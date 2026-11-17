@@ -8,6 +8,19 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
+    <header class="window-titlebar">
+      <div class="window-drag" data-window-drag>
+        <span class="window-mark" aria-hidden="true"><i></i></span>
+        <span class="window-name">ECLIPSE</span>
+        <span class="window-divider" aria-hidden="true"></span>
+        <span class="window-context">Roblox desktop hub</span>
+      </div>
+      <div class="window-controls" aria-label="Window controls">
+        <button class="window-control" type="button" data-window-action="minimize" aria-label="Minimize Eclipse"><span aria-hidden="true">−</span></button>
+        <button class="window-control" type="button" data-window-action="maximize" aria-label="Maximize or restore Eclipse"><span class="maximize-symbol" aria-hidden="true">□</span></button>
+        <button class="window-control window-close" type="button" data-window-action="close" aria-label="Close Eclipse"><span aria-hidden="true">×</span></button>
+      </div>
+    </header>
     <div class="app-shell" id="app-shell">
       <aside class="sidebar" aria-label="Primary navigation">
         <a class="brand" href="#overview" data-page-target="overview" aria-label="Eclipse home">

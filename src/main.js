@@ -364,8 +364,10 @@ function createMainWindow() {
     minWidth: 1040,
     minHeight: 680,
     show: false,
-    backgroundColor: '#0b1020',
-    title: 'Eclipse',
+    frame: false,
+    titleBarStyle: 'hidden',
+    backgroundColor: '#080c17',
+    title: 'Eclipse — Roblox desktop hub',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -375,6 +377,8 @@ function createMainWindow() {
     }
   });
 
+  window.removeMenu();
+  window.setMenuBarVisibility(false);
   window.once('ready-to-show', () => window.show());
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   return window;
@@ -391,6 +395,19 @@ function registerIpcHandlers(store) {
       throw new Error(error?.isExpected ? error.message : 'Eclipse could not complete that operation.');
     }
   };
+
+  const currentWindow = (event) => BrowserWindow.fromWebContents(event.sender);
+  ipcMain.on('eclipse:window:minimize', (event) => currentWindow(event)?.minimize());
+  ipcMain.on('eclipse:window:toggle-maximize', (event) => {
+    const window = currentWindow(event);
+    if (!window) return;
+    if (window.isMaximized()) {
+      window.unmaximize();
+    } else {
+      window.maximize();
+    }
+  });
+  ipcMain.on('eclipse:window:close', (event) => currentWindow(event)?.close());
 
   ipcMain.handle('eclipse:dashboard', guarded(async () => {
     const state = store.get();

@@ -418,6 +418,20 @@ $$('[data-setting]').forEach((control) => {
   });
 });
 
+document.querySelector('[data-window-drag]').addEventListener('dblclick', () => {
+  window.eclipse.toggleMaximizeWindow();
+});
+
+document.addEventListener('click', (event) => {
+  const control = event.target.closest('[data-window-action]');
+  if (!control) return;
+
+  event.preventDefault();
+  if (control.dataset.windowAction === 'minimize') window.eclipse.minimizeWindow();
+  if (control.dataset.windowAction === 'maximize') window.eclipse.toggleMaximizeWindow();
+  if (control.dataset.windowAction === 'close') window.eclipse.closeWindow();
+});
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !$('#launch-confirmation').hidden) {
     closeLaunchConfirmation();

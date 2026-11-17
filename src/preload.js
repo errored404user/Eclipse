@@ -3,6 +3,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('eclipse', Object.freeze({
+  minimizeWindow: () => ipcRenderer.send('eclipse:window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.send('eclipse:window:toggle-maximize'),
+  closeWindow: () => ipcRenderer.send('eclipse:window:close'),
   getDashboard: () => ipcRenderer.invoke('eclipse:dashboard'),
   createProfile: (profile) => ipcRenderer.invoke('eclipse:profile:create', profile),
   removeProfile: (profileId) => ipcRenderer.invoke('eclipse:profile:remove', { profileId }),
