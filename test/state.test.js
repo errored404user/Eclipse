@@ -28,7 +28,7 @@ const {
 
 test('normalizes persisted state, drops malformed records, and removes duplicate favorites', () => {
   const state = normalizeState({
-    settings: { reduceMotion: true, activityTracking: true, showStartupLauncher: false, theme: 'aurora', density: 'compact', accent: 'mint' },
+    settings: { reduceMotion: true, activityTracking: true, showStartupLauncher: false, launcherPrimaryAction: 'workspace', showRecentLaunches: false, interfaceEffects: 'reduced', theme: 'aurora', density: 'compact', accent: 'mint' },
     ui: { lastPage: 'library' },
     profiles: [
       { id: 'profile_12345678901234567890', name: '  Main\nSetup ', description: ' First   profile ', color: 'mint', pinned: true, createdAt: '2026-01-01' },
@@ -39,16 +39,19 @@ test('normalizes persisted state, drops malformed records, and removes duplicate
       { name: '  ' }
     ],
     favorites: [
-      { placeId: '1818', title: ' Classic   Crossroads ', collectionId: 'collection_12345678901234567890', addedAt: '2026-01-02' },
+      { placeId: '1818', title: ' Classic   Crossroads ', collectionId: 'collection_12345678901234567890', pinned: true, addedAt: '2026-01-02', lastLaunchedAt: '2026-02-03' },
       { placeId: 1818, title: 'Duplicate' },
       { placeId: 'not-an-id', title: 'Bad' }
     ]
   });
 
-  assert.equal(state.schemaVersion, 4);
+  assert.equal(state.schemaVersion, 5);
   assert.equal(state.settings.reduceMotion, true);
   assert.equal(state.settings.activityTracking, true);
   assert.equal(state.settings.showStartupLauncher, false);
+  assert.equal(state.settings.launcherPrimaryAction, 'workspace');
+  assert.equal(state.settings.showRecentLaunches, false);
+  assert.equal(state.settings.interfaceEffects, 'reduced');
   assert.equal(state.settings.theme, 'aurora');
   assert.equal(state.settings.accent, 'mint');
   assert.equal(state.settings.density, 'compact');
@@ -63,6 +66,8 @@ test('normalizes persisted state, drops malformed records, and removes duplicate
   assert.equal(state.favorites[0].placeId, 1818);
   assert.equal(state.favorites[0].title, 'Classic Crossroads');
   assert.equal(state.favorites[0].collectionId, 'collection_12345678901234567890');
+  assert.equal(state.favorites[0].pinned, true);
+  assert.equal(state.favorites[0].lastLaunchedAt, '2026-02-03T00:00:00.000Z');
 });
 
 test('settings use safe defaults and reject malformed update patches', () => {
@@ -72,6 +77,9 @@ test('settings use safe defaults and reject malformed update patches', () => {
       highContrast: 'true',
       activityTracking: 'true',
       showStartupLauncher: 'false',
+      launcherPrimaryAction: 'direct-client',
+      showRecentLaunches: 'false',
+      interfaceEffects: 'maximum',
       showClientWidget: 'false',
       startPage: 'unknown-page',
       librarySort: 'title'
@@ -83,15 +91,21 @@ test('settings use safe defaults and reject malformed update patches', () => {
   assert.equal(state.settings.highContrast, false);
   assert.equal(state.settings.activityTracking, false);
   assert.equal(state.settings.showStartupLauncher, true);
+  assert.equal(state.settings.launcherPrimaryAction, 'official-roblox');
+  assert.equal(state.settings.showRecentLaunches, true);
+  assert.equal(state.settings.interfaceEffects, 'full');
   assert.equal(state.settings.showClientWidget, true);
   assert.equal(state.settings.startPage, 'overview');
   assert.equal(state.settings.librarySort, 'title');
   assert.equal(state.ui.lastPage, 'overview');
-  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, showStartupLauncher: false, showClientWidget: false, theme: 'carbon' }), { highContrast: true, activityTracking: true, showStartupLauncher: false, showClientWidget: false, theme: 'carbon' });
+  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, showStartupLauncher: false, launcherPrimaryAction: 'workspace', showRecentLaunches: false, interfaceEffects: 'reduced', showClientWidget: false, theme: 'carbon' }), { highContrast: true, activityTracking: true, showStartupLauncher: false, launcherPrimaryAction: 'workspace', showRecentLaunches: false, interfaceEffects: 'reduced', showClientWidget: false, theme: 'carbon' });
   assert.throws(() => normalizeSettingsPatch({ theme: 'untrusted-theme' }), /theme setting is invalid/);
   assert.throws(() => normalizeSettingsPatch({ highContrast: 'true' }), /highContrast setting must be enabled or disabled/);
   assert.throws(() => normalizeSettingsPatch({ activityTracking: 'true' }), /activityTracking setting must be enabled or disabled/);
   assert.throws(() => normalizeSettingsPatch({ showStartupLauncher: 'false' }), /showStartupLauncher setting must be enabled or disabled/);
+  assert.throws(() => normalizeSettingsPatch({ launcherPrimaryAction: 'direct-client' }), /launcherPrimaryAction setting is invalid/);
+  assert.throws(() => normalizeSettingsPatch({ showRecentLaunches: 'false' }), /showRecentLaunches setting must be enabled or disabled/);
+  assert.throws(() => normalizeSettingsPatch({ interfaceEffects: 'maximum' }), /interfaceEffects setting is invalid/);
   assert.throws(() => normalizeSettingsPatch({ unknown: true }), /Unsupported setting/);
 });
 
@@ -117,6 +131,8 @@ test('profile, collection, and favorite creators enforce required valid user inp
   assert.equal(favorite.placeId, 1818);
   assert.equal(favorite.title, 'Crossroads');
   assert.equal(favorite.collectionId, collection.id);
+  assert.equal(favorite.pinned, false);
+  assert.equal(favorite.lastLaunchedAt, null);
 });
 
 test('state retains a bounded number of unique favorite entries', () => {

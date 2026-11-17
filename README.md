@@ -29,9 +29,9 @@ A dedicated **Install guide** turns official-client detection into four clear st
 
 ## Local organization and backup
 
-Profiles are local labels with a name, note, color, and optional pin. Pinned profiles remain at the top, and profile search looks only through local profile names and notes. Saved experience shortcuts can optionally belong to one local collection with a name, color, and note. Deleting a collection leaves its shortcuts intact and ungrouped.
+Profiles are local labels with a name, note, color, and optional pin. Pinned profiles remain at the top, and profile search looks only through local profile names and notes. Saved experience shortcuts can be pinned, optionally belong to one local collection with a name, color, and note, and be sorted by name, save date, or a local last-handoff timestamp. Eclipse records that timestamp only after you choose a saved shortcut and Eclipse hands it off to Roblox’s official experience page; it contains no account, server, or gameplay data. Deleting a collection leaves its shortcuts intact and ungrouped.
 
-The Overview dashboard contains independently showable/hideable core local-status cards for official-client readiness, profiles, saved shortcuts, and installation help. The layout is fixed, and no widget fetches remote data.
+The Overview dashboard contains independently showable/hideable core local-status cards for official-client readiness, profiles, saved shortcuts, installation help, and a local Continue deck for recently handed-off saved shortcuts. The layout is fixed, and no widget fetches remote data.
 
 Eclipse can export a portable, versioned JSON backup of **Eclipse-owned state only**: profiles, experience collections, saved experience shortcuts, preferences, and workspace state. It excludes Roblox credentials, sessions, client files, and Guarded FastFlag configuration. Importing a backup first displays its counts and then requires explicit confirmation before replacing the current Eclipse-owned data. Backup files are selected with the operating system’s native file dialog; the renderer never receives arbitrary file-system paths.
 
@@ -42,7 +42,7 @@ Eclipse can export a portable, versioned JSON backup of **Eclipse-owned state on
 - Opens official Roblox game and catalog pages in the user's default browser, allowing Roblox's official flow to launch the client.
 - Stores local profiles, named experience collections, and favorite experience IDs in an atomic JSON state file.
 - Includes a packaged, in-app feature-history page with no remote update check or usage telemetry.
-- Provides twenty validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, optional local activity presence, startup-launcher visibility, core dashboard cards, launch confirmation, navigation, library presentation, and diagnostic privacy.
+- Provides twenty-three validated, persisted settings that control theme, accent, density, text size, Eclipse-only visual effects, motion, contrast, focus mode, notifications, optional local activity presence, startup-launcher behavior, core dashboard cards, launch confirmation, navigation, library presentation, and diagnostic privacy.
 - Provides input validation, bounded state, diagnostics, and a hardened Electron IPC boundary.
 - Uses a native desktop UI with no remote web content, no Node.js access in the renderer, and no arbitrary IPC channels.
 

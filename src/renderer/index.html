@@ -115,6 +115,12 @@
               <button class="text-button" type="button" data-page-target="installation">Open install guide <span>→</span></button>
             </article>
           </div>
+
+          <section class="recent-launches" id="recent-launches" data-dashboard-widget="recent" aria-labelledby="recent-launches-title" hidden>
+            <div class="deck-heading"><div><p class="eyebrow">LOCAL CONTINUE DECK</p><h3 id="recent-launches-title">Return to a saved shortcut.</h3></div><button class="text-button" type="button" data-page-target="library">Open library <span>→</span></button></div>
+            <p class="recent-launches-copy">Saved Eclipse shortcuts appear here after Eclipse hands them off to Roblox’s official page. This local timestamp contains no account, server, or gameplay data.</p>
+            <div class="recent-launch-list" id="recent-launch-list"></div>
+          </section>
         </section>
 
         <section class="page" id="page-profiles" data-page="profiles" aria-labelledby="profiles-title" hidden>
@@ -341,6 +347,7 @@
             <article class="release-entry"><span class="release-index">03</span><div><p class="eyebrow">ECLIPSE EXPERIENCE</p><h3>Launcher, integration boundaries, and deployment</h3><p>Added the Eclipse startup launcher, optional local player-presence check, privacy statements, and official-only deployment/install guidance.</p></div></article>
             <article class="release-entry"><span class="release-index">04</span><div><p class="eyebrow">LOCAL OWNERSHIP</p><h3>Organization and recovery</h3><p>Added pinned profile search, Eclipse-only backup/restore with import review, local experience collections, and a configurable core dashboard.</p></div></article>
             <article class="release-entry"><span class="release-index">05</span><div><p class="eyebrow">SAFER DECISIONS</p><h3>Reviewed settings and official handoff</h3><p>Added a live reviewed-FastFlag comparison, conflict-first restore flow, per-control guidance, status-aware official Roblox actions, and browser-led installation troubleshooting.</p></div></article>
+            <article class="release-entry"><span class="release-index">06</span><div><p class="eyebrow">DAILY WORKSPACE</p><h3>Faster local return paths</h3><p>Added saved-shortcut pins, local recent official-handoff timestamps, a configurable Continue deck, launcher first-action choice, and an Eclipse-only reduced-effects mode.</p></div></article>
           </div>
 
           <article class="guide-boundary"><span aria-hidden="true">✦</span><div><h3>Feature history, not a safety claim.</h3><p>Eclipse remains Windows-only and official-client-only. It does not handle Roblox credentials, alter client binaries, automate gameplay, or promise compatibility with future Roblox changes.</p></div></article>
@@ -358,6 +365,7 @@
                 <label>Accent<select data-setting="accent"><option value="violet">Violet</option><option value="sky">Sky</option><option value="mint">Mint</option><option value="amber">Amber</option><option value="rose">Rose</option></select></label>
                 <label>Density<select data-setting="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
                 <label>Text size<select data-setting="fontScale"><option value="standard">Standard</option><option value="large">Large</option><option value="extra-large">Extra large</option></select></label>
+                <label>Interface effects<select data-setting="interfaceEffects"><option value="full">Full visual effects</option><option value="reduced">Reduced effects</option></select><small class="control-note">Reduces Eclipse-only backdrop blur and ambient decoration. It does not change Roblox graphics or performance.</small></label>
               </div>
               <label class="toggle-row"><span><strong>Focus mode</strong><small>Hide decorative artwork and keep the workspace visually quiet.</small></span><input type="checkbox" data-setting="focusMode"><i></i></label>
             </article>
@@ -371,6 +379,7 @@
             <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LAUNCH &amp; NAVIGATION</p><h3>Choose your flow</h3></div><span class="panel-index">03</span></div>
               <div class="field-grid one-column">
                 <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="integrations">Integrations</option><option value="deployment">Deployment</option><option value="installation">Install guide</option><option value="fastflags">FastFlags</option><option value="release">Release notes</option><option value="settings">Settings</option></select></label>
+                <label>Launcher first action<select data-setting="launcherPrimaryAction"><option value="official-roblox">Open official Roblox</option><option value="workspace">Open my Eclipse workspace</option></select><small class="control-note">Changes the primary action in Eclipse’s optional startup launcher. Official Roblox continues through your browser.</small></label>
               </div>
               <label class="toggle-row"><span><strong>Remember last page</strong><small>Open Eclipse where you left off instead of using the selected start page.</small></span><input type="checkbox" data-setting="rememberLastPage"><i></i></label>
               <label class="toggle-row"><span><strong>Show startup launcher</strong><small>Show Eclipse’s compact launcher when the app opens. Turn it off to go directly to your workspace.</small></span><input type="checkbox" data-setting="showStartupLauncher"><i></i></label>
@@ -379,7 +388,7 @@
 
             <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LIBRARY &amp; PRIVACY</p><h3>Control what you see</h3></div><span class="panel-index">04</span></div>
               <div class="field-grid one-column">
-                <label>Library sorting<select data-setting="librarySort"><option value="recent">Most recently saved</option><option value="title">Name A–Z</option></select></label>
+                <label>Library sorting<select data-setting="librarySort"><option value="recent">Most recently saved</option><option value="launched">Most recently handed off</option><option value="title">Name A–Z</option></select></label>
               </div>
               <label class="toggle-row"><span><strong>Show experience IDs</strong><small>Display numeric place IDs in your local saved-experience library.</small></span><input type="checkbox" data-setting="showExperienceId"><i></i></label>
               <label class="toggle-row"><span><strong>Show installation path</strong><small>Reveal the locally detected Roblox path in Diagnostics. Hidden by default.</small></span><input type="checkbox" data-setting="showInstallationPath"><i></i></label>
@@ -391,6 +400,7 @@
               <label class="toggle-row"><span><strong>Local profiles</strong><small>Show your count of locally stored profile labels.</small></span><input type="checkbox" data-setting="showProfilesWidget"><i></i></label>
               <label class="toggle-row"><span><strong>Saved experiences</strong><small>Show the local saved-shortcut count.</small></span><input type="checkbox" data-setting="showLibraryWidget"><i></i></label>
               <label class="toggle-row"><span><strong>Official deployment help</strong><small>Show the link to the guided installation checklist.</small></span><input type="checkbox" data-setting="showDeploymentWidget"><i></i></label>
+              <label class="toggle-row"><span><strong>Local continue deck</strong><small>Show recently handed-off saved shortcuts. The timestamps stay in Eclipse and contain no account or session data.</small></span><input type="checkbox" data-setting="showRecentLaunches"><i></i></label>
             </article>
           </div>
 
@@ -407,7 +417,7 @@
         <div class="launcher-identity"><img class="launcher-mark" src="assets/eclipse-orbital.svg" alt=""><div><p class="eyebrow">ECLIPSE DESKTOP</p><h2 id="launcher-title">Eclipse</h2><span class="launcher-version">Official Roblox companion</span></div></div>
         <div class="launcher-links"><button type="button" data-action="launcher-open-deployment">Official installation</button><button type="button" data-action="launcher-open-integrations">Privacy &amp; integrations</button></div>
         <div class="launcher-actions">
-          <button class="launcher-action primary" type="button" data-action="launcher-open-roblox"><span aria-hidden="true">↗</span><span><strong>Open official Roblox</strong><small>Continue through Roblox’s official home</small></span><b aria-hidden="true">›</b></button>
+          <button class="launcher-action primary" id="launcher-primary-action" type="button" data-action="launcher-open-roblox"><span id="launcher-primary-icon" aria-hidden="true">↗</span><span><strong id="launcher-primary-title">Open official Roblox</strong><small id="launcher-primary-copy">Continue through Roblox’s official home</small></span><b aria-hidden="true">›</b></button>
           <button class="launcher-action" type="button" data-action="launcher-open-settings"><span aria-hidden="true">⌘</span><span><strong>Configure Eclipse</strong><small>Open the full launchpad and settings</small></span><b aria-hidden="true">›</b></button>
           <button class="launcher-action" type="button" data-action="launcher-open-deployment"><span aria-hidden="true">⇣</span><span><strong>Deployment &amp; installation</strong><small>Check or install the official Roblox Player</small></span><b aria-hidden="true">›</b></button>
         </div>

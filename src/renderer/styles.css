@@ -267,3 +267,14 @@ html:hover::-webkit-scrollbar-thumb, html:focus-within::-webkit-scrollbar-thumb 
 .confirm-dialog code { color: var(--orbital-bright); font-size: .92em; }
 @media (max-width: 1240px) { .deployment-troubleshoot { grid-template-columns: 1fr; }.troubleshoot-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }.troubleshoot-actions .button { min-width: 0; } }
 @media (max-width: 700px) { .deployment-actions { width: 100%; justify-content: stretch; }.deployment-actions .button, .official-deployment-handoff { width: 100% !important; }.troubleshoot-list, .troubleshoot-actions { grid-template-columns: 1fr; }.troubleshoot-actions .button { width: 100%; }.control-note { min-height: 0; }.fastflag-policy-strip { gap: 10px; } }
+
+/* Daily workspace controls: local continue deck and Eclipse-only visual performance mode. */
+:root[data-interface-effects="reduced"] body::after { display: none; }
+:root[data-interface-effects="reduced"] .sidebar,
+:root[data-interface-effects="reduced"] .launcher-screen,
+:root[data-interface-effects="reduced"] .quick-launch { backdrop-filter: none; }
+:root[data-interface-effects="reduced"] .eclipse-art::before { opacity: .24; }
+:root[data-interface-effects="reduced"] .info-card::after { display: none; }
+.recent-launches { margin-top: 34px; }.recent-launches .deck-heading { margin: 0 0 7px; }.recent-launches-copy { max-width: 700px; margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.55; }.recent-launch-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }.recent-launch-card { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 88px; padding: 17px; border: 1px solid color-mix(in srgb, var(--orbital-gold) 22%, var(--line)); border-radius: 12px; background: linear-gradient(125deg, color-mix(in srgb, var(--orbital-soft) 35%, var(--surface)), var(--surface)); }.recent-launch-card h4 { margin: 0 0 5px; }.recent-launch-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }.favorite-pin { padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--orbital-gold) 43%, transparent); border-radius: 999px; background: var(--orbital-soft); color: var(--orbital-bright); font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+@media (max-width: 1060px) { .recent-launch-list { grid-template-columns: 1fr; }.recent-launch-card { min-height: 0; } }
+@media (max-width: 700px) { .recent-launches { margin-top: 26px; }.recent-launch-card { align-items: flex-start; flex-direction: column; }.recent-launch-card .text-button { margin-top: 2px; } }

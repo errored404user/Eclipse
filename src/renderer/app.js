@@ -134,11 +134,20 @@ function renderProfiles() {
 
 function sortFavorites(favorites) {
   const ordered = [...favorites];
-  if (dashboard.state.settings.librarySort === 'title') {
-    return ordered.sort((left, right) => left.title.localeCompare(right.title, undefined, { sensitivity: 'base' }));
-  }
-
-  return ordered.sort((left, right) => Date.parse(right.addedAt) - Date.parse(left.addedAt));
+  const sortMode = dashboard.state.settings.librarySort;
+  return ordered.sort((left, right) => {
+    const pinDifference = Number(right.pinned) - Number(left.pinned);
+    if (pinDifference !== 0) return pinDifference;
+    if (sortMode === 'title') {
+      return left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
+    }
+    if (sortMode === 'launched') {
+      const rightLastLaunched = right.lastLaunchedAt ? Date.parse(right.lastLaunchedAt) : 0;
+      const leftLastLaunched = left.lastLaunchedAt ? Date.parse(left.lastLaunchedAt) : 0;
+      return rightLastLaunched - leftLastLaunched || Date.parse(right.addedAt) - Date.parse(left.addedAt);
+    }
+    return Date.parse(right.addedAt) - Date.parse(left.addedAt);
+  });
 }
 
 function renderFavorites() {
@@ -181,6 +190,12 @@ function renderFavorites() {
     const title = document.createElement('h4');
     title.textContent = favorite.title;
     titleRow.append(title);
+    if (favorite.pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'favorite-pin';
+      pin.textContent = 'Pinned';
+      titleRow.append(pin);
+    }
     const collection = favorite.collectionId ? collections.get(favorite.collectionId) : null;
     if (collection) {
       const badge = document.createElement('span');
@@ -190,15 +205,42 @@ function renderFavorites() {
     }
     const meta = document.createElement('p');
     const idLabel = dashboard.state.settings.showExperienceId ? `Experience ID ${favorite.placeId} · ` : '';
-    meta.textContent = `${idLabel}Saved ${formatDate(favorite.addedAt)}`;
+    const launchLabel = favorite.lastLaunchedAt ? ` · Official handoff ${formatDate(favorite.lastLaunchedAt)}` : '';
+    meta.textContent = `${idLabel}Saved ${formatDate(favorite.addedAt)}${launchLabel}`;
     detail.append(titleRow, meta);
     const actions = document.createElement('div');
     actions.className = 'inline-actions';
     actions.append(
       createButton('Launch', 'launch-experience', { placeId: favorite.placeId }, 'text-button compact'),
+      createButton(favorite.pinned ? 'Unpin' : 'Pin', 'toggle-favorite-pin', { placeId: favorite.placeId }, 'text-button quiet'),
       createButton('Remove', 'remove-favorite', { placeId: favorite.placeId })
     );
     item.append(detail, actions);
+    list.append(item);
+  }
+}
+
+function renderRecentLaunches() {
+  const recents = dashboard.state.favorites
+    .filter((favorite) => favorite.lastLaunchedAt)
+    .sort((left, right) => Date.parse(right.lastLaunchedAt) - Date.parse(left.lastLaunchedAt))
+    .slice(0, 3);
+  const list = $('#recent-launch-list');
+  list.replaceChildren();
+
+  for (const favorite of recents) {
+    const item = document.createElement('article');
+    item.className = 'recent-launch-card';
+    const detail = document.createElement('div');
+    const title = document.createElement('h4');
+    title.textContent = favorite.title;
+    const copy = document.createElement('p');
+    copy.textContent = `Official handoff ${formatDate(favorite.lastLaunchedAt)}`;
+    detail.append(title, copy);
+    item.append(
+      detail,
+      createButton('Open official page', 'launch-experience', { placeId: favorite.placeId }, 'text-button compact')
+    );
     list.append(item);
   }
 }
@@ -283,14 +325,16 @@ function renderDashboardWidgets() {
     client: settings.showClientWidget,
     profiles: settings.showProfilesWidget,
     library: settings.showLibraryWidget,
-    deployment: settings.showDeploymentWidget
+    deployment: settings.showDeploymentWidget,
+    recent: settings.showRecentLaunches && dashboard.state.favorites.some((favorite) => favorite.lastLaunchedAt)
   };
   $$('[data-dashboard-widget]').forEach((widget) => {
     widget.hidden = widgetSettings[widget.dataset.dashboardWidget] !== true;
   });
-  const visibleCount = Object.values(widgetSettings).filter(Boolean).length;
-  $('#dashboard-widgets-heading').hidden = visibleCount === 0;
-  $('#dashboard-widgets').hidden = visibleCount === 0;
+  const visibleCoreCount = ['client', 'profiles', 'library', 'deployment']
+    .filter((key) => widgetSettings[key]).length;
+  $('#dashboard-widgets-heading').hidden = visibleCoreCount === 0;
+  $('#dashboard-widgets').hidden = visibleCoreCount === 0;
   $('#deployment-widget-heading').textContent = dashboard.diagnostics.ready
     ? 'Official client ready'
     : 'Installation help available';
@@ -378,6 +422,7 @@ function applySettings(settings) {
   root.dataset.accent = settings.accent;
   root.dataset.density = settings.density;
   root.dataset.fontScale = settings.fontScale;
+  root.dataset.interfaceEffects = settings.interfaceEffects;
   root.classList.toggle('reduce-motion', settings.reduceMotion);
   root.classList.toggle('high-contrast', settings.highContrast);
   root.classList.toggle('focus-mode', settings.focusMode);
@@ -632,6 +677,14 @@ function renderInstallationGuide() {
 }
 
 function renderLauncher() {
+  const openWorkspace = dashboard.state.settings.launcherPrimaryAction === 'workspace';
+  const primaryAction = $('#launcher-primary-action');
+  primaryAction.dataset.action = openWorkspace ? 'launcher-open-workspace' : 'launcher-open-roblox';
+  $('#launcher-primary-icon').textContent = openWorkspace ? '⌂' : '↗';
+  $('#launcher-primary-title').textContent = openWorkspace ? 'Open your workspace' : 'Open official Roblox';
+  $('#launcher-primary-copy').textContent = openWorkspace
+    ? 'Continue with your saved Eclipse workspace'
+    : 'Continue through Roblox’s official home';
   $('#launcher-screen').hidden = !launcherVisible;
 }
 
@@ -649,6 +702,7 @@ function render() {
   renderProfiles();
   renderCollections();
   renderFavorites();
+  renderRecentLaunches();
   renderDashboardWidgets();
   renderInstallation();
   renderDiagnostics();
@@ -765,6 +819,23 @@ async function confirmBackupImport() {
   }
 }
 
+async function launchOfficialExperience(placeId) {
+  try {
+    await window.eclipse.launchExperience(placeId);
+    try {
+      await window.eclipse.recordFavoriteLaunch(placeId);
+    } catch {
+      // A local recents marker is optional and must not change the official handoff result.
+    }
+    await refreshDashboard();
+    showToast('Opening the official Roblox experience page.');
+    return true;
+  } catch (error) {
+    showToast(error?.message || 'Eclipse could not open the official Roblox experience page.', 'error');
+    return false;
+  }
+}
+
 async function requestLaunch(placeId) {
   if (!dashboard.diagnostics.ready) {
     showToast('Install the official Roblox Player before launching an experience.', 'error');
@@ -776,7 +847,7 @@ async function requestLaunch(placeId) {
     return;
   }
 
-  await runOperation(() => window.eclipse.launchExperience(placeId), 'Opening the official Roblox experience page.');
+  await launchOfficialExperience(placeId);
 }
 
 async function refreshInstallation() {
@@ -899,11 +970,16 @@ document.addEventListener('click', (event) => {
   if (action === 'refresh-installation') refreshInstallation();
   if (action === 'refresh-activity') runOperation(() => Promise.resolve(), dashboard.activity.enabled ? 'Local activity status refreshed.' : 'Enable activity tracking to check local player presence.');
   if (action === 'launcher-open-roblox') runOperation(() => window.eclipse.openRobloxHome(), 'Opening Roblox’s official home page.');
+  if (action === 'launcher-open-workspace') {
+    const { settings, ui } = dashboard.state;
+    dismissLauncher(settings.rememberLastPage ? ui.lastPage : settings.startPage);
+  }
   if (action === 'launcher-open-settings') dismissLauncher('settings');
   if (action === 'launcher-open-integrations') dismissLauncher('integrations');
   if (action === 'launcher-open-deployment') dismissLauncher('deployment');
   if (action === 'launch-experience') requestLaunch(trigger.dataset.placeId);
   if (action === 'toggle-profile-pin') runOperation(() => window.eclipse.toggleProfilePin(trigger.dataset.profileId), 'Profile pin updated.');
+  if (action === 'toggle-favorite-pin') runOperation(() => window.eclipse.toggleFavoritePin(trigger.dataset.placeId), 'Saved experience pin updated.');
   if (action === 'remove-profile') runOperation(() => window.eclipse.removeProfile(trigger.dataset.profileId), 'Profile removed.');
   if (action === 'filter-collection') {
     libraryCollectionFilter = trigger.dataset.collectionId;
@@ -936,7 +1012,7 @@ document.addEventListener('click', (event) => {
   if (action === 'confirm-launch' && pendingPlaceId) {
     const placeId = pendingPlaceId;
     closeLaunchConfirmation();
-    runOperation(() => window.eclipse.launchExperience(placeId), 'Opening the official Roblox experience page.');
+    launchOfficialExperience(placeId);
   }
 });
 

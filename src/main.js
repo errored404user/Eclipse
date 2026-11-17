@@ -734,6 +734,29 @@ function registerIpcHandlers(store) {
     });
   }));
 
+  ipcMain.handle('eclipse:favorite:toggle-pin', guarded(async (payload) => {
+    const placeId = toPlaceId(payload?.placeId);
+    return store.update((state) => {
+      const favorite = state.favorites.find((entry) => entry.placeId === placeId);
+      if (!favorite) {
+        throw invalidRequest('That saved experience no longer exists.');
+      }
+      favorite.pinned = !favorite.pinned;
+      return state;
+    });
+  }));
+
+  ipcMain.handle('eclipse:favorite:record-launch', guarded(async (payload) => {
+    const placeId = toPlaceId(payload?.placeId);
+    return store.update((state) => {
+      const favorite = state.favorites.find((entry) => entry.placeId === placeId);
+      if (favorite) {
+        favorite.lastLaunchedAt = new Date().toISOString();
+      }
+      return state;
+    });
+  }));
+
   ipcMain.handle('eclipse:settings:update', guarded(async (payload) => {
     let patch;
     try {

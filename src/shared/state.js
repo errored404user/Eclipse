@@ -2,7 +2,7 @@
 
 const { randomUUID } = require('node:crypto');
 
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 const MAX_PROFILES = 12;
 const MAX_FAVORITES = 48;
 const MAX_COLLECTIONS = 16;
@@ -15,24 +15,29 @@ const SETTING_OPTIONS = Object.freeze({
   accent: ['violet', 'sky', 'mint', 'amber', 'rose'],
   density: ['comfortable', 'compact'],
   fontScale: ['standard', 'large', 'extra-large'],
+  interfaceEffects: ['full', 'reduced'],
+  launcherPrimaryAction: ['official-roblox', 'workspace'],
   startPage: UI_PAGES,
-  librarySort: ['recent', 'title']
+  librarySort: ['recent', 'launched', 'title']
 });
 const DEFAULT_SETTINGS = Object.freeze({
   theme: 'midnight',
   accent: 'violet',
   density: 'comfortable',
   fontScale: 'standard',
+  interfaceEffects: 'full',
   reduceMotion: false,
   highContrast: false,
   focusMode: false,
   notifications: true,
   activityTracking: false,
   showStartupLauncher: true,
+  launcherPrimaryAction: 'official-roblox',
   showClientWidget: true,
   showProfilesWidget: true,
   showLibraryWidget: true,
   showDeploymentWidget: true,
+  showRecentLaunches: true,
   confirmLaunch: true,
   rememberLastPage: true,
   startPage: 'overview',
@@ -88,6 +93,14 @@ function toPlaceId(value) {
 function validDate(value) {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
     return new Date().toISOString();
+  }
+
+  return new Date(value).toISOString();
+}
+
+function optionalDate(value) {
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+    return null;
   }
 
   return new Date(value).toISOString();
@@ -208,7 +221,9 @@ function normalizeFavorite(value) {
       placeId,
       title: title || `Experience ${placeId}`,
       collectionId: COLLECTION_ID_PATTERN.test(collectionId) ? collectionId : null,
-      addedAt: validDate(value.addedAt)
+      pinned: value.pinned === true,
+      addedAt: validDate(value.addedAt),
+      lastLaunchedAt: optionalDate(value.lastLaunchedAt)
     };
   } catch {
     return null;
@@ -310,7 +325,9 @@ function createFavorite(input) {
     placeId,
     title: title || `Experience ${placeId}`,
     collectionId: COLLECTION_ID_PATTERN.test(collectionId) ? collectionId : null,
-    addedAt: new Date().toISOString()
+    pinned: false,
+    addedAt: new Date().toISOString(),
+    lastLaunchedAt: null
   };
 }
 

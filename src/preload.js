@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('eclipse', Object.freeze({
   removeCollection: (collectionId) => ipcRenderer.invoke('eclipse:collection:remove', { collectionId }),
   addFavorite: (favorite) => ipcRenderer.invoke('eclipse:favorite:add', favorite),
   removeFavorite: (placeId) => ipcRenderer.invoke('eclipse:favorite:remove', { placeId }),
+  toggleFavoritePin: (placeId) => ipcRenderer.invoke('eclipse:favorite:toggle-pin', { placeId }),
+  recordFavoriteLaunch: (placeId) => ipcRenderer.invoke('eclipse:favorite:record-launch', { placeId }),
   updateSettings: (settings) => ipcRenderer.invoke('eclipse:settings:update', settings),
   resetSettings: () => ipcRenderer.invoke('eclipse:settings:reset'),
   exportBackup: () => ipcRenderer.invoke('eclipse:backup:export'),
