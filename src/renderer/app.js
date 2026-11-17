@@ -4,6 +4,7 @@ const pageTitles = {
   overview: 'Good to see you.',
   profiles: 'Profiles',
   library: 'Library',
+  fastflags: 'Guarded FastFlags',
   settings: 'Settings'
 };
 
@@ -212,6 +213,98 @@ function applySettings(settings) {
   });
 }
 
+function renderFastFlags() {
+  const fastFlags = dashboard.fastFlags;
+  const controlsDisabled = !dashboard.diagnostics.ready || !fastFlags.available || fastFlags.blocked;
+  const preferences = fastFlags.preferences;
+
+  document.querySelectorAll('[data-fastflag]').forEach((control) => {
+    const key = control.dataset.fastflag;
+    if (key === 'grassMotion') {
+      control.checked = preferences.grassMotion === 'minimized';
+    } else if (control.type === 'checkbox') {
+      control.checked = preferences[key] === true;
+    } else {
+      control.value = preferences[key];
+    }
+    control.disabled = controlsDisabled;
+  });
+  $('#fastflag-apply').disabled = controlsDisabled;
+  $('[data-action="reset-fastflags"]').disabled = controlsDisabled;
+
+  const status = $('#fastflag-status');
+  status.classList.toggle('is-ready', fastFlags.available && !fastFlags.blocked && dashboard.diagnostics.ready);
+  status.classList.toggle('is-warning', controlsDisabled);
+  const statusTitle = !fastFlags.available
+    ? 'Windows ClientSettings unavailable'
+    : fastFlags.blocked
+      ? 'ClientSettings requires attention'
+      : !dashboard.diagnostics.ready
+        ? 'Install Roblox before applying settings'
+        : 'Guarded configuration ready';
+  const statusCopy = !dashboard.diagnostics.ready
+    ? 'Eclipse will not write overrides until it detects the official Roblox Player.'
+    : fastFlags.message;
+  status.replaceChildren(document.createElement('span'), (() => {
+    const detail = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = statusTitle;
+    const copy = document.createElement('small');
+    copy.textContent = statusCopy;
+    detail.append(title, copy);
+    return detail;
+  })());
+
+  $('#fastflag-status-heading').textContent = fastFlags.blocked ? 'Configuration blocked' : 'ClientSettings status';
+  const details = $('#fastflag-details');
+  details.replaceChildren();
+  const rows = [
+    ['Configuration', fastFlags.configExists ? 'Existing file found' : 'Will be created on apply'],
+    ['Backup', fastFlags.backupExists ? 'Latest Eclipse backup available' : 'No Eclipse backup yet'],
+    ['Managed overrides', fastFlags.hasManagedOverrides ? 'Active' : 'Roblox defaults'],
+    ['Other entries', String(fastFlags.unmanagedFlagCount)]
+  ];
+  for (const [term, value] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = term;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    details.append(dt, dd);
+  }
+
+  const issues = $('#fastflag-issues');
+  issues.replaceChildren();
+  if (fastFlags.issues.length === 0) {
+    issues.hidden = true;
+  } else {
+    const heading = document.createElement('strong');
+    heading.textContent = 'Review needed before applying changes';
+    const list = document.createElement('ul');
+    for (const issue of fastFlags.issues) {
+      const item = document.createElement('li');
+      item.textContent = issue;
+      list.append(item);
+    }
+    issues.append(heading, list);
+    issues.hidden = false;
+  }
+}
+
+function getFastFlagPreferences() {
+  const preferences = {};
+  document.querySelectorAll('[data-fastflag]').forEach((control) => {
+    const key = control.dataset.fastflag;
+    if (key === 'grassMotion') {
+      preferences.grassMotion = control.checked ? 'minimized' : 'roblox-default';
+    } else if (control.type === 'checkbox') {
+      preferences[key] = control.checked;
+    } else {
+      preferences[key] = control.value;
+    }
+  });
+  return preferences;
+}
+
 function renderSettings() {
   applySettings(dashboard.state.settings);
 }
@@ -221,6 +314,7 @@ function render() {
   renderFavorites();
   renderInstallation();
   renderDiagnostics();
+  renderFastFlags();
   renderSettings();
 }
 
@@ -304,6 +398,15 @@ $('#favorite-form').addEventListener('submit', async (event) => {
   if (succeeded) event.currentTarget.reset();
 });
 
+$('#fastflags-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!dashboard.diagnostics.ready) {
+    showToast('Install the official Roblox Player before applying FastFlags.', 'error');
+    return;
+  }
+  await runOperation(() => window.eclipse.applyFastFlags(getFastFlagPreferences()), 'Reviewed FastFlags saved. Restart Roblox to apply them.');
+});
+
 $$('[data-setting]').forEach((control) => {
   control.addEventListener('change', (event) => {
     const key = event.currentTarget.dataset.setting;
@@ -336,6 +439,8 @@ document.addEventListener('click', (event) => {
   if (action === 'remove-profile') runOperation(() => window.eclipse.removeProfile(trigger.dataset.profileId), 'Profile removed.');
   if (action === 'remove-favorite') runOperation(() => window.eclipse.removeFavorite(trigger.dataset.placeId), 'Experience removed from your library.');
   if (action === 'reset-settings') runOperation(() => window.eclipse.resetSettings(), 'Preferences restored to defaults.');
+  if (action === 'open-fastflag-reference') runOperation(() => window.eclipse.openFastFlagReference(), 'Opening Roblox FastFlag guidance.');
+  if (action === 'reset-fastflags') runOperation(() => window.eclipse.resetFastFlags(), 'Eclipse-managed FastFlags removed. Restart Roblox to use its defaults.');
   if (action === 'cancel-launch') closeLaunchConfirmation();
   if (action === 'confirm-launch' && pendingPlaceId) {
     const placeId = pendingPlaceId;

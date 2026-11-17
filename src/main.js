@@ -17,6 +17,14 @@ const {
   toPlaceId
 } = require('./shared/state');
 const { isOfficialClientDetected } = require('./shared/installation');
+const {
+  FASTFLAG_ALLOWLIST_REFERENCE,
+  MANAGED_FASTFLAG_KEYS,
+  buildManagedFastFlagOverrides,
+  createDefaultFastFlagPreferences,
+  deriveFastFlagPreferences,
+  validateFastFlagPreferences
+} = require('./shared/fastflags');
 
 const ROBLOX_HOME_URL = 'https://www.roblox.com/';
 const ROBLOX_DOWNLOAD_URL = 'https://www.roblox.com/download';
@@ -75,6 +83,183 @@ class LocalStateStore {
       mode: 0o600
     });
     await fs.rename(temporaryPath, this.filePath);
+  }
+}
+
+
+class GuardedFastFlagService {
+  resolvePaths() {
+    if (process.platform !== 'win32' || !process.env.LOCALAPPDATA) {
+      return null;
+    }
+
+    const clientSettingsDirectory = path.join(process.env.LOCALAPPDATA, 'Roblox', 'ClientSettings');
+    return {
+      clientSettingsDirectory,
+      configurationPath: path.join(clientSettingsDirectory, 'ClientAppSettings.json'),
+      backupPath: path.join(clientSettingsDirectory, 'ClientAppSettings.eclipse-backup.json')
+    };
+  }
+
+  async getStatus() {
+    const paths = this.resolvePaths();
+    if (!paths) {
+      return {
+        available: false,
+        blocked: true,
+        configExists: false,
+        backupExists: false,
+        hasManagedOverrides: false,
+        unmanagedFlagCount: 0,
+        preferences: createDefaultFastFlagPreferences(),
+        issues: [],
+        message: 'Guarded FastFlags are available only on Windows with local application data.'
+      };
+    }
+
+    try {
+      const [configuration, backupExists] = await Promise.all([
+        this.readConfiguration(paths),
+        this.pathExists(paths.backupPath)
+      ]);
+      const derived = deriveFastFlagPreferences(configuration.flags);
+      const unmanagedFlagCount = Object.keys(configuration.flags)
+        .filter((key) => !MANAGED_FASTFLAG_KEYS.includes(key)).length;
+
+      return {
+        available: true,
+        blocked: false,
+        configExists: configuration.exists,
+        backupExists,
+        hasManagedOverrides: derived.hasManagedOverrides,
+        unmanagedFlagCount,
+        preferences: derived.preferences,
+        issues: derived.issues,
+        message: configuration.exists
+          ? 'Eclipse found ClientAppSettings.json and will preserve entries it does not manage.'
+          : 'No ClientAppSettings.json exists yet. Eclipse will create one only after you apply reviewed options.'
+      };
+    } catch (error) {
+      return {
+        available: true,
+        blocked: true,
+        configExists: true,
+        backupExists: false,
+        hasManagedOverrides: false,
+        unmanagedFlagCount: 0,
+        preferences: createDefaultFastFlagPreferences(),
+        issues: [error.message],
+        message: 'Eclipse will not modify ClientAppSettings.json until the issue is resolved.'
+      };
+    }
+  }
+
+  async apply(preferences) {
+    const paths = this.resolvePaths();
+    if (!paths) {
+      throw invalidRequest('Guarded FastFlags are available only on Windows.');
+    }
+
+    const validatedPreferences = validateFastFlagPreferences(preferences);
+    const configuration = await this.readConfiguration(paths);
+    const managedOverrides = buildManagedFastFlagOverrides(validatedPreferences);
+    if (!configuration.exists && Object.keys(managedOverrides).length === 0) {
+      return this.getStatus();
+    }
+
+    const nextFlags = { ...configuration.flags };
+    for (const key of MANAGED_FASTFLAG_KEYS) {
+      delete nextFlags[key];
+    }
+    Object.assign(nextFlags, managedOverrides);
+
+    await this.writeConfiguration(paths, nextFlags, configuration.rawContents);
+    return this.getStatus();
+  }
+
+  async reset() {
+    const paths = this.resolvePaths();
+    if (!paths) {
+      throw invalidRequest('Guarded FastFlags are available only on Windows.');
+    }
+
+    const configuration = await this.readConfiguration(paths);
+    if (!configuration.exists) {
+      return this.getStatus();
+    }
+
+    const nextFlags = { ...configuration.flags };
+    const hadManagedOverrides = MANAGED_FASTFLAG_KEYS.some((key) => Object.hasOwn(nextFlags, key));
+    if (!hadManagedOverrides) {
+      return this.getStatus();
+    }
+
+    for (const key of MANAGED_FASTFLAG_KEYS) {
+      delete nextFlags[key];
+    }
+    await this.writeConfiguration(paths, nextFlags, configuration.rawContents);
+    return this.getStatus();
+  }
+
+  async readConfiguration(paths) {
+    try {
+      const details = await fs.lstat(paths.configurationPath);
+      if (details.isSymbolicLink()) {
+        throw invalidRequest('ClientAppSettings.json is a symbolic link. Eclipse will not modify it.');
+      }
+
+      const rawContents = await fs.readFile(paths.configurationPath, 'utf8');
+      const parsed = JSON.parse(rawContents);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw invalidRequest('ClientAppSettings.json must contain a JSON object. Eclipse will not overwrite it.');
+      }
+
+      return { exists: true, rawContents, flags: parsed };
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        return { exists: false, rawContents: null, flags: {} };
+      }
+      if (error?.isExpected) {
+        throw error;
+      }
+      throw invalidRequest('ClientAppSettings.json is not valid JSON. Eclipse will not overwrite it.');
+    }
+  }
+
+  async writeConfiguration(paths, flags, previousContents) {
+    await fs.mkdir(paths.clientSettingsDirectory, { recursive: true, mode: 0o700 });
+
+    try {
+      const details = await fs.lstat(paths.clientSettingsDirectory);
+      if (details.isSymbolicLink()) {
+        throw invalidRequest('The Roblox ClientSettings directory is a symbolic link. Eclipse will not modify it.');
+      }
+    } catch (error) {
+      if (error?.isExpected) {
+        throw error;
+      }
+      throw invalidRequest('Eclipse could not validate the Roblox ClientSettings directory.');
+    }
+
+    if (previousContents !== null) {
+      await this.writeAtomically(paths.backupPath, previousContents);
+    }
+    await this.writeAtomically(paths.configurationPath, `${JSON.stringify(flags, null, 2)}\n`);
+  }
+
+  async writeAtomically(destination, contents) {
+    const temporaryPath = `${destination}.${process.pid}.${randomUUID()}.tmp`;
+    await fs.writeFile(temporaryPath, contents, { encoding: 'utf8', mode: 0o600 });
+    await fs.rename(temporaryPath, destination);
+  }
+
+  async pathExists(targetPath) {
+    try {
+      await fs.access(targetPath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -209,10 +394,11 @@ function registerIpcHandlers(store) {
 
   ipcMain.handle('eclipse:dashboard', guarded(async () => {
     const state = store.get();
-    return {
-      state,
-      diagnostics: await buildDiagnostics(state.settings)
-    };
+    const [diagnostics, fastFlags] = await Promise.all([
+      buildDiagnostics(state.settings),
+      fastFlagService.getStatus()
+    ]);
+    return { state, diagnostics, fastFlags };
   }));
 
   ipcMain.handle('eclipse:profile:create', guarded(async (payload) => {
@@ -298,6 +484,27 @@ function registerIpcHandlers(store) {
     });
   }));
 
+  ipcMain.handle('eclipse:fastflags:open-reference', guarded(async () => {
+    await shell.openExternal(FASTFLAG_ALLOWLIST_REFERENCE);
+  }));
+
+  ipcMain.handle('eclipse:fastflags:apply', guarded(async (payload) => {
+    let preferences;
+    try {
+      preferences = validateFastFlagPreferences(requireObject(payload, 'FastFlag preferences are required.'));
+    } catch (error) {
+      throw invalidRequest(error.message);
+    }
+
+    await requireInstalledRobloxClient();
+    return fastFlagService.apply(preferences);
+  }));
+
+  ipcMain.handle('eclipse:fastflags:reset', guarded(async () => {
+    await requireInstalledRobloxClient();
+    return fastFlagService.reset();
+  }));
+
   ipcMain.handle('eclipse:client:launch-experience', guarded(async (payload) => {
     const placeId = toPlaceId(payload?.placeId);
     await requireInstalledRobloxClient();
@@ -319,6 +526,7 @@ function registerIpcHandlers(store) {
 }
 
 let stateStore;
+const fastFlagService = new GuardedFastFlagService();
 
 app.whenReady().then(async () => {
   if (process.platform === 'win32') {

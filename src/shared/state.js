@@ -7,7 +7,7 @@ const MAX_PROFILES = 12;
 const MAX_FAVORITES = 48;
 const PROFILE_COLORS = new Set(['violet', 'sky', 'mint', 'amber', 'rose']);
 const PROFILE_ID_PATTERN = /^profile_[a-z0-9-]{20,}$/i;
-const UI_PAGES = ['overview', 'profiles', 'library', 'settings'];
+const UI_PAGES = ['overview', 'profiles', 'library', 'fastflags', 'settings'];
 const SETTING_OPTIONS = Object.freeze({
   theme: ['midnight', 'aurora', 'carbon'],
   accent: ['violet', 'sky', 'mint', 'amber', 'rose'],

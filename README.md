@@ -25,6 +25,19 @@ Experience launches are also enforced by the Electron main process, so a rendere
 - Provides input validation, bounded state, diagnostics, and a hardened Electron IPC boundary.
 - Uses a native desktop UI with no remote web content, no Node.js access in the renderer, and no arbitrary IPC channels.
 
+## Guarded FastFlags
+
+Eclipse implements a narrow **Guarded FastFlags** page for reviewed client-side rendering and accessibility overrides. It is not a generic FastFlag editor.
+
+- Roblox publishes a local FastFlag allowlist and can change it at any time. Read the current guidance at [Roblox’s FastFlag allowlist announcement](https://devforum.roblox.com/t/allowlist-for-local-client-configuration-via-fast-flags/3966569).
+- Eclipse applies only its fixed catalog: texture quality, minimized grass motion, a DPI-scaling workaround, 1×/2×/4× anti-aliasing, and a mutually exclusive Direct3D 11/Vulkan/OpenGL renderer choice.
+- It writes only `%LOCALAPPDATA%\\Roblox\\ClientSettings\\ClientAppSettings.json`, after detecting the official Roblox Player.
+- It never touches cache files, IXP settings, binaries, networking, scheduling, or gameplay settings.
+- Before modifying an existing configuration, Eclipse creates `ClientAppSettings.eclipse-backup.json` beside it. Restore defaults removes only Eclipse-managed keys and preserves unrelated entries.
+- Malformed JSON or symbolic links are blocked rather than overwritten.
+
+These controls are selected from an allowlisted local configuration route, but **they are not a promise against moderation action or instability**. Use Roblox defaults whenever a setting causes a problem, and restart Roblox after applying a change.
+
 ## Intentional safety boundaries
 
 Eclipse does **not** implement or plan to implement:
@@ -44,8 +57,9 @@ src/
   preload.js              Minimal context-isolated renderer bridge
   shared/state.js         Validated state, settings schema, and pure state helpers
   shared/installation.js  Testable official-client readiness predicate
+  shared/fastflags.js     Fixed FastFlag catalog, validation, and pure configuration transforms
   renderer/               Local HTML, CSS, and browser-only UI logic
-test/state.test.js        Node unit tests for state and installation-readiness behavior
+test/state.test.js        Node unit tests for state, readiness, and guarded FastFlag behavior
 ```
 
 The UI is intentionally separated from local system access. Future official integrations should be implemented as narrowly scoped main-process adapters, with explicit user consent and tests.

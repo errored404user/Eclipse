@@ -11,6 +11,11 @@ const {
   toPlaceId
 } = require('../src/shared/state');
 const { isOfficialClientDetected } = require('../src/shared/installation');
+const {
+  buildManagedFastFlagOverrides,
+  deriveFastFlagPreferences,
+  validateFastFlagPreferences
+} = require('../src/shared/fastflags');
 
 test('normalizes persisted state, drops malformed records, and removes duplicate favorites', () => {
   const state = normalizeState({
@@ -94,4 +99,61 @@ test('only a detected official client satisfies the launch gate', () => {
   assert.equal(isOfficialClientDetected({ status: 'not-detected' }), false);
   assert.equal(isOfficialClientDetected({ status: 'unsupported-platform' }), false);
   assert.equal(isOfficialClientDetected(null), false);
+});
+
+test('guarded FastFlags produce only reviewed local overrides', () => {
+  assert.deepEqual(buildManagedFastFlagOverrides({
+    textureQuality: 'roblox-default',
+    grassMotion: 'roblox-default',
+    disableDpiScaling: false,
+    antiAliasing: 'roblox-default',
+    renderer: 'roblox-default'
+  }), {});
+
+  const preferences = {
+    textureQuality: 'medium',
+    grassMotion: 'minimized',
+    disableDpiScaling: true,
+    antiAliasing: '2x',
+    renderer: 'vulkan'
+  };
+  const overrides = buildManagedFastFlagOverrides(preferences);
+
+  assert.deepEqual(overrides, {
+    DFFlagTextureQualityOverrideEnabled: 'True',
+    DFIntTextureQualityOverride: '2',
+    FIntGrassMovementReducedMotionFactor: '0',
+    DFFlagDisableDPIScale: 'True',
+    FIntDebugForceMSAASamples: '2',
+    FFlagDebugGraphicsPreferVulkan: 'True'
+  });
+  assert.throws(() => validateFastFlagPreferences({ ...preferences, customFlag: 'True' }), /Unsupported FastFlag preference/);
+  assert.throws(() => validateFastFlagPreferences({ ...preferences, renderer: 'directx12' }), /renderer FastFlag preference is invalid/);
+});
+
+test('guarded FastFlags derive reviewed values and flag renderer conflicts', () => {
+  const derived = deriveFastFlagPreferences({
+    DFFlagTextureQualityOverrideEnabled: 'True',
+    DFIntTextureQualityOverride: '3',
+    FIntGrassMovementReducedMotionFactor: '0',
+    DFFlagDisableDPIScale: 'True',
+    FIntDebugForceMSAASamples: '4',
+    FFlagDebugGraphicsPreferD3D11: 'True'
+  });
+
+  assert.equal(derived.hasManagedOverrides, true);
+  assert.deepEqual(derived.preferences, {
+    textureQuality: 'high',
+    grassMotion: 'minimized',
+    disableDpiScaling: true,
+    antiAliasing: '4x',
+    renderer: 'd3d11'
+  });
+
+  const conflicting = deriveFastFlagPreferences({
+    FFlagDebugGraphicsPreferD3D11: 'True',
+    FFlagDebugGraphicsPreferVulkan: 'True'
+  });
+  assert.equal(conflicting.preferences.renderer, 'roblox-default');
+  assert.match(conflicting.issues[0], /Multiple renderer overrides/);
 });
