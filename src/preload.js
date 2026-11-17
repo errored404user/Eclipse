@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('eclipse', Object.freeze({
   addFavorite: (favorite) => ipcRenderer.invoke('eclipse:favorite:add', favorite),
   removeFavorite: (placeId) => ipcRenderer.invoke('eclipse:favorite:remove', { placeId }),
   updateSettings: (settings) => ipcRenderer.invoke('eclipse:settings:update', settings),
+  resetSettings: () => ipcRenderer.invoke('eclipse:settings:reset'),
+  setLastPage: (page) => ipcRenderer.invoke('eclipse:ui:last-page', { page }),
   launchExperience: (placeId) => ipcRenderer.invoke('eclipse:client:launch-experience', { placeId }),
   openRobloxHome: () => ipcRenderer.invoke('eclipse:client:open-home'),
   openRobloxCatalog: () => ipcRenderer.invoke('eclipse:client:open-catalog'),

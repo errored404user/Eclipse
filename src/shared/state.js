@@ -2,17 +2,47 @@
 
 const { randomUUID } = require('node:crypto');
 
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 const MAX_PROFILES = 12;
 const MAX_FAVORITES = 48;
 const PROFILE_COLORS = new Set(['violet', 'sky', 'mint', 'amber', 'rose']);
 const PROFILE_ID_PATTERN = /^profile_[a-z0-9-]{20,}$/i;
+const UI_PAGES = ['overview', 'profiles', 'library', 'settings'];
+const SETTING_OPTIONS = Object.freeze({
+  theme: ['midnight', 'aurora', 'carbon'],
+  accent: ['violet', 'sky', 'mint', 'amber', 'rose'],
+  density: ['comfortable', 'compact'],
+  fontScale: ['standard', 'large', 'extra-large'],
+  startPage: UI_PAGES,
+  librarySort: ['recent', 'title']
+});
+const DEFAULT_SETTINGS = Object.freeze({
+  theme: 'midnight',
+  accent: 'violet',
+  density: 'comfortable',
+  fontScale: 'standard',
+  reduceMotion: false,
+  highContrast: false,
+  focusMode: false,
+  notifications: true,
+  confirmLaunch: true,
+  rememberLastPage: true,
+  startPage: 'overview',
+  librarySort: 'recent',
+  showExperienceId: true,
+  showInstallationPath: false
+});
+
+function createDefaultSettings() {
+  return { ...DEFAULT_SETTINGS };
+}
 
 function createDefaultState() {
   return {
     schemaVersion: STATE_VERSION,
-    settings: {
-      reduceMotion: false
+    settings: createDefaultSettings(),
+    ui: {
+      lastPage: 'overview'
     },
     profiles: [],
     favorites: []
@@ -52,6 +82,63 @@ function validDate(value) {
   }
 
   return new Date(value).toISOString();
+}
+
+function isUiPage(value) {
+  return typeof value === 'string' && UI_PAGES.includes(value);
+}
+
+function normalizeEnum(value, allowedValues, fallback) {
+  return typeof value === 'string' && allowedValues.includes(value) ? value : fallback;
+}
+
+function normalizeSettings(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const settings = createDefaultSettings();
+
+  for (const [key, fallback] of Object.entries(DEFAULT_SETTINGS)) {
+    if (typeof fallback === 'boolean') {
+      settings[key] = source[key] === true;
+      continue;
+    }
+
+    settings[key] = normalizeEnum(source[key], SETTING_OPTIONS[key], fallback);
+  }
+
+  return settings;
+}
+
+function normalizeSettingsPatch(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Settings details are required.');
+  }
+
+  const patch = {};
+  for (const [key, input] of Object.entries(value)) {
+    if (!Object.hasOwn(DEFAULT_SETTINGS, key)) {
+      throw new Error(`Unsupported setting: ${key}.`);
+    }
+
+    const fallback = DEFAULT_SETTINGS[key];
+    if (typeof fallback === 'boolean') {
+      if (typeof input !== 'boolean') {
+        throw new Error(`The ${key} setting must be enabled or disabled.`);
+      }
+      patch[key] = input;
+      continue;
+    }
+
+    if (typeof input !== 'string' || !SETTING_OPTIONS[key].includes(input)) {
+      throw new Error(`The ${key} setting is invalid.`);
+    }
+    patch[key] = input;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new Error('No supported settings were provided.');
+  }
+
+  return patch;
 }
 
 function normalizeProfile(value) {
@@ -98,8 +185,8 @@ function normalizeFavorite(value) {
 function normalizeState(value) {
   const source = value && typeof value === 'object' ? value : {};
   const state = createDefaultState();
-
-  state.settings.reduceMotion = source.settings?.reduceMotion === true;
+  state.settings = normalizeSettings(source.settings);
+  state.ui.lastPage = isUiPage(source.ui?.lastPage) ? source.ui.lastPage : state.settings.startPage;
 
   const profileIds = new Set();
   for (const rawProfile of Array.isArray(source.profiles) ? source.profiles : []) {
@@ -158,14 +245,21 @@ function cloneState(state) {
 }
 
 module.exports = {
+  DEFAULT_SETTINGS,
   MAX_FAVORITES,
   MAX_PROFILES,
+  SETTING_OPTIONS,
   STATE_VERSION,
+  UI_PAGES,
   boundedText,
   cloneState,
+  createDefaultSettings,
   createDefaultState,
   createFavorite,
   createProfile,
+  isUiPage,
+  normalizeSettings,
+  normalizeSettingsPatch,
   normalizeState,
   toPlaceId
 };

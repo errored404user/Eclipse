@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell" id="app-shell">
       <aside class="sidebar" aria-label="Primary navigation">
         <a class="brand" href="#overview" data-page-target="overview" aria-label="Eclipse home">
           <span class="brand-mark" aria-hidden="true"><span></span></span>
@@ -23,8 +23,8 @@
         </nav>
 
         <div class="sidebar-foot">
-          <div class="safe-mark"><span class="safe-dot"></span>Official client flow</div>
-          <p>Built to be private by default.</p>
+          <div class="safe-mark"><span class="safe-dot"></span><span id="sidebar-readiness">Checking official client</span></div>
+          <p>Private by default. Official client only.</p>
         </div>
       </aside>
 
@@ -36,23 +36,23 @@
           </div>
           <div class="topbar-actions">
             <span class="status-pill" id="client-status"><span></span>Checking client</span>
-            <button class="button button-secondary" type="button" data-action="open-download">Get Roblox</button>
+            <button class="button button-secondary" type="button" data-action="open-download">Install Roblox</button>
           </div>
         </header>
 
         <section class="page is-active" id="page-overview" data-page="overview" aria-labelledby="overview-title">
           <div class="hero-grid">
             <article class="hero-card">
-              <p class="eyebrow">ECLIPSE / ALPHA</p>
-              <h2 id="overview-title">A clearer way to start your next experience.</h2>
-              <p class="hero-copy">Eclipse keeps launch shortcuts, local preferences, and client health in one focused desktop workspace. Your Roblox sign-in remains with Roblox.</p>
+              <p class="eyebrow">ECLIPSE / SETUP FIRST</p>
+              <h2 id="overview-title">Your Roblox desktop space, built around the official client.</h2>
+              <p class="hero-copy">Install Roblox once, then keep trusted launch shortcuts, local preferences, and client health in a focused workspace. Eclipse never handles your Roblox sign-in.</p>
               <form class="quick-launch" id="quick-launch-form">
                 <label for="quick-place-id">Launch an experience</label>
                 <div class="input-action-row">
                   <input id="quick-place-id" name="placeId" inputmode="numeric" autocomplete="off" placeholder="Enter Roblox experience ID" maxlength="18" required>
-                  <button class="button button-primary" type="submit">Launch</button>
+                  <button class="button button-primary" id="quick-launch-button" type="submit">Launch</button>
                 </div>
-                <p class="form-hint">Eclipse opens the official Roblox experience page in your default browser.</p>
+                <p class="form-hint" id="launch-gate-copy">Eclipse opens the official Roblox experience page in your default browser.</p>
               </form>
             </article>
             <article class="eclipse-art" aria-hidden="true">
@@ -70,20 +70,20 @@
               <p class="eyebrow">CLIENT STATUS</p>
               <h3 id="installation-heading">Checking installation</h3>
               <p id="installation-copy">Looking for the official Roblox Player installation.</p>
-              <button class="text-button" type="button" data-action="open-download">Open official download <span>→</span></button>
+              <div class="card-actions"><button class="text-button" type="button" data-action="open-download">Open official download <span>→</span></button><button class="text-button quiet" type="button" data-action="refresh-installation">Check again</button></div>
             </article>
             <article class="info-card">
               <div class="card-icon">◌</div>
               <p class="eyebrow">LOCAL PROFILES</p>
               <h3 id="profile-count">0 profiles</h3>
-              <p>Organize local launch preferences without storing a Roblox login.</p>
+              <p>Organize local preferences without storing a Roblox account or credentials.</p>
               <button class="text-button" type="button" data-page-target="profiles">Manage profiles <span>→</span></button>
             </article>
             <article class="info-card">
               <div class="card-icon">◇</div>
               <p class="eyebrow">SAVED EXPERIENCES</p>
               <h3 id="favorite-count">0 saved</h3>
-              <p>Keep a small, private library of Roblox experience IDs you enjoy.</p>
+              <p>Keep a compact, private library of Roblox experience shortcuts.</p>
               <button class="text-button" type="button" data-page-target="library">Open library <span>→</span></button>
             </article>
           </div>
@@ -92,7 +92,7 @@
         <section class="page" id="page-profiles" data-page="profiles" aria-labelledby="profiles-title" hidden>
           <div class="section-heading">
             <div><p class="eyebrow">LOCAL ORGANIZATION</p><h2 id="profiles-title">Profiles, without credentials.</h2></div>
-            <p>Profiles are stored only on this device and contain names, notes, and a visual accent—not Roblox accounts.</p>
+            <p>Profiles are stored only on this device and contain names, notes, and a visual accent—not Roblox accounts or sessions.</p>
           </div>
           <div class="two-column-grid">
             <article class="panel">
@@ -134,19 +134,70 @@
 
         <section class="page" id="page-settings" data-page="settings" aria-labelledby="settings-title" hidden>
           <div class="section-heading">
-            <div><p class="eyebrow">PREFERENCES &amp; HEALTH</p><h2 id="settings-title">Control your Eclipse.</h2></div>
-            <p>Settings are local to this computer and each preference takes effect immediately.</p>
+            <div><p class="eyebrow">PREFERENCES &amp; HEALTH</p><h2 id="settings-title">Shape your Eclipse.</h2></div>
+            <p>Every option below is validated, saved locally, and applied immediately or on your next app launch.</p>
           </div>
-          <div class="settings-grid">
-            <article class="panel"><h3>Preferences</h3>
-              <label class="toggle-row"><span><strong>Reduce motion</strong><small>Turn off non-essential interface animations in Eclipse.</small></span><input type="checkbox" id="reduce-motion"><i></i></label>
+          <div class="settings-grid settings-grid-wide">
+            <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">APPEARANCE</p><h3>Make it yours</h3></div><span class="panel-index">01</span></div>
+              <div class="field-grid">
+                <label>Theme<select data-setting="theme"><option value="midnight">Midnight</option><option value="aurora">Aurora</option><option value="carbon">Carbon</option></select></label>
+                <label>Accent<select data-setting="accent"><option value="violet">Violet</option><option value="sky">Sky</option><option value="mint">Mint</option><option value="amber">Amber</option><option value="rose">Rose</option></select></label>
+                <label>Density<select data-setting="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
+                <label>Text size<select data-setting="fontScale"><option value="standard">Standard</option><option value="large">Large</option><option value="extra-large">Extra large</option></select></label>
+              </div>
+              <label class="toggle-row"><span><strong>Focus mode</strong><small>Hide decorative artwork and keep the workspace visually quiet.</small></span><input type="checkbox" data-setting="focusMode"><i></i></label>
             </article>
-            <article class="panel"><h3>Diagnostics</h3><dl class="diagnostics" id="diagnostics-list"></dl><button class="button button-secondary full-width" type="button" data-action="refresh">Refresh diagnostics</button></article>
+
+            <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">ACCESSIBILITY</p><h3>Comfort comes first</h3></div><span class="panel-index">02</span></div>
+              <label class="toggle-row"><span><strong>Reduce motion</strong><small>Turn off non-essential interface animations and transitions.</small></span><input type="checkbox" data-setting="reduceMotion"><i></i></label>
+              <label class="toggle-row"><span><strong>High contrast</strong><small>Increase visual separation between text, panels, borders, and controls.</small></span><input type="checkbox" data-setting="highContrast"><i></i></label>
+              <label class="toggle-row"><span><strong>Interface notifications</strong><small>Show confirmations for successful local actions. Errors are always shown.</small></span><input type="checkbox" data-setting="notifications"><i></i></label>
+            </article>
+
+            <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LAUNCH &amp; NAVIGATION</p><h3>Choose your flow</h3></div><span class="panel-index">03</span></div>
+              <div class="field-grid one-column">
+                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="settings">Settings</option></select></label>
+              </div>
+              <label class="toggle-row"><span><strong>Remember last page</strong><small>Open Eclipse where you left off instead of using the selected start page.</small></span><input type="checkbox" data-setting="rememberLastPage"><i></i></label>
+              <label class="toggle-row"><span><strong>Confirm before launch</strong><small>Review an experience ID before Eclipse opens the official Roblox page.</small></span><input type="checkbox" data-setting="confirmLaunch"><i></i></label>
+            </article>
+
+            <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LIBRARY &amp; PRIVACY</p><h3>Control what you see</h3></div><span class="panel-index">04</span></div>
+              <div class="field-grid one-column">
+                <label>Library sorting<select data-setting="librarySort"><option value="recent">Most recently saved</option><option value="title">Name A–Z</option></select></label>
+              </div>
+              <label class="toggle-row"><span><strong>Show experience IDs</strong><small>Display numeric place IDs in your local saved-experience library.</small></span><input type="checkbox" data-setting="showExperienceId"><i></i></label>
+              <label class="toggle-row"><span><strong>Show installation path</strong><small>Reveal the locally detected Roblox path in Diagnostics. Hidden by default.</small></span><input type="checkbox" data-setting="showInstallationPath"><i></i></label>
+            </article>
           </div>
+
+          <div class="settings-footer"><div><h3>Restore defaults</h3><p>Reset Eclipse preferences and its remembered page. Your profiles and saved experiences are kept.</p></div><button class="button button-secondary" type="button" data-action="reset-settings">Restore defaults</button></div>
+          <article class="diagnostics-card"><div><p class="eyebrow">SYSTEM CHECK</p><h3>Diagnostics</h3></div><dl class="diagnostics" id="diagnostics-list"></dl><button class="button button-secondary" type="button" data-action="refresh-installation">Refresh client check</button></article>
           <article class="safety-note"><span>✦</span><div><h3>Safety is an Eclipse feature.</h3><p>Nothing in Eclipse accesses Roblox credentials, alters Roblox files, injects into the client, or automates gameplay.</p></div></article>
         </section>
       </main>
     </div>
+
+    <section class="setup-overlay" id="installation-gate" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
+      <div class="setup-dialog">
+        <div class="setup-orbit" aria-hidden="true"><span></span></div>
+        <p class="eyebrow">ECLIPSE SETUP</p>
+        <h2 id="setup-title">Install Roblox before you launch.</h2>
+        <p id="setup-copy">Eclipse only works with the official Roblox Player. Install it from Roblox, then return here for a local check.</p>
+        <ol class="setup-steps" aria-label="Setup steps">
+          <li class="is-current"><span>1</span><div><strong>Download from Roblox</strong><small>Eclipse opens Roblox’s official download page—nothing is bundled or silently installed.</small></div></li>
+          <li id="setup-verify-step"><span>2</span><div><strong>Run the official installer</strong><small>Complete Roblox’s own setup and sign in only through Roblox.</small></div></li>
+          <li id="setup-ready-step"><span>3</span><div><strong>Check and continue</strong><small>Eclipse unlocks experience launches after detection succeeds.</small></div></li>
+        </ol>
+        <div class="setup-actions"><button class="button button-secondary" type="button" data-action="open-download">Open official download</button><button class="button button-primary" type="button" data-action="refresh-installation">Check again</button></div>
+        <p class="setup-note">Eclipse does not download, modify, or store files from your Roblox account.</p>
+      </div>
+    </section>
+
+    <section class="confirm-overlay" id="launch-confirmation" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+      <div class="confirm-dialog"><p class="eyebrow">CONFIRM OFFICIAL LAUNCH</p><h2 id="confirm-title">Open this experience?</h2><p id="confirm-copy">Eclipse will open the official Roblox experience page in your default browser.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-launch">Cancel</button><button class="button button-primary" type="button" data-action="confirm-launch">Open Roblox</button></div></div>
+    </section>
+
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     <script src="app.js"></script>
   </body>

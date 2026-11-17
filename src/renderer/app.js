@@ -8,10 +8,17 @@ const pageTitles = {
 };
 
 let dashboard;
+let initializedPage = false;
+let pendingPlaceId = null;
 
 const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function showToast(message, type = 'success') {
+  if (type === 'success' && dashboard?.state?.settings?.notifications === false) {
+    return;
+  }
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
@@ -27,18 +34,26 @@ function formatDate(isoString) {
   }
 }
 
-function setPage(pageName) {
+function setPage(pageName, { persist = true } = {}) {
   if (!pageTitles[pageName]) return;
 
-  document.querySelectorAll('[data-page]').forEach((page) => {
+  $$('[data-page]').forEach((page) => {
     const active = page.dataset.page === pageName;
     page.hidden = !active;
     page.classList.toggle('is-active', active);
   });
-  document.querySelectorAll('[data-page-target]').forEach((button) => {
+  $$('[data-page-target]').forEach((button) => {
     button.classList.toggle('is-active', button.dataset.pageTarget === pageName);
   });
   $('#page-title').textContent = pageTitles[pageName];
+
+  if (persist && dashboard?.state.settings.rememberLastPage) {
+    window.eclipse.setLastPage(pageName).then((state) => {
+      dashboard.state = state;
+    }).catch(() => {
+      // Page persistence should never prevent local navigation.
+    });
+  }
 }
 
 function createButton(label, action, payload, className = 'icon-button') {
@@ -80,9 +95,18 @@ function renderProfiles() {
   }
 }
 
+function sortFavorites(favorites) {
+  const ordered = [...favorites];
+  if (dashboard.state.settings.librarySort === 'title') {
+    return ordered.sort((left, right) => left.title.localeCompare(right.title, undefined, { sensitivity: 'base' }));
+  }
+
+  return ordered.sort((left, right) => Date.parse(right.addedAt) - Date.parse(left.addedAt));
+}
+
 function renderFavorites() {
-  const favorites = dashboard.state.favorites;
-  $('#favorite-count').textContent = `${favorites.length} ${favorites.length === 1 ? 'saved' : 'saved'}`;
+  const favorites = sortFavorites(dashboard.state.favorites);
+  $('#favorite-count').textContent = `${favorites.length} saved`;
   $('#favorite-list-count').textContent = String(favorites.length);
   const list = $('#favorites-list');
   list.replaceChildren();
@@ -102,7 +126,8 @@ function renderFavorites() {
     const title = document.createElement('h4');
     title.textContent = favorite.title;
     const meta = document.createElement('p');
-    meta.textContent = `Experience ID ${favorite.placeId} · Saved ${formatDate(favorite.addedAt)}`;
+    const idLabel = dashboard.state.settings.showExperienceId ? `Experience ID ${favorite.placeId} · ` : '';
+    meta.textContent = `${idLabel}Saved ${formatDate(favorite.addedAt)}`;
     detail.append(title, meta);
     const actions = document.createElement('div');
     actions.className = 'inline-actions';
@@ -115,27 +140,49 @@ function renderFavorites() {
   }
 }
 
+function renderInstallation() {
+  const { diagnostics } = dashboard;
+  const { installation, ready } = diagnostics;
+  const status = $('#client-status');
+  status.classList.toggle('is-ready', ready);
+  status.classList.toggle('is-warning', !ready);
+  status.replaceChildren();
+  status.append(document.createElement('span'), document.createTextNode(ready ? 'Client detected' : 'Setup required'));
+
+  $('#sidebar-readiness').textContent = ready ? 'Official client ready' : 'Setup required';
+  $('#installation-heading').textContent = ready ? 'Roblox Player detected' : 'Roblox Player not detected';
+  $('#installation-copy').textContent = installation.message;
+  $('#quick-launch-button').disabled = !ready;
+  $('#quick-place-id').disabled = !ready;
+  $('#launch-gate-copy').textContent = ready
+    ? 'Eclipse opens the official Roblox experience page in your default browser.'
+    : 'Install the official Roblox Player, then select “Check again” to unlock launches.';
+
+  const gate = $('#installation-gate');
+  gate.hidden = ready;
+  document.body.classList.toggle('setup-required', !ready);
+  $('#setup-copy').textContent = ready
+    ? 'The official Roblox Player is ready. Eclipse can now open official experience pages.'
+    : `${installation.message} Use Roblox’s official installer, then return here to check again.`;
+  $('#setup-verify-step').classList.toggle('is-current', !ready);
+  $('#setup-ready-step').classList.toggle('is-complete', ready);
+}
+
 function renderDiagnostics() {
   const { diagnostics } = dashboard;
-  const installation = diagnostics.installation;
-  const detected = installation.status === 'detected';
-  const status = $('#client-status');
-  status.classList.toggle('is-ready', detected);
-  status.classList.toggle('is-warning', !detected);
-  status.innerHTML = '<span></span>';
-  status.append(document.createTextNode(detected ? 'Client detected' : 'Client not detected'));
-
-  $('#installation-heading').textContent = detected ? 'Roblox Player detected' : 'Roblox Player not detected';
-  $('#installation-copy').textContent = installation.message;
-
-  const diagnosticsList = $('#diagnostics-list');
-  diagnosticsList.replaceChildren();
   const rows = [
     ['Eclipse version', diagnostics.appVersion],
     ['Runtime', diagnostics.platform],
-    ['Client status', installation.status.replaceAll('-', ' ')],
+    ['Client status', diagnostics.installation.status.replaceAll('-', ' ')],
     ['Security', diagnostics.security]
   ];
+
+  if (diagnostics.installation.executablePath) {
+    rows.splice(3, 0, ['Detected path', diagnostics.installation.executablePath]);
+  }
+
+  const diagnosticsList = $('#diagnostics-list');
+  diagnosticsList.replaceChildren();
   for (const [term, value] of rows) {
     const dt = document.createElement('dt');
     dt.textContent = term;
@@ -145,22 +192,47 @@ function renderDiagnostics() {
   }
 }
 
+function applySettings(settings) {
+  const root = document.documentElement;
+  root.dataset.theme = settings.theme;
+  root.dataset.accent = settings.accent;
+  root.dataset.density = settings.density;
+  root.dataset.fontScale = settings.fontScale;
+  root.classList.toggle('reduce-motion', settings.reduceMotion);
+  root.classList.toggle('high-contrast', settings.highContrast);
+  root.classList.toggle('focus-mode', settings.focusMode);
+
+  $$('[data-setting]').forEach((control) => {
+    const value = settings[control.dataset.setting];
+    if (control.type === 'checkbox') {
+      control.checked = value === true;
+    } else {
+      control.value = value;
+    }
+  });
+}
+
 function renderSettings() {
-  const reduceMotion = dashboard.state.settings.reduceMotion;
-  $('#reduce-motion').checked = reduceMotion;
-  document.documentElement.classList.toggle('reduce-motion', reduceMotion);
+  applySettings(dashboard.state.settings);
 }
 
 function render() {
   renderProfiles();
   renderFavorites();
+  renderInstallation();
   renderDiagnostics();
   renderSettings();
 }
 
-async function refreshDashboard() {
+async function refreshDashboard({ initializePage = false } = {}) {
   dashboard = await window.eclipse.getDashboard();
   render();
+
+  if (initializePage || !initializedPage) {
+    const { settings, ui } = dashboard.state;
+    setPage(settings.rememberLastPage ? ui.lastPage : settings.startPage, { persist: false });
+    initializedPage = true;
+  }
 }
 
 async function runOperation(operation, successMessage) {
@@ -168,33 +240,82 @@ async function runOperation(operation, successMessage) {
     await operation();
     await refreshDashboard();
     if (successMessage) showToast(successMessage);
+    return true;
   } catch (error) {
     showToast(error?.message || 'Eclipse could not complete that action.', 'error');
+    return false;
+  }
+}
+
+function showLaunchConfirmation(placeId) {
+  pendingPlaceId = String(placeId);
+  $('#confirm-copy').textContent = `Eclipse will open Roblox experience ID ${pendingPlaceId} through the official Roblox page in your default browser.`;
+  $('#launch-confirmation').hidden = false;
+}
+
+function closeLaunchConfirmation() {
+  pendingPlaceId = null;
+  $('#launch-confirmation').hidden = true;
+}
+
+async function requestLaunch(placeId) {
+  if (!dashboard.diagnostics.ready) {
+    showToast('Install the official Roblox Player before launching an experience.', 'error');
+    return;
+  }
+
+  if (dashboard.state.settings.confirmLaunch) {
+    showLaunchConfirmation(placeId);
+    return;
+  }
+
+  await runOperation(() => window.eclipse.launchExperience(placeId), 'Opening the official Roblox experience page.');
+}
+
+async function refreshInstallation() {
+  try {
+    await refreshDashboard();
+    if (dashboard.diagnostics.ready) {
+      showToast('Official Roblox Player detected. Launches are unlocked.');
+    } else {
+      showToast('Roblox Player is not detected yet. Complete the official installer, then check again.', 'error');
+    }
+  } catch (error) {
+    showToast(error?.message || 'Eclipse could not refresh the installation check.', 'error');
   }
 }
 
 $('#quick-launch-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const input = $('#quick-place-id');
-  await runOperation(async () => window.eclipse.launchExperience(input.value), 'Opening the official Roblox experience page.');
+  await requestLaunch($('#quick-place-id').value);
 });
 
 $('#profile-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  await runOperation(async () => window.eclipse.createProfile(Object.fromEntries(form)), 'Local profile created.');
-  event.currentTarget.reset();
+  const succeeded = await runOperation(() => window.eclipse.createProfile(Object.fromEntries(form)), 'Local profile created.');
+  if (succeeded) event.currentTarget.reset();
 });
 
 $('#favorite-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  await runOperation(async () => window.eclipse.addFavorite(Object.fromEntries(form)), 'Experience saved to your library.');
-  event.currentTarget.reset();
+  const succeeded = await runOperation(() => window.eclipse.addFavorite(Object.fromEntries(form)), 'Experience saved to your library.');
+  if (succeeded) event.currentTarget.reset();
 });
 
-$('#reduce-motion').addEventListener('change', (event) => {
-  runOperation(async () => window.eclipse.updateSettings({ reduceMotion: event.currentTarget.checked }), 'Motion preference saved.');
+$$('[data-setting]').forEach((control) => {
+  control.addEventListener('change', (event) => {
+    const key = event.currentTarget.dataset.setting;
+    const value = event.currentTarget.type === 'checkbox' ? event.currentTarget.checked : event.currentTarget.value;
+    runOperation(() => window.eclipse.updateSettings({ [key]: value }), 'Preference saved.');
+  });
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('#launch-confirmation').hidden) {
+    closeLaunchConfirmation();
+  }
 });
 
 document.addEventListener('click', (event) => {
@@ -208,14 +329,21 @@ document.addEventListener('click', (event) => {
   }
 
   const action = trigger.dataset.action;
-  if (action === 'open-download') runOperation(() => window.eclipse.openRobloxDownload(), 'Opening the official Roblox download page.');
+  if (action === 'open-download') runOperation(() => window.eclipse.openRobloxDownload(), 'Opening Roblox’s official download page.');
   if (action === 'open-catalog') runOperation(() => window.eclipse.openRobloxCatalog(), 'Opening the official Roblox catalog.');
-  if (action === 'refresh') runOperation(() => Promise.resolve(), 'Diagnostics refreshed.');
-  if (action === 'launch-experience') runOperation(() => window.eclipse.launchExperience(trigger.dataset.placeId), 'Opening the official Roblox experience page.');
+  if (action === 'refresh-installation') refreshInstallation();
+  if (action === 'launch-experience') requestLaunch(trigger.dataset.placeId);
   if (action === 'remove-profile') runOperation(() => window.eclipse.removeProfile(trigger.dataset.profileId), 'Profile removed.');
   if (action === 'remove-favorite') runOperation(() => window.eclipse.removeFavorite(trigger.dataset.placeId), 'Experience removed from your library.');
+  if (action === 'reset-settings') runOperation(() => window.eclipse.resetSettings(), 'Preferences restored to defaults.');
+  if (action === 'cancel-launch') closeLaunchConfirmation();
+  if (action === 'confirm-launch' && pendingPlaceId) {
+    const placeId = pendingPlaceId;
+    closeLaunchConfirmation();
+    runOperation(() => window.eclipse.launchExperience(placeId), 'Opening the official Roblox experience page.');
+  }
 });
 
-refreshDashboard().catch((error) => {
+refreshDashboard({ initializePage: true }).catch((error) => {
   showToast(error?.message || 'Eclipse could not load its local dashboard.', 'error');
 });

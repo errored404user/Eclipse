@@ -11,9 +11,12 @@ const {
   createDefaultState,
   createFavorite,
   createProfile,
+  isUiPage,
+  normalizeSettingsPatch,
   normalizeState,
   toPlaceId
 } = require('./shared/state');
+const { isOfficialClientDetected } = require('./shared/installation');
 
 const ROBLOX_HOME_URL = 'https://www.roblox.com/';
 const ROBLOX_DOWNLOAD_URL = 'https://www.roblox.com/download';
@@ -147,13 +150,26 @@ async function detectRobloxInstallation() {
   };
 }
 
-async function buildDiagnostics() {
+async function buildDiagnostics(settings) {
+  const rawInstallation = await detectRobloxInstallation();
+  const { executablePath, ...redactedInstallation } = rawInstallation;
+  const installation = settings.showInstallationPath ? rawInstallation : redactedInstallation;
+
   return {
     appVersion: app.getVersion(),
     platform: `${process.platform} ${process.arch}`,
-    installation: await detectRobloxInstallation(),
+    ready: isOfficialClientDetected(rawInstallation),
+    installation,
     security: 'Credential-free local state; no client patching, injection, or game automation.'
   };
+}
+
+async function requireInstalledRobloxClient() {
+  const installation = await detectRobloxInstallation();
+  if (!isOfficialClientDetected(installation)) {
+    throw invalidRequest('Install the official Roblox Player and select “Check again” before launching an experience from Eclipse.');
+  }
+  return installation;
 }
 
 function createMainWindow() {
@@ -191,10 +207,13 @@ function registerIpcHandlers(store) {
     }
   };
 
-  ipcMain.handle('eclipse:dashboard', guarded(async () => ({
-    state: store.get(),
-    diagnostics: await buildDiagnostics()
-  })));
+  ipcMain.handle('eclipse:dashboard', guarded(async () => {
+    const state = store.get();
+    return {
+      state,
+      diagnostics: await buildDiagnostics(state.settings)
+    };
+  }));
 
   ipcMain.handle('eclipse:profile:create', guarded(async (payload) => {
     const profile = createProfile(requireObject(payload, 'Profile details are required.'));
@@ -240,16 +259,40 @@ function registerIpcHandlers(store) {
   }));
 
   ipcMain.handle('eclipse:settings:update', guarded(async (payload) => {
-    const patch = requireObject(payload, 'Settings details are required.');
-    const acceptedKeys = ['reduceMotion'];
-    const keys = acceptedKeys.filter((key) => typeof patch[key] === 'boolean');
-    if (keys.length === 0) {
-      throw invalidRequest('No supported settings were provided.');
+    let patch;
+    try {
+      patch = normalizeSettingsPatch(requireObject(payload, 'Settings details are required.'));
+    } catch (error) {
+      throw invalidRequest(error.message);
     }
 
     return store.update((state) => {
-      for (const key of keys) {
-        state.settings[key] = patch[key];
+      state.settings = { ...state.settings, ...patch };
+      if ('startPage' in patch && !state.settings.rememberLastPage) {
+        state.ui.lastPage = state.settings.startPage;
+      }
+      return state;
+    });
+  }));
+
+  ipcMain.handle('eclipse:settings:reset', guarded(async () => {
+    const defaults = createDefaultState();
+    return store.update((state) => ({
+      ...state,
+      settings: defaults.settings,
+      ui: defaults.ui
+    }));
+  }));
+
+  ipcMain.handle('eclipse:ui:last-page', guarded(async (payload) => {
+    const page = payload?.page;
+    if (!isUiPage(page)) {
+      throw invalidRequest('The requested page is invalid.');
+    }
+
+    return store.update((state) => {
+      if (state.settings.rememberLastPage) {
+        state.ui.lastPage = page;
       }
       return state;
     });
@@ -257,6 +300,7 @@ function registerIpcHandlers(store) {
 
   ipcMain.handle('eclipse:client:launch-experience', guarded(async (payload) => {
     const placeId = toPlaceId(payload?.placeId);
+    await requireInstalledRobloxClient();
     await shell.openExternal(`https://www.roblox.com/games/${placeId}`);
     return { placeId };
   }));
