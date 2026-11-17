@@ -34,6 +34,7 @@
           <button class="nav-item" type="button" data-page-target="library" title="Library"><span class="nav-glyph" aria-hidden="true">◇</span><span class="nav-label">Library</span></button>
           <button class="nav-item" type="button" data-page-target="integrations" title="Integrations"><span class="nav-glyph" aria-hidden="true">◎</span><span class="nav-label">Integrations</span></button>
           <button class="nav-item" type="button" data-page-target="deployment" title="Deployment"><span class="nav-glyph" aria-hidden="true">⇣</span><span class="nav-label">Deployment</span></button>
+          <button class="nav-item" type="button" data-page-target="installation" title="Install guide"><span class="nav-glyph" aria-hidden="true">?</span><span class="nav-label">Install guide</span></button>
           <button class="nav-item" type="button" data-page-target="fastflags" title="Guarded FastFlags"><span class="nav-glyph" aria-hidden="true">≋</span><span class="nav-label">FastFlags</span></button>
           <button class="nav-item" type="button" data-page-target="settings" title="Settings"><span class="nav-glyph" aria-hidden="true">⌘</span><span class="nav-label">Settings</span></button>
         </nav>
@@ -126,7 +127,7 @@
                 <button class="button button-primary" type="submit">Create profile</button>
               </form>
             </article>
-            <div class="list-panel"><div class="list-heading"><h3>Your profiles</h3><span id="profile-list-count" class="count-badge">0</span></div><div id="profiles-list" class="card-list"></div></div>
+            <div class="list-panel"><div class="list-heading"><h3>Your profiles</h3><span id="profile-list-count" class="count-badge">0</span></div><label class="profile-search" for="profile-search"><span aria-hidden="true">⌕</span><input id="profile-search" type="search" autocomplete="off" placeholder="Search profile names or notes"></label><p class="filter-hint" id="profile-filter-hint">Pinned profiles stay at the top.</p><div id="profiles-list" class="card-list"></div></div>
           </div>
         </section>
 
@@ -189,7 +190,7 @@
           <article class="deployment-hero">
             <div class="deployment-badge" aria-hidden="true">↗</div>
             <div><p class="eyebrow">OFFICIAL PLAYER</p><h3 id="deployment-heading">Checking local installation</h3><p id="deployment-copy">Eclipse is checking the standard Windows Roblox Player location.</p></div>
-            <div class="deployment-actions"><button class="button button-primary" type="button" data-action="open-download">Open official installer</button><button class="button button-secondary" type="button" data-action="refresh-installation">Check again</button></div>
+            <div class="deployment-actions"><button class="button button-primary" type="button" data-page-target="installation">Open install guide</button><button class="button button-secondary" type="button" data-action="refresh-installation">Check again</button></div>
           </article>
 
           <div class="deployment-grid">
@@ -197,6 +198,28 @@
             <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">UPDATE POLICY</p><h3>Roblox-managed updates</h3></div><span class="panel-index">02</span></div><p>Roblox’s official Player selects its own production deployment and updates itself. Eclipse does not override client channels, domains, or update sources.</p><span class="availability-badge good">Official defaults retained</span></article>
             <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">REPAIR PATH</p><h3>Reinstall through Roblox</h3></div><span class="panel-index">03</span></div><p>If the player is missing or damaged, download and run the current installer from Roblox. This preserves the official installation and verification path.</p><button class="text-button" type="button" data-action="open-download">Open Roblox download <span>→</span></button></article>
           </div>
+        </section>
+
+        <section class="page" id="page-installation" data-page="installation" aria-labelledby="installation-guide-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">OFFICIAL INSTALLATION GUIDE</p><h2 id="installation-guide-title">A clear path back to Roblox.</h2></div>
+            <p>Use this local guide when the official Player is missing or needs a fresh install. Eclipse never downloads, runs, repairs, or modifies the client for you.</p>
+          </div>
+
+          <article class="guide-hero">
+            <div class="guide-badge" aria-hidden="true">✓</div>
+            <div><p class="eyebrow">LOCAL DETECTION</p><h3 id="guide-heading">Checking official Roblox Player</h3><p id="guide-copy">Eclipse is checking the standard Windows Roblox Player location.</p></div>
+            <span class="guide-status" id="guide-status"><i></i><strong>Checking</strong></span>
+          </article>
+
+          <ol class="installation-steps" id="installation-steps">
+            <li data-install-step="detect"><span class="step-number">01</span><div><p class="eyebrow">LOCAL CHECK</p><h3>Check the official Player</h3><p>Eclipse looks only in Roblox’s conventional Windows install location. A detected Player unlocks official experience-page launches; it does not grant Eclipse access to your account.</p><button class="text-button quiet" type="button" data-action="refresh-installation">Run local check again <span>→</span></button></div></li>
+            <li data-install-step="download"><span class="step-number">02</span><div><p class="eyebrow">OFFICIAL SOURCE</p><h3>Open Roblox’s download page</h3><p>Download the current Player only from Roblox. Eclipse opens the official page in your default browser and does not bundle an installer.</p><button class="button button-secondary" type="button" data-action="open-download">Open official download</button></div></li>
+            <li data-install-step="install"><span class="step-number">03</span><div><p class="eyebrow">ROBLOX INSTALLER</p><h3>Run the official installer</h3><p>Complete Roblox’s own installation and sign-in flow there. Do not enter Roblox credentials into Eclipse—Eclipse never asks for or stores them.</p></div></li>
+            <li data-install-step="recheck"><span class="step-number">04</span><div><p class="eyebrow">RETURN TO ECLIPSE</p><h3>Re-check and continue</h3><p>Return here after Roblox finishes. Eclipse will refresh the local detection result and keep experience launches locked until the official Player is found.</p><button class="button button-primary" type="button" data-action="refresh-installation">Check installation</button></div></li>
+          </ol>
+
+          <article class="guide-boundary"><span aria-hidden="true">✦</span><div><h3>What this guide will not do</h3><p>No alternate channels, unofficial domains, client redistribution, silent installs, binary edits, or account handling. Roblox remains in control of its installation and update process.</p></div></article>
         </section>
 
         <section class="page" id="page-fastflags" data-page="fastflags" aria-labelledby="fastflags-title" hidden>
@@ -282,9 +305,10 @@
 
             <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LAUNCH &amp; NAVIGATION</p><h3>Choose your flow</h3></div><span class="panel-index">03</span></div>
               <div class="field-grid one-column">
-                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="integrations">Integrations</option><option value="deployment">Deployment</option><option value="fastflags">FastFlags</option><option value="settings">Settings</option></select></label>
+                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="integrations">Integrations</option><option value="deployment">Deployment</option><option value="installation">Install guide</option><option value="fastflags">FastFlags</option><option value="settings">Settings</option></select></label>
               </div>
               <label class="toggle-row"><span><strong>Remember last page</strong><small>Open Eclipse where you left off instead of using the selected start page.</small></span><input type="checkbox" data-setting="rememberLastPage"><i></i></label>
+              <label class="toggle-row"><span><strong>Show startup launcher</strong><small>Show Eclipse’s compact launcher when the app opens. Turn it off to go directly to your workspace.</small></span><input type="checkbox" data-setting="showStartupLauncher"><i></i></label>
               <label class="toggle-row"><span><strong>Confirm before launch</strong><small>Review an experience ID before Eclipse opens the official Roblox page.</small></span><input type="checkbox" data-setting="confirmLaunch"><i></i></label>
             </article>
 
@@ -297,6 +321,7 @@
             </article>
           </div>
 
+          <article class="backup-panel"><div><p class="eyebrow">LOCAL BACKUP</p><h3>Take your Eclipse setup with you.</h3><p>Export or restore a portable JSON file containing Eclipse-owned profiles, saved experiences, preferences, and workspace choices. It never includes Roblox credentials, sessions, client files, or FastFlag configuration.</p></div><div class="backup-actions"><button class="button button-secondary" type="button" data-action="export-backup">Export Eclipse data</button><button class="button button-primary" type="button" data-action="preview-backup-import">Import backup</button></div></article>
           <div class="settings-footer"><div><h3>Restore defaults</h3><p>Reset Eclipse preferences and its remembered page. Your profiles and saved experiences are kept.</p></div><button class="button button-secondary" type="button" data-action="reset-settings">Restore defaults</button></div>
           <article class="diagnostics-card"><div><p class="eyebrow">SYSTEM CHECK</p><h3>Diagnostics</h3></div><dl class="diagnostics" id="diagnostics-list"></dl><button class="button button-secondary" type="button" data-action="refresh-installation">Refresh client check</button></article>
           <article class="safety-note"><span>✦</span><div><h3>Safety is an Eclipse feature.</h3><p>Nothing in Eclipse accesses Roblox credentials, alters Roblox files, injects into the client, or automates gameplay.</p></div></article>
@@ -335,6 +360,10 @@
 
     <section class="confirm-overlay" id="launch-confirmation" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
       <div class="confirm-dialog"><p class="eyebrow">CONFIRM OFFICIAL LAUNCH</p><h2 id="confirm-title">Open this experience?</h2><p id="confirm-copy">Eclipse will open the official Roblox experience page in your default browser.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-launch">Cancel</button><button class="button button-primary" type="button" data-action="confirm-launch">Open Roblox</button></div></div>
+    </section>
+
+    <section class="confirm-overlay" id="backup-import-preview" role="dialog" aria-modal="true" aria-labelledby="backup-preview-title" hidden>
+      <div class="confirm-dialog backup-dialog"><p class="eyebrow">REVIEW ECLIPSE BACKUP</p><h2 id="backup-preview-title">Replace this Eclipse setup?</h2><p id="backup-preview-copy">Review the local data in this backup before continuing.</p><dl class="backup-summary" id="backup-preview-summary"></dl><p class="backup-warning">Importing replaces Eclipse-owned profiles, saved experiences, preferences, and workspace state. It does not change Roblox files, accounts, or FastFlag configuration.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-backup-import">Cancel</button><button class="button button-primary" type="button" data-action="confirm-backup-import">Replace Eclipse data</button></div></div>
     </section>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>

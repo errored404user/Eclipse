@@ -6,6 +6,7 @@ const pageTitles = {
   library: 'Library',
   integrations: 'Integrations',
   deployment: 'Deployment',
+  installation: 'Install guide',
   fastflags: 'Guarded FastFlags',
   settings: 'Settings'
 };
@@ -13,6 +14,8 @@ const pageTitles = {
 let dashboard;
 let initializedPage = false;
 let pendingPlaceId = null;
+let pendingBackupToken = null;
+let profileSearch = '';
 let launcherVisible = true;
 
 const $ = (selector) => document.querySelector(selector);
@@ -72,29 +75,56 @@ function createButton(label, action, payload, className = 'icon-button') {
 
 function renderProfiles() {
   const profiles = dashboard.state.profiles;
-  $('#profile-count').textContent = `${profiles.length} ${profiles.length === 1 ? 'profile' : 'profiles'}`;
-  $('#profile-list-count').textContent = String(profiles.length);
+  const query = profileSearch.trim().toLocaleLowerCase();
+  const visibleProfiles = profiles
+    .filter((profile) => !query || `${profile.name} ${profile.description}`.toLocaleLowerCase().includes(query))
+    .sort((left, right) => Number(right.pinned) - Number(left.pinned)
+      || Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  const pinnedCount = profiles.filter((profile) => profile.pinned).length;
+
+  $('#profile-count').textContent = `${profiles.length} ${profiles.length === 1 ? 'profile' : 'profiles'}${pinnedCount ? ` · ${pinnedCount} pinned` : ''}`;
+  $('#profile-list-count').textContent = String(visibleProfiles.length);
+  $('#profile-filter-hint').textContent = query
+    ? `${visibleProfiles.length} matching ${visibleProfiles.length === 1 ? 'profile' : 'profiles'} · pins remain first.`
+    : pinnedCount ? `${pinnedCount} pinned ${pinnedCount === 1 ? 'profile stays' : 'profiles stay'} at the top.` : 'Pin important profiles to keep them at the top.';
   const list = $('#profiles-list');
   list.replaceChildren();
 
-  if (profiles.length === 0) {
+  if (profiles.length === 0 || visibleProfiles.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'empty-state';
-    empty.textContent = 'Create a profile to keep a named local setup in Eclipse.';
+    empty.textContent = profiles.length === 0
+      ? 'Create a profile to keep a named local setup in Eclipse.'
+      : 'No local profiles match that search.';
     list.append(empty);
     return;
   }
 
-  for (const profile of profiles) {
+  for (const profile of visibleProfiles) {
     const item = document.createElement('article');
-    item.className = `list-card profile-card accent-${profile.color}`;
+    item.className = `list-card profile-card accent-${profile.color}${profile.pinned ? ' is-pinned' : ''}`;
     const detail = document.createElement('div');
+    const titleRow = document.createElement('div');
+    titleRow.className = 'profile-title-row';
     const title = document.createElement('h4');
     title.textContent = profile.name;
+    titleRow.append(title);
+    if (profile.pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'profile-pin';
+      pin.textContent = 'Pinned';
+      titleRow.append(pin);
+    }
     const description = document.createElement('p');
     description.textContent = profile.description || `Created ${formatDate(profile.createdAt)}`;
-    detail.append(title, description);
-    item.append(detail, createButton('Remove', 'remove-profile', { profileId: profile.id }));
+    detail.append(titleRow, description);
+    const actions = document.createElement('div');
+    actions.className = 'profile-actions';
+    actions.append(
+      createButton(profile.pinned ? 'Unpin' : 'Pin', 'toggle-profile-pin', { profileId: profile.id }, 'text-button compact'),
+      createButton('Remove', 'remove-profile', { profileId: profile.id })
+    );
+    item.append(detail, actions);
     list.append(item);
   }
 }
@@ -363,6 +393,24 @@ function renderDeployment() {
   }
 }
 
+function renderInstallationGuide() {
+  const { installation, ready } = dashboard.diagnostics;
+  const status = $('#guide-status');
+  status.classList.toggle('is-ready', ready);
+  status.replaceChildren(document.createElement('i'), document.createTextNode(ready ? 'Player detected' : 'Action needed'));
+  $('#guide-heading').textContent = ready ? 'Official Roblox Player detected' : 'Official Roblox Player not detected';
+  $('#guide-copy').textContent = ready
+    ? 'The official Player is available locally. Eclipse will continue to require Roblox’s official browser and client flow.'
+    : installation.message;
+
+  $$('[data-install-step]').forEach((step) => {
+    const stepName = step.dataset.installStep;
+    step.classList.toggle('is-complete', ready);
+    step.classList.toggle('is-current', !ready && (stepName === 'detect' || stepName === 'download'));
+    step.classList.toggle('is-pending', !ready && stepName !== 'detect' && stepName !== 'download');
+  });
+}
+
 function renderLauncher() {
   $('#launcher-screen').hidden = !launcherVisible;
 }
@@ -384,6 +432,7 @@ function render() {
   renderDiagnostics();
   renderIntegrations();
   renderDeployment();
+  renderInstallationGuide();
   renderFastFlags();
   renderSettings();
   renderLauncher();
@@ -391,6 +440,9 @@ function render() {
 
 async function refreshDashboard({ initializePage = false } = {}) {
   dashboard = await window.eclipse.getDashboard();
+  if (initializePage || !initializedPage) {
+    launcherVisible = dashboard.state.settings.showStartupLauncher;
+  }
   render();
 
   if (initializePage || !initializedPage) {
@@ -421,6 +473,64 @@ function showLaunchConfirmation(placeId) {
 function closeLaunchConfirmation() {
   pendingPlaceId = null;
   $('#launch-confirmation').hidden = true;
+}
+
+function closeBackupPreview() {
+  pendingBackupToken = null;
+  $('#backup-import-preview').hidden = true;
+}
+
+function showBackupPreview(preview) {
+  pendingBackupToken = preview.token;
+  $('#backup-preview-copy').textContent = 'Review this local Eclipse backup before replacing the current Eclipse-owned data on this device.';
+  const summary = $('#backup-preview-summary');
+  summary.replaceChildren();
+  const rows = [
+    ['Local profiles', String(preview.summary.profileCount)],
+    ['Pinned profiles', String(preview.summary.pinnedProfileCount)],
+    ['Saved experiences', String(preview.summary.favoriteCount)],
+    ['Eclipse preferences', String(preview.summary.preferenceCount)]
+  ];
+  for (const [term, value] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = term;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    summary.append(dt, dd);
+  }
+  $('#backup-import-preview').hidden = false;
+}
+
+async function exportBackup() {
+  try {
+    const result = await window.eclipse.exportBackup();
+    if (!result.canceled) {
+      showToast('Eclipse-owned data exported as a local JSON backup.');
+    }
+  } catch (error) {
+    showToast(error?.message || 'Eclipse could not export a backup.', 'error');
+  }
+}
+
+async function previewBackupImport() {
+  try {
+    const preview = await window.eclipse.previewBackupImport();
+    if (!preview.canceled) showBackupPreview(preview);
+  } catch (error) {
+    showToast(error?.message || 'Eclipse could not read that backup.', 'error');
+  }
+}
+
+async function confirmBackupImport() {
+  if (!pendingBackupToken) return;
+  const token = pendingBackupToken;
+  closeBackupPreview();
+  const imported = await runOperation(() => window.eclipse.importBackup(token), 'Eclipse-owned data replaced from the reviewed backup.');
+  if (imported) {
+    profileSearch = '';
+    $('#profile-search').value = '';
+    renderProfiles();
+  }
 }
 
 async function requestLaunch(placeId) {
@@ -469,6 +579,11 @@ $('#favorite-form').addEventListener('submit', async (event) => {
   if (succeeded) event.currentTarget.reset();
 });
 
+$('#profile-search').addEventListener('input', (event) => {
+  profileSearch = event.currentTarget.value;
+  renderProfiles();
+});
+
 $('#fastflags-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!dashboard.diagnostics.ready) {
@@ -501,9 +616,9 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !$('#launch-confirmation').hidden) {
-    closeLaunchConfirmation();
-  }
+  if (event.key !== 'Escape') return;
+  if (!$('#launch-confirmation').hidden) closeLaunchConfirmation();
+  if (!$('#backup-import-preview').hidden) closeBackupPreview();
 });
 
 document.addEventListener('click', (event) => {
@@ -526,7 +641,12 @@ document.addEventListener('click', (event) => {
   if (action === 'launcher-open-integrations') dismissLauncher('integrations');
   if (action === 'launcher-open-deployment') dismissLauncher('deployment');
   if (action === 'launch-experience') requestLaunch(trigger.dataset.placeId);
+  if (action === 'toggle-profile-pin') runOperation(() => window.eclipse.toggleProfilePin(trigger.dataset.profileId), 'Profile pin updated.');
   if (action === 'remove-profile') runOperation(() => window.eclipse.removeProfile(trigger.dataset.profileId), 'Profile removed.');
+  if (action === 'export-backup') exportBackup();
+  if (action === 'preview-backup-import') previewBackupImport();
+  if (action === 'cancel-backup-import') closeBackupPreview();
+  if (action === 'confirm-backup-import') confirmBackupImport();
   if (action === 'remove-favorite') runOperation(() => window.eclipse.removeFavorite(trigger.dataset.placeId), 'Experience removed from your library.');
   if (action === 'reset-settings') runOperation(() => window.eclipse.resetSettings(), 'Preferences restored to defaults.');
   if (action === 'open-fastflag-reference') runOperation(() => window.eclipse.openFastFlagReference(), 'Opening Roblox FastFlag guidance.');

@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -20,6 +20,12 @@ const {
   toPlaceId
 } = require('./shared/state');
 const { isOfficialClientDetected } = require('./shared/installation');
+const {
+  MAX_BACKUP_BYTES,
+  createBackupEnvelope,
+  summarizeBackup,
+  validateBackupEnvelope
+} = require('./shared/backup');
 const {
   FASTFLAG_ALLOWLIST_REFERENCE,
   MANAGED_FASTFLAG_KEYS,
@@ -66,6 +72,10 @@ class LocalStateStore {
     return cloneState(this.state);
   }
 
+  replace(nextState) {
+    return this.update(() => nextState);
+  }
+
   update(mutator) {
     const operation = this.writeQueue.then(async () => {
       const proposedState = mutator(this.get());
@@ -89,6 +99,125 @@ class LocalStateStore {
   }
 }
 
+
+class EclipseBackupService {
+  constructor(store) {
+    this.store = store;
+    this.pendingImports = new Map();
+  }
+
+  async exportForWindow(window) {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const result = await dialog.showSaveDialog(window, {
+      title: 'Export Eclipse backup',
+      defaultPath: `eclipse-backup-${timestamp}.json`,
+      filters: [{ name: 'Eclipse backup', extensions: ['json'] }]
+    });
+
+    if (result.canceled || !result.filePath) {
+      return { canceled: true };
+    }
+
+    const envelope = createBackupEnvelope(this.store.get());
+    await this.writeBackup(result.filePath, `${JSON.stringify(envelope, null, 2)}\n`);
+    return { canceled: false, summary: summarizeBackup(envelope.state) };
+  }
+
+  async previewForWindow(window) {
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Choose an Eclipse backup',
+      filters: [{ name: 'Eclipse backup', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+
+    if (result.canceled || result.filePaths.length !== 1) {
+      return { canceled: true };
+    }
+
+    const contents = await this.readBackup(result.filePaths[0]);
+    let importedState;
+    try {
+      importedState = validateBackupEnvelope(JSON.parse(contents));
+    } catch (error) {
+      throw invalidRequest(error?.message || 'Eclipse could not validate that backup file.');
+    }
+
+    this.pendingImports.clear();
+    const token = randomUUID();
+    this.pendingImports.set(token, {
+      state: importedState,
+      ownerWebContentsId: window?.webContents.id ?? null,
+      expiresAt: Date.now() + 5 * 60 * 1000
+    });
+    return { canceled: false, token, summary: summarizeBackup(importedState) };
+  }
+
+  async importPending(token, window) {
+    if (typeof token !== 'string') {
+      throw invalidRequest('Choose and preview an Eclipse backup before importing it.');
+    }
+
+    const pending = this.pendingImports.get(token);
+    this.pendingImports.delete(token);
+    if (!pending || pending.expiresAt < Date.now()) {
+      throw invalidRequest('The backup preview expired. Choose the backup again before importing it.');
+    }
+    if (pending.ownerWebContentsId !== null && pending.ownerWebContentsId !== window?.webContents.id) {
+      throw invalidRequest('That backup preview belongs to a different Eclipse window. Choose the backup again.');
+    }
+
+    return this.store.replace(pending.state);
+  }
+
+  async readBackup(filePath) {
+    let details;
+    try {
+      details = await fs.lstat(filePath);
+    } catch {
+      throw invalidRequest('Eclipse could not read the selected backup file.');
+    }
+
+    if (!details.isFile() || details.isSymbolicLink()) {
+      throw invalidRequest('The selected backup must be a regular JSON file, not a link or directory.');
+    }
+    if (details.size > MAX_BACKUP_BYTES) {
+      throw invalidRequest('The selected backup is larger than Eclipse’s 1 MB local-backup limit.');
+    }
+
+    try {
+      return await fs.readFile(filePath, 'utf8');
+    } catch {
+      throw invalidRequest('Eclipse could not read the selected backup file.');
+    }
+  }
+
+  async writeBackup(destination, contents) {
+    try {
+      const details = await fs.lstat(destination);
+      if (details.isSymbolicLink() || !details.isFile()) {
+        throw invalidRequest('Choose a regular file name for the Eclipse backup.');
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        if (error?.isExpected) throw error;
+        throw invalidRequest('Eclipse could not validate the selected backup location.');
+      }
+    }
+
+    const temporaryPath = `${destination}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temporaryPath, contents, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      await fs.rename(temporaryPath, destination);
+    } catch {
+      try {
+        await fs.unlink(temporaryPath);
+      } catch {
+        // A failed cleanup does not change the original error result.
+      }
+      throw invalidRequest('Eclipse could not save the backup at that location.');
+    }
+  }
+}
 
 class GuardedFastFlagService {
   resolvePaths() {
@@ -436,9 +565,9 @@ function createMainWindow() {
 }
 
 function registerIpcHandlers(store) {
-  const guarded = (handler) => async (_event, payload) => {
+  const guarded = (handler) => async (event, payload) => {
     try {
-      return await handler(payload);
+      return await handler(payload, event);
     } catch (error) {
       if (!error?.isExpected) {
         console.error('Eclipse IPC operation failed:', error);
@@ -448,6 +577,7 @@ function registerIpcHandlers(store) {
   };
 
   const currentWindow = (event) => BrowserWindow.fromWebContents(event.sender);
+  const backups = new EclipseBackupService(store);
   ipcMain.on('eclipse:window:minimize', (event) => currentWindow(event)?.minimize());
   ipcMain.on('eclipse:window:toggle-maximize', (event) => {
     const window = currentWindow(event);
@@ -485,6 +615,18 @@ function registerIpcHandlers(store) {
     const profileId = requireProfileId(payload?.profileId);
     return store.update((state) => {
       state.profiles = state.profiles.filter((profile) => profile.id !== profileId);
+      return state;
+    });
+  }));
+
+  ipcMain.handle('eclipse:profile:toggle-pin', guarded(async (payload) => {
+    const profileId = requireProfileId(payload?.profileId);
+    return store.update((state) => {
+      const profile = state.profiles.find((entry) => entry.id === profileId);
+      if (!profile) {
+        throw invalidRequest('That local profile no longer exists.');
+      }
+      profile.pinned = !profile.pinned;
       return state;
     });
   }));
@@ -537,6 +679,18 @@ function registerIpcHandlers(store) {
       settings: defaults.settings,
       ui: defaults.ui
     }));
+  }));
+
+  ipcMain.handle('eclipse:backup:export', guarded(async (payload, event) => {
+    return backups.exportForWindow(currentWindow(event));
+  }));
+
+  ipcMain.handle('eclipse:backup:preview-import', guarded(async (payload, event) => {
+    return backups.previewForWindow(currentWindow(event));
+  }));
+
+  ipcMain.handle('eclipse:backup:import', guarded(async (payload, event) => {
+    return backups.importPending(payload?.token, currentWindow(event));
   }));
 
   ipcMain.handle('eclipse:ui:last-page', guarded(async (payload) => {

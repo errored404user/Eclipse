@@ -25,13 +25,21 @@ Eclipse opens with a compact launcher for the most common next steps:
 
 The **Integrations** page currently offers one optional local-only signal: whether `RobloxPlayerBeta.exe` is running on Windows. This check is off by default, is evaluated only when Eclipse refreshes its local dashboard, and does not read account, game, place, server, or activity-history data. It is never uploaded. Discord Rich Presence is visibly marked unavailable in this release; Eclipse makes no claim that it is active.
 
+A dedicated **Install guide** turns official-client detection into four clear steps: check the local Player, open Roblox’s official download page, run Roblox’s installer, then re-check in Eclipse. It provides guidance only—Eclipse never installs, repairs, redistributes, or modifies Roblox.
+
+## Local organization and backup
+
+Profiles are local labels with a name, note, color, and optional pin. Pinned profiles remain at the top, and profile search looks only through local profile names and notes.
+
+Eclipse can export a portable, versioned JSON backup of **Eclipse-owned state only**: profiles, saved experience shortcuts, preferences, and workspace state. It excludes Roblox credentials, sessions, client files, and Guarded FastFlag configuration. Importing a backup first displays its counts and then requires explicit confirmation before replacing the current Eclipse-owned data. Backup files are selected with the operating system’s native file dialog; the renderer never receives arbitrary file-system paths.
+
 ## What works today
 
 - Detects common Windows Roblox client installation locations without changing them.
 - Provides a setup-first onboarding flow and blocks experience launches until the official player is detected.
 - Opens official Roblox game and catalog pages in the user's default browser, allowing Roblox's official flow to launch the client.
 - Stores locally named launch profiles and favorite experience IDs in an atomic JSON state file.
-- Provides fifteen validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, optional local activity presence, launch confirmation, navigation, library presentation, and diagnostic privacy.
+- Provides sixteen validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, optional local activity presence, startup-launcher visibility, launch confirmation, navigation, library presentation, and diagnostic privacy.
 - Provides input validation, bounded state, diagnostics, and a hardened Electron IPC boundary.
 - Uses a native desktop UI with no remote web content, no Node.js access in the renderer, and no arbitrary IPC channels.
 
@@ -67,6 +75,7 @@ src/
   preload.js              Minimal context-isolated renderer bridge
   shared/state.js         Validated state, settings schema, and pure state helpers
   shared/installation.js  Testable official-client readiness predicate
+  shared/backup.js        Versioned Eclipse-owned backup envelope and validation helpers
   shared/fastflags.js     Fixed FastFlag catalog, validation, and pure configuration transforms
   renderer/               Local HTML, CSS, and browser-only UI logic
 test/state.test.js        Node unit tests for state, readiness, and guarded FastFlag behavior

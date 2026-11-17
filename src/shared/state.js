@@ -2,12 +2,12 @@
 
 const { randomUUID } = require('node:crypto');
 
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
 const MAX_PROFILES = 12;
 const MAX_FAVORITES = 48;
 const PROFILE_COLORS = new Set(['violet', 'sky', 'mint', 'amber', 'rose']);
 const PROFILE_ID_PATTERN = /^profile_[a-z0-9-]{20,}$/i;
-const UI_PAGES = ['overview', 'profiles', 'library', 'integrations', 'deployment', 'fastflags', 'settings'];
+const UI_PAGES = ['overview', 'profiles', 'library', 'integrations', 'deployment', 'installation', 'fastflags', 'settings'];
 const SETTING_OPTIONS = Object.freeze({
   theme: ['midnight', 'aurora', 'carbon'],
   accent: ['violet', 'sky', 'mint', 'amber', 'rose'],
@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   focusMode: false,
   notifications: true,
   activityTracking: false,
+  showStartupLauncher: true,
   confirmLaunch: true,
   rememberLastPage: true,
   startPage: 'overview',
@@ -99,7 +100,7 @@ function normalizeSettings(value) {
 
   for (const [key, fallback] of Object.entries(DEFAULT_SETTINGS)) {
     if (typeof fallback === 'boolean') {
-      settings[key] = source[key] === true;
+      settings[key] = typeof source[key] === 'boolean' ? source[key] : fallback;
       continue;
     }
 
@@ -160,6 +161,7 @@ function normalizeProfile(value) {
     name,
     description: boundedText(value.description, 140),
     color: PROFILE_COLORS.has(color) ? color : 'violet',
+    pinned: value.pinned === true,
     createdAt: validDate(value.createdAt)
   };
 }
@@ -226,6 +228,7 @@ function createProfile(input) {
     name,
     description: boundedText(input?.description, 140),
     color: PROFILE_COLORS.has(color) ? color : 'violet',
+    pinned: false,
     createdAt: new Date().toISOString()
   };
 }

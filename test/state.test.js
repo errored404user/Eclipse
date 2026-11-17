@@ -12,6 +12,13 @@ const {
 } = require('../src/shared/state');
 const { isOfficialClientDetected } = require('../src/shared/installation');
 const {
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  createBackupEnvelope,
+  summarizeBackup,
+  validateBackupEnvelope
+} = require('../src/shared/backup');
+const {
   buildManagedFastFlagOverrides,
   deriveFastFlagPreferences,
   validateFastFlagPreferences
@@ -19,10 +26,10 @@ const {
 
 test('normalizes persisted state, drops malformed records, and removes duplicate favorites', () => {
   const state = normalizeState({
-    settings: { reduceMotion: true, activityTracking: true, theme: 'aurora', density: 'compact', accent: 'mint' },
+    settings: { reduceMotion: true, activityTracking: true, showStartupLauncher: false, theme: 'aurora', density: 'compact', accent: 'mint' },
     ui: { lastPage: 'library' },
     profiles: [
-      { id: 'profile_12345678901234567890', name: '  Main\nSetup ', description: ' First   profile ', color: 'mint', createdAt: '2026-01-01' },
+      { id: 'profile_12345678901234567890', name: '  Main\nSetup ', description: ' First   profile ', color: 'mint', pinned: true, createdAt: '2026-01-01' },
       { name: '   ' }
     ],
     favorites: [
@@ -32,15 +39,17 @@ test('normalizes persisted state, drops malformed records, and removes duplicate
     ]
   });
 
-  assert.equal(state.schemaVersion, 2);
+  assert.equal(state.schemaVersion, 3);
   assert.equal(state.settings.reduceMotion, true);
   assert.equal(state.settings.activityTracking, true);
+  assert.equal(state.settings.showStartupLauncher, false);
   assert.equal(state.settings.theme, 'aurora');
   assert.equal(state.settings.accent, 'mint');
   assert.equal(state.settings.density, 'compact');
   assert.equal(state.ui.lastPage, 'library');
   assert.deepEqual(state.profiles[0].name, 'Main Setup');
   assert.deepEqual(state.profiles[0].description, 'First profile');
+  assert.equal(state.profiles[0].pinned, true);
   assert.equal(state.favorites.length, 1);
   assert.equal(state.favorites[0].placeId, 1818);
   assert.equal(state.favorites[0].title, 'Classic Crossroads');
@@ -52,6 +61,7 @@ test('settings use safe defaults and reject malformed update patches', () => {
       theme: 'untrusted-theme',
       highContrast: 'true',
       activityTracking: 'true',
+      showStartupLauncher: 'false',
       startPage: 'unknown-page',
       librarySort: 'title'
     },
@@ -61,13 +71,15 @@ test('settings use safe defaults and reject malformed update patches', () => {
   assert.equal(state.settings.theme, 'midnight');
   assert.equal(state.settings.highContrast, false);
   assert.equal(state.settings.activityTracking, false);
+  assert.equal(state.settings.showStartupLauncher, true);
   assert.equal(state.settings.startPage, 'overview');
   assert.equal(state.settings.librarySort, 'title');
   assert.equal(state.ui.lastPage, 'overview');
-  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, theme: 'carbon' }), { highContrast: true, activityTracking: true, theme: 'carbon' });
+  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, showStartupLauncher: false, theme: 'carbon' }), { highContrast: true, activityTracking: true, showStartupLauncher: false, theme: 'carbon' });
   assert.throws(() => normalizeSettingsPatch({ theme: 'untrusted-theme' }), /theme setting is invalid/);
   assert.throws(() => normalizeSettingsPatch({ highContrast: 'true' }), /highContrast setting must be enabled or disabled/);
   assert.throws(() => normalizeSettingsPatch({ activityTracking: 'true' }), /activityTracking setting must be enabled or disabled/);
+  assert.throws(() => normalizeSettingsPatch({ showStartupLauncher: 'false' }), /showStartupLauncher setting must be enabled or disabled/);
   assert.throws(() => normalizeSettingsPatch({ unknown: true }), /Unsupported setting/);
 });
 
@@ -80,6 +92,7 @@ test('profile and favorite creators enforce required valid user inputs', () => {
   assert.match(profile.id, /^profile_/);
   assert.equal(profile.name, 'Weekend');
   assert.equal(profile.color, 'sky');
+  assert.equal(profile.pinned, false);
 
   const favorite = createFavorite({ placeId: '1818', title: '  Crossroads ' });
   assert.equal(favorite.placeId, 1818);
@@ -96,6 +109,34 @@ test('state retains a bounded number of unique favorite entries', () => {
   assert.equal(state.favorites.length, MAX_FAVORITES);
   assert.equal(state.favorites[0].placeId, 1);
   assert.equal(state.favorites.at(-1).placeId, MAX_FAVORITES);
+});
+
+test('versioned Eclipse backups validate and retain only normalized local state', () => {
+  const source = normalizeState({
+    settings: { theme: 'carbon', showStartupLauncher: false },
+    ui: { lastPage: 'installation' },
+    profiles: [{ id: 'profile_12345678901234567890', name: 'Pinned local setup', pinned: true, color: 'sky' }],
+    favorites: [{ placeId: 1818, title: 'Crossroads' }]
+  });
+  const envelope = createBackupEnvelope(source, '2026-11-17T00:00:00.000Z');
+
+  assert.equal(envelope.format, BACKUP_FORMAT);
+  assert.equal(envelope.version, BACKUP_VERSION);
+  assert.equal(envelope.state.profiles[0].pinned, true);
+  assert.deepEqual(summarizeBackup(envelope.state), {
+    profileCount: 1,
+    pinnedProfileCount: 1,
+    favoriteCount: 1,
+    preferenceCount: Object.keys(source.settings).length
+  });
+
+  const restored = validateBackupEnvelope(envelope);
+  assert.equal(restored.settings.theme, 'carbon');
+  assert.equal(restored.settings.showStartupLauncher, false);
+  assert.equal(restored.ui.lastPage, 'installation');
+  assert.equal(restored.profiles[0].pinned, true);
+  assert.throws(() => validateBackupEnvelope({ format: 'other', version: 1, state: {} }), /not a supported Eclipse backup/);
+  assert.throws(() => validateBackupEnvelope({ format: BACKUP_FORMAT, version: BACKUP_VERSION, state: { settings: {}, ui: {} } }), /missing required local state/);
 });
 
 test('only a detected official client satisfies the launch gate', () => {
