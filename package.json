@@ -1,0 +1,23 @@
+{
+  "name": "eclipse-roblox-client",
+  "productName": "Eclipse",
+  "version": "0.1.0",
+  "description": "A privacy-first Windows desktop hub for the official Roblox client.",
+  "main": "src/main.js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/shared/state.js && node --check src/shared/installation.js && node --check src/shared/fastflags.js && node --check src/shared/backup.js",
+    "pack": "electron-packager . Eclipse --platform=win32 --arch=x64 --out=release --overwrite --asar --prune=true",
+    "dist": "npm run check && npm test && npm run pack"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.3.3"
+  }
+}
