@@ -19,7 +19,7 @@ const {
 
 test('normalizes persisted state, drops malformed records, and removes duplicate favorites', () => {
   const state = normalizeState({
-    settings: { reduceMotion: true, theme: 'aurora', density: 'compact', accent: 'mint' },
+    settings: { reduceMotion: true, activityTracking: true, theme: 'aurora', density: 'compact', accent: 'mint' },
     ui: { lastPage: 'library' },
     profiles: [
       { id: 'profile_12345678901234567890', name: '  Main\nSetup ', description: ' First   profile ', color: 'mint', createdAt: '2026-01-01' },
@@ -34,6 +34,7 @@ test('normalizes persisted state, drops malformed records, and removes duplicate
 
   assert.equal(state.schemaVersion, 2);
   assert.equal(state.settings.reduceMotion, true);
+  assert.equal(state.settings.activityTracking, true);
   assert.equal(state.settings.theme, 'aurora');
   assert.equal(state.settings.accent, 'mint');
   assert.equal(state.settings.density, 'compact');
@@ -50,6 +51,7 @@ test('settings use safe defaults and reject malformed update patches', () => {
     settings: {
       theme: 'untrusted-theme',
       highContrast: 'true',
+      activityTracking: 'true',
       startPage: 'unknown-page',
       librarySort: 'title'
     },
@@ -58,12 +60,14 @@ test('settings use safe defaults and reject malformed update patches', () => {
 
   assert.equal(state.settings.theme, 'midnight');
   assert.equal(state.settings.highContrast, false);
+  assert.equal(state.settings.activityTracking, false);
   assert.equal(state.settings.startPage, 'overview');
   assert.equal(state.settings.librarySort, 'title');
   assert.equal(state.ui.lastPage, 'overview');
-  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, theme: 'carbon' }), { highContrast: true, theme: 'carbon' });
+  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, theme: 'carbon' }), { highContrast: true, activityTracking: true, theme: 'carbon' });
   assert.throws(() => normalizeSettingsPatch({ theme: 'untrusted-theme' }), /theme setting is invalid/);
   assert.throws(() => normalizeSettingsPatch({ highContrast: 'true' }), /highContrast setting must be enabled or disabled/);
+  assert.throws(() => normalizeSettingsPatch({ activityTracking: 'true' }), /activityTracking setting must be enabled or disabled/);
   assert.throws(() => normalizeSettingsPatch({ unknown: true }), /Unsupported setting/);
 });
 

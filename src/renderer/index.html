@@ -32,6 +32,8 @@
           <button class="nav-item is-active" type="button" data-page-target="overview" title="Overview"><span class="nav-glyph" aria-hidden="true">✦</span><span class="nav-label">Overview</span></button>
           <button class="nav-item" type="button" data-page-target="profiles" title="Profiles"><span class="nav-glyph" aria-hidden="true">◌</span><span class="nav-label">Profiles</span></button>
           <button class="nav-item" type="button" data-page-target="library" title="Library"><span class="nav-glyph" aria-hidden="true">◇</span><span class="nav-label">Library</span></button>
+          <button class="nav-item" type="button" data-page-target="integrations" title="Integrations"><span class="nav-glyph" aria-hidden="true">◎</span><span class="nav-label">Integrations</span></button>
+          <button class="nav-item" type="button" data-page-target="deployment" title="Deployment"><span class="nav-glyph" aria-hidden="true">⇣</span><span class="nav-label">Deployment</span></button>
           <button class="nav-item" type="button" data-page-target="fastflags" title="Guarded FastFlags"><span class="nav-glyph" aria-hidden="true">≋</span><span class="nav-label">FastFlags</span></button>
           <button class="nav-item" type="button" data-page-target="settings" title="Settings"><span class="nav-glyph" aria-hidden="true">⌘</span><span class="nav-label">Settings</span></button>
         </nav>
@@ -148,6 +150,55 @@
           </div>
         </section>
 
+        <section class="page" id="page-integrations" data-page="integrations" aria-labelledby="integrations-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">LOCAL CONNECTIONS</p><h2 id="integrations-title">Integrations with boundaries.</h2></div>
+            <p>Every integration is opt-in. Eclipse keeps activity checks local and does not collect Roblox account, game, server, or telemetry data.</p>
+          </div>
+
+          <article class="integration-hero">
+            <div class="integration-signal" aria-hidden="true"><span></span><i></i><b></b></div>
+            <div><p class="eyebrow">ACTIVITY TRACKING</p><h3 id="activity-heading">Local player presence</h3><p id="activity-copy">Activity tracking is disabled. Eclipse is not checking running processes.</p></div>
+            <div class="integration-status" id="activity-status"><span></span><strong>Disabled</strong></div>
+          </article>
+
+          <div class="integration-grid">
+            <article class="panel integration-panel">
+              <div class="panel-heading"><div><p class="eyebrow">LOCAL ACTIVITY</p><h3>Player presence</h3></div><span class="panel-index">01</span></div>
+              <label class="toggle-row"><span><strong>Enable activity tracking</strong><small>Checks only whether <code>RobloxPlayerBeta.exe</code> is running on this device. Eclipse does not inspect your account, game, server, or activity history.</small></span><input type="checkbox" data-setting="activityTracking"><i></i></label>
+              <button class="button button-secondary full-width" type="button" data-action="refresh-activity">Refresh local status</button>
+            </article>
+            <article class="panel integration-panel">
+              <div class="panel-heading"><div><p class="eyebrow">PRIVACY STATUS</p><h3>What Eclipse does not do</h3></div><span class="panel-index">02</span></div>
+              <ul class="boundary-list"><li><span>✓</span>No account credentials or cookies</li><li><span>✓</span>No game or place identification</li><li><span>✓</span>No server lookup or location sharing</li><li><span>✓</span>No background telemetry upload</li></ul>
+            </article>
+            <article class="panel integration-panel integration-unavailable">
+              <div class="panel-heading"><div><p class="eyebrow">FUTURE INTEGRATION</p><h3>Discord Rich Presence</h3></div><span class="panel-index">03</span></div>
+              <p>Not enabled in this build. Eclipse will not display a setting for an integration until it has a privacy review, a working local implementation, and clear consent.</p>
+              <span class="availability-badge">Unavailable by design</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="page-deployment" data-page="deployment" aria-labelledby="deployment-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">OFFICIAL CLIENT DELIVERY</p><h2 id="deployment-title">Install safely. Keep Roblox in control.</h2></div>
+            <p>Eclipse never bundles, patches, or redistributes the Roblox client. Installation, repair, and client updates stay with Roblox’s official flow.</p>
+          </div>
+
+          <article class="deployment-hero">
+            <div class="deployment-badge" aria-hidden="true">↗</div>
+            <div><p class="eyebrow">OFFICIAL PLAYER</p><h3 id="deployment-heading">Checking local installation</h3><p id="deployment-copy">Eclipse is checking the standard Windows Roblox Player location.</p></div>
+            <div class="deployment-actions"><button class="button button-primary" type="button" data-action="open-download">Open official installer</button><button class="button button-secondary" type="button" data-action="refresh-installation">Check again</button></div>
+          </article>
+
+          <div class="deployment-grid">
+            <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">CLIENT STATUS</p><h3>Local deployment</h3></div><span class="panel-index">01</span></div><dl class="deployment-details" id="deployment-details"></dl></article>
+            <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">UPDATE POLICY</p><h3>Roblox-managed updates</h3></div><span class="panel-index">02</span></div><p>Roblox’s official Player selects its own production deployment and updates itself. Eclipse does not override client channels, domains, or update sources.</p><span class="availability-badge good">Official defaults retained</span></article>
+            <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">REPAIR PATH</p><h3>Reinstall through Roblox</h3></div><span class="panel-index">03</span></div><p>If the player is missing or damaged, download and run the current installer from Roblox. This preserves the official installation and verification path.</p><button class="text-button" type="button" data-action="open-download">Open Roblox download <span>→</span></button></article>
+          </div>
+        </section>
+
         <section class="page" id="page-fastflags" data-page="fastflags" aria-labelledby="fastflags-title" hidden>
           <div class="section-heading">
             <div><p class="eyebrow">GUARDED CLIENT SETTINGS</p><h2 id="fastflags-title">Reviewed FastFlags only.</h2></div>
@@ -231,7 +282,7 @@
 
             <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LAUNCH &amp; NAVIGATION</p><h3>Choose your flow</h3></div><span class="panel-index">03</span></div>
               <div class="field-grid one-column">
-                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="fastflags">FastFlags</option><option value="settings">Settings</option></select></label>
+                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="integrations">Integrations</option><option value="deployment">Deployment</option><option value="fastflags">FastFlags</option><option value="settings">Settings</option></select></label>
               </div>
               <label class="toggle-row"><span><strong>Remember last page</strong><small>Open Eclipse where you left off instead of using the selected start page.</small></span><input type="checkbox" data-setting="rememberLastPage"><i></i></label>
               <label class="toggle-row"><span><strong>Confirm before launch</strong><small>Review an experience ID before Eclipse opens the official Roblox page.</small></span><input type="checkbox" data-setting="confirmLaunch"><i></i></label>
@@ -252,6 +303,19 @@
         </section>
       </main>
     </div>
+
+    <section class="launcher-screen" id="launcher-screen" role="dialog" aria-modal="true" aria-labelledby="launcher-title">
+      <div class="launcher-dialog">
+        <div class="launcher-identity"><span class="launcher-mark" aria-hidden="true"><i></i></span><div><p class="eyebrow">ECLIPSE DESKTOP</p><h2 id="launcher-title">Eclipse</h2><span class="launcher-version">Official Roblox companion</span></div></div>
+        <div class="launcher-links"><button type="button" data-action="launcher-open-deployment">Official installation</button><button type="button" data-action="launcher-open-integrations">Privacy &amp; integrations</button></div>
+        <div class="launcher-actions">
+          <button class="launcher-action primary" type="button" data-action="launcher-open-roblox"><span aria-hidden="true">↗</span><span><strong>Open Roblox</strong><small>Continue through Roblox’s official home</small></span><b aria-hidden="true">›</b></button>
+          <button class="launcher-action" type="button" data-action="launcher-open-settings"><span aria-hidden="true">⌘</span><span><strong>Configure Eclipse</strong><small>Open the full launchpad and settings</small></span><b aria-hidden="true">›</b></button>
+          <button class="launcher-action" type="button" data-action="launcher-open-deployment"><span aria-hidden="true">⇣</span><span><strong>Deployment &amp; installation</strong><small>Check or install the official Roblox Player</small></span><b aria-hidden="true">›</b></button>
+        </div>
+        <p class="launcher-note">Eclipse is local, credential-free, and built around the official Roblox client.</p>
+      </div>
+    </section>
 
     <section class="setup-overlay" id="installation-gate" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
       <div class="setup-dialog">

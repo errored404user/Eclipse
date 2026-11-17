@@ -4,6 +4,8 @@ const pageTitles = {
   overview: 'Good to see you.',
   profiles: 'Profiles',
   library: 'Library',
+  integrations: 'Integrations',
+  deployment: 'Deployment',
   fastflags: 'Guarded FastFlags',
   settings: 'Settings'
 };
@@ -11,6 +13,7 @@ const pageTitles = {
 let dashboard;
 let initializedPage = false;
 let pendingPlaceId = null;
+let launcherVisible = true;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -162,9 +165,11 @@ function renderInstallation() {
     ? 'Eclipse opens the official Roblox experience page in your default browser.'
     : 'Install the official Roblox Player, then select “Check again” to unlock launches.';
 
+  // Launches stay gated in both the UI and main process, but setup no longer blocks
+  // deployment, integrations, or other local configuration pages.
   const gate = $('#installation-gate');
-  gate.hidden = ready;
-  document.body.classList.toggle('setup-required', !ready);
+  gate.hidden = true;
+  document.body.classList.remove('setup-required');
   $('#setup-copy').textContent = ready
     ? 'The official Roblox Player is ready. Eclipse can now open official experience pages.'
     : `${installation.message} Use Roblox’s official installer, then return here to check again.`;
@@ -308,6 +313,66 @@ function getFastFlagPreferences() {
   return preferences;
 }
 
+function renderIntegrations() {
+  const activity = dashboard.activity;
+  const status = $('#activity-status');
+  status.classList.toggle('is-ready', activity.status === 'running');
+  status.classList.toggle('is-warning', activity.status === 'unavailable');
+  status.replaceChildren();
+  const indicator = document.createElement('span');
+  const label = document.createElement('strong');
+  label.textContent = activity.status === 'running'
+    ? 'Player running'
+    : activity.status === 'idle'
+      ? 'Player idle'
+      : activity.status === 'disabled'
+        ? 'Disabled'
+        : 'Unavailable';
+  status.append(indicator, label);
+  $('#activity-heading').textContent = activity.status === 'running'
+    ? 'Official Roblox Player detected'
+    : activity.status === 'idle'
+      ? 'No active Roblox Player'
+      : 'Local player presence';
+  $('#activity-copy').textContent = activity.message;
+}
+
+function renderDeployment() {
+  const { diagnostics } = dashboard;
+  const { installation, ready } = diagnostics;
+  $('#deployment-heading').textContent = ready ? 'Official Roblox Player detected' : 'Official Roblox Player not detected';
+  $('#deployment-copy').textContent = installation.message;
+
+  const details = $('#deployment-details');
+  details.replaceChildren();
+  const rows = [
+    ['Install state', ready ? 'Detected and ready' : 'Not detected'],
+    ['Client source', 'Roblox official installer'],
+    ['Update ownership', 'Managed by Roblox'],
+    ['Launch state', ready ? 'Experience launch unlocked' : 'Install required']
+  ];
+  if (installation.executablePath) {
+    rows.splice(1, 0, ['Detected path', installation.executablePath]);
+  }
+  for (const [term, value] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = term;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    details.append(dt, dd);
+  }
+}
+
+function renderLauncher() {
+  $('#launcher-screen').hidden = !launcherVisible;
+}
+
+function dismissLauncher(pageName) {
+  launcherVisible = false;
+  renderLauncher();
+  setPage(pageName);
+}
+
 function renderSettings() {
   applySettings(dashboard.state.settings);
 }
@@ -317,8 +382,11 @@ function render() {
   renderFavorites();
   renderInstallation();
   renderDiagnostics();
+  renderIntegrations();
+  renderDeployment();
   renderFastFlags();
   renderSettings();
+  renderLauncher();
 }
 
 async function refreshDashboard({ initializePage = false } = {}) {
@@ -452,6 +520,11 @@ document.addEventListener('click', (event) => {
   if (action === 'open-download') runOperation(() => window.eclipse.openRobloxDownload(), 'Opening Roblox’s official download page.');
   if (action === 'open-catalog') runOperation(() => window.eclipse.openRobloxCatalog(), 'Opening the official Roblox catalog.');
   if (action === 'refresh-installation') refreshInstallation();
+  if (action === 'refresh-activity') runOperation(() => Promise.resolve(), dashboard.activity.enabled ? 'Local activity status refreshed.' : 'Enable activity tracking to check local player presence.');
+  if (action === 'launcher-open-roblox') runOperation(() => window.eclipse.openRobloxHome(), 'Opening Roblox’s official home page.');
+  if (action === 'launcher-open-settings') dismissLauncher('settings');
+  if (action === 'launcher-open-integrations') dismissLauncher('integrations');
+  if (action === 'launcher-open-deployment') dismissLauncher('deployment');
   if (action === 'launch-experience') requestLaunch(trigger.dataset.placeId);
   if (action === 'remove-profile') runOperation(() => window.eclipse.removeProfile(trigger.dataset.profileId), 'Profile removed.');
   if (action === 'remove-favorite') runOperation(() => window.eclipse.removeFavorite(trigger.dataset.placeId), 'Experience removed from your library.');

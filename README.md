@@ -15,13 +15,23 @@ Eclipse does not install, distribute, patch, or impersonate Roblox. On first lau
 
 Experience launches are also enforced by the Electron main process, so a renderer change cannot bypass the local installation check.
 
+## Launcher, integrations, and deployment
+
+Eclipse opens with a compact launcher for the most common next steps:
+
+- **Open Roblox** opens Roblox’s official home page in the default browser.
+- **Configure Eclipse** opens the full local launchpad and settings workspace.
+- **Deployment & installation** shows official installation status, links only to Roblox’s installer, and supports a local re-check. Eclipse does not choose client channels or domains, distribute Roblox, or modify its installation.
+
+The **Integrations** page currently offers one optional local-only signal: whether `RobloxPlayerBeta.exe` is running on Windows. This check is off by default, is evaluated only when Eclipse refreshes its local dashboard, and does not read account, game, place, server, or activity-history data. It is never uploaded. Discord Rich Presence is visibly marked unavailable in this release; Eclipse makes no claim that it is active.
+
 ## What works today
 
 - Detects common Windows Roblox client installation locations without changing them.
 - Provides a setup-first onboarding flow and blocks experience launches until the official player is detected.
 - Opens official Roblox game and catalog pages in the user's default browser, allowing Roblox's official flow to launch the client.
 - Stores locally named launch profiles and favorite experience IDs in an atomic JSON state file.
-- Provides fourteen validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, launch confirmation, navigation, library presentation, and diagnostic privacy.
+- Provides fifteen validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, optional local activity presence, launch confirmation, navigation, library presentation, and diagnostic privacy.
 - Provides input validation, bounded state, diagnostics, and a hardened Electron IPC boundary.
 - Uses a native desktop UI with no remote web content, no Node.js access in the renderer, and no arbitrary IPC channels.
 

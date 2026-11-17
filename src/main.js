@@ -4,6 +4,9 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const execFileAsync = promisify(execFile);
 const {
   MAX_FAVORITES,
   MAX_PROFILES,
@@ -335,6 +338,54 @@ async function detectRobloxInstallation() {
   };
 }
 
+async function getRobloxActivity(settings) {
+  if (!settings.activityTracking) {
+    return {
+      enabled: false,
+      status: 'disabled',
+      running: false,
+      message: 'Activity tracking is disabled. Eclipse is not checking running processes.'
+    };
+  }
+
+  if (process.platform !== 'win32') {
+    return {
+      enabled: true,
+      status: 'unavailable',
+      running: false,
+      message: 'Local Roblox activity detection is available only on Windows.'
+    };
+  }
+
+  try {
+    const { stdout } = await execFileAsync('tasklist', [
+      '/FI', 'IMAGENAME eq RobloxPlayerBeta.exe',
+      '/FO', 'CSV',
+      '/NH'
+    ], {
+      windowsHide: true,
+      timeout: 2500,
+      maxBuffer: 8192
+    });
+    const running = stdout.toLowerCase().includes('robloxplayerbeta.exe');
+    return {
+      enabled: true,
+      status: running ? 'running' : 'idle',
+      running,
+      message: running
+        ? 'Official Roblox Player is currently running on this device.'
+        : 'Official Roblox Player is not currently running.'
+    };
+  } catch {
+    return {
+      enabled: true,
+      status: 'unavailable',
+      running: false,
+      message: 'Eclipse could not read the local Roblox Player process state.'
+    };
+  }
+}
+
 async function buildDiagnostics(settings) {
   const rawInstallation = await detectRobloxInstallation();
   const { executablePath, ...redactedInstallation } = rawInstallation;
@@ -411,11 +462,12 @@ function registerIpcHandlers(store) {
 
   ipcMain.handle('eclipse:dashboard', guarded(async () => {
     const state = store.get();
-    const [diagnostics, fastFlags] = await Promise.all([
+    const [diagnostics, fastFlags, activity] = await Promise.all([
       buildDiagnostics(state.settings),
-      fastFlagService.getStatus()
+      fastFlagService.getStatus(),
+      getRobloxActivity(state.settings)
     ]);
-    return { state, diagnostics, fastFlags };
+    return { state, diagnostics, fastFlags, activity };
   }));
 
   ipcMain.handle('eclipse:profile:create', guarded(async (payload) => {
