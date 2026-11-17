@@ -54,6 +54,25 @@ npm start
 
 The Electron application can be developed on non-Windows platforms, but its Roblox installation diagnostics will clearly report that Windows is the supported target.
 
+### Build the Windows application
+
+On a Windows x64 machine, create a distributable Eclipse application with:
+
+```bash
+npm install
+npm run dist
+```
+
+`dist` runs syntax and unit checks before packaging. Its output is:
+
+```text
+release/Eclipse-win32-x64/Eclipse.exe
+```
+
+`Eclipse.exe` depends on the files in its generated directory. To distribute it, share or zip the entire `release/Eclipse-win32-x64` folder; do not move the EXE by itself. Use `npm run pack` only when you need a quick package without the pre-packaging validation steps.
+
+The resulting executable is unsigned. Windows SmartScreen can warn users until the application is signed with an appropriate code-signing certificate.
+
 ## Product direction
 
 The first version is an independent desktop hub, not a clone of another launcher:

@@ -9,12 +9,15 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/shared/state.js"
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/shared/state.js",
+    "pack": "electron-packager . Eclipse --platform=win32 --arch=x64 --out=release --overwrite --asar --prune=true",
+    "dist": "npm run check && npm test && npm run pack"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "devDependencies": {
+    "@electron/packager": "20.3.0",
     "electron": "45.3.3"
   }
 }
