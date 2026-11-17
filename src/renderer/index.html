@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Eclipse — Roblox desktop hub</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#overview" data-page-target="overview" aria-label="Eclipse home">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <span>ECLIPSE</span>
+        </a>
+
+        <nav class="navigation">
+          <button class="nav-item is-active" type="button" data-page-target="overview"><span aria-hidden="true">◉</span>Overview</button>
+          <button class="nav-item" type="button" data-page-target="profiles"><span aria-hidden="true">◌</span>Profiles</button>
+          <button class="nav-item" type="button" data-page-target="library"><span aria-hidden="true">◇</span>Library</button>
+          <button class="nav-item" type="button" data-page-target="settings"><span aria-hidden="true">⌘</span>Settings</button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="safe-mark"><span class="safe-dot"></span>Official client flow</div>
+          <p>Built to be private by default.</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">WINDOWS DESKTOP HUB</p>
+            <h1 id="page-title">Good to see you.</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="status-pill" id="client-status"><span></span>Checking client</span>
+            <button class="button button-secondary" type="button" data-action="open-download">Get Roblox</button>
+          </div>
+        </header>
+
+        <section class="page is-active" id="page-overview" data-page="overview" aria-labelledby="overview-title">
+          <div class="hero-grid">
+            <article class="hero-card">
+              <p class="eyebrow">ECLIPSE / ALPHA</p>
+              <h2 id="overview-title">A clearer way to start your next experience.</h2>
+              <p class="hero-copy">Eclipse keeps launch shortcuts, local preferences, and client health in one focused desktop workspace. Your Roblox sign-in remains with Roblox.</p>
+              <form class="quick-launch" id="quick-launch-form">
+                <label for="quick-place-id">Launch an experience</label>
+                <div class="input-action-row">
+                  <input id="quick-place-id" name="placeId" inputmode="numeric" autocomplete="off" placeholder="Enter Roblox experience ID" maxlength="18" required>
+                  <button class="button button-primary" type="submit">Launch</button>
+                </div>
+                <p class="form-hint">Eclipse opens the official Roblox experience page in your default browser.</p>
+              </form>
+            </article>
+            <article class="eclipse-art" aria-hidden="true">
+              <div class="planet"><i></i><b></b></div>
+              <div class="orbit orbit-one"></div>
+              <div class="orbit orbit-two"></div>
+              <span class="star star-one"></span><span class="star star-two"></span><span class="star star-three"></span>
+              <p>LIGHT / SHADOW / PLAY</p>
+            </article>
+          </div>
+
+          <div class="overview-cards">
+            <article class="info-card" id="installation-card">
+              <div class="card-icon">↗</div>
+              <p class="eyebrow">CLIENT STATUS</p>
+              <h3 id="installation-heading">Checking installation</h3>
+              <p id="installation-copy">Looking for the official Roblox Player installation.</p>
+              <button class="text-button" type="button" data-action="open-download">Open official download <span>→</span></button>
+            </article>
+            <article class="info-card">
+              <div class="card-icon">◌</div>
+              <p class="eyebrow">LOCAL PROFILES</p>
+              <h3 id="profile-count">0 profiles</h3>
+              <p>Organize local launch preferences without storing a Roblox login.</p>
+              <button class="text-button" type="button" data-page-target="profiles">Manage profiles <span>→</span></button>
+            </article>
+            <article class="info-card">
+              <div class="card-icon">◇</div>
+              <p class="eyebrow">SAVED EXPERIENCES</p>
+              <h3 id="favorite-count">0 saved</h3>
+              <p>Keep a small, private library of Roblox experience IDs you enjoy.</p>
+              <button class="text-button" type="button" data-page-target="library">Open library <span>→</span></button>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="page-profiles" data-page="profiles" aria-labelledby="profiles-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">LOCAL ORGANIZATION</p><h2 id="profiles-title">Profiles, without credentials.</h2></div>
+            <p>Profiles are stored only on this device and contain names, notes, and a visual accent—not Roblox accounts.</p>
+          </div>
+          <div class="two-column-grid">
+            <article class="panel">
+              <h3>Create local profile</h3>
+              <form id="profile-form" class="stacked-form">
+                <label>Profile name<input name="name" maxlength="36" required placeholder="e.g. Weekend play"></label>
+                <label>Note <textarea name="description" maxlength="140" rows="3" placeholder="Optional reminder or setup note"></textarea></label>
+                <label>Accent
+                  <select name="color">
+                    <option value="violet">Violet</option><option value="sky">Sky</option><option value="mint">Mint</option><option value="amber">Amber</option><option value="rose">Rose</option>
+                  </select>
+                </label>
+                <button class="button button-primary" type="submit">Create profile</button>
+              </form>
+            </article>
+            <div class="list-panel"><div class="list-heading"><h3>Your profiles</h3><span id="profile-list-count" class="count-badge">0</span></div><div id="profiles-list" class="card-list"></div></div>
+          </div>
+        </section>
+
+        <section class="page" id="page-library" data-page="library" aria-labelledby="library-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">YOUR SHORTLIST</p><h2 id="library-title">Saved experiences.</h2></div>
+            <p>Use an experience’s numeric Roblox place ID to create a personal shortcut. Eclipse validates it before saving.</p>
+          </div>
+          <div class="two-column-grid">
+            <article class="panel">
+              <h3>Save an experience</h3>
+              <form id="favorite-form" class="stacked-form">
+                <label>Experience ID<input name="placeId" inputmode="numeric" maxlength="18" required placeholder="e.g. 1818"></label>
+                <label>Display name<input name="title" maxlength="60" placeholder="Optional; defaults to Experience ID"></label>
+                <button class="button button-primary" type="submit">Save experience</button>
+              </form>
+              <div class="panel-divider"></div>
+              <button class="button button-secondary full-width" type="button" data-action="open-catalog">Browse official Roblox catalog</button>
+            </article>
+            <div class="list-panel"><div class="list-heading"><h3>Library</h3><span id="favorite-list-count" class="count-badge">0</span></div><div id="favorites-list" class="card-list"></div></div>
+          </div>
+        </section>
+
+        <section class="page" id="page-settings" data-page="settings" aria-labelledby="settings-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">PREFERENCES &amp; HEALTH</p><h2 id="settings-title">Control your Eclipse.</h2></div>
+            <p>Settings are local to this computer and each preference takes effect immediately.</p>
+          </div>
+          <div class="settings-grid">
+            <article class="panel"><h3>Preferences</h3>
+              <label class="toggle-row"><span><strong>Reduce motion</strong><small>Turn off non-essential interface animations in Eclipse.</small></span><input type="checkbox" id="reduce-motion"><i></i></label>
+            </article>
+            <article class="panel"><h3>Diagnostics</h3><dl class="diagnostics" id="diagnostics-list"></dl><button class="button button-secondary full-width" type="button" data-action="refresh">Refresh diagnostics</button></article>
+          </div>
+          <article class="safety-note"><span>✦</span><div><h3>Safety is an Eclipse feature.</h3><p>Nothing in Eclipse accesses Roblox credentials, alters Roblox files, injects into the client, or automates gameplay.</p></div></article>
+        </section>
+      </main>
+    </div>
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

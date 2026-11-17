@@ -1,0 +1,20 @@
+{
+  "name": "eclipse-roblox-client",
+  "productName": "Eclipse",
+  "version": "0.1.0",
+  "description": "A privacy-first Windows desktop hub for the official Roblox client.",
+  "main": "src/main.js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/shared/state.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "electron": "45.3.3"
+  }
+}
