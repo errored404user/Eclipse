@@ -320,6 +320,12 @@ function renderInstallation() {
   $('#installation-copy').textContent = installation.message;
   $('#quick-launch-button').disabled = !ready;
   $('#quick-place-id').disabled = !ready;
+  const officialHandoff = $('#official-handoff');
+  officialHandoff.classList.toggle('is-install', !ready);
+  officialHandoff.lastElementChild.textContent = ready ? 'Open official Roblox' : 'Install official Roblox';
+  officialHandoff.title = ready
+    ? 'Open Roblox’s official home page in your default browser.'
+    : 'Open Roblox’s official download page in your default browser.';
   $('#launch-gate-copy').textContent = ready
     ? 'Eclipse opens the official Roblox experience page in your default browser.'
     : 'Install the official Roblox Player, then select “Check again” to unlock launches.';
@@ -778,6 +784,14 @@ document.addEventListener('click', (event) => {
 
   const action = trigger.dataset.action;
   if (action === 'open-download') runOperation(() => window.eclipse.openRobloxDownload(), 'Opening Roblox’s official download page.');
+  if (action === 'open-official-roblox') {
+    const operation = dashboard.diagnostics.ready
+      ? () => window.eclipse.openRobloxHome()
+      : () => window.eclipse.openRobloxDownload();
+    runOperation(operation, dashboard.diagnostics.ready
+      ? 'Opening Roblox’s official home page.'
+      : 'Opening Roblox’s official download page.');
+  }
   if (action === 'open-catalog') runOperation(() => window.eclipse.openRobloxCatalog(), 'Opening the official Roblox catalog.');
   if (action === 'refresh-installation') refreshInstallation();
   if (action === 'refresh-activity') runOperation(() => Promise.resolve(), dashboard.activity.enabled ? 'Local activity status refreshed.' : 'Enable activity tracking to check local player presence.');
