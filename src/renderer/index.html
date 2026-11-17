@@ -16,11 +16,11 @@
         </a>
 
         <nav class="navigation">
-          <button class="nav-item is-active" type="button" data-page-target="overview"><span aria-hidden="true">◉</span>Overview</button>
-          <button class="nav-item" type="button" data-page-target="profiles"><span aria-hidden="true">◌</span>Profiles</button>
-          <button class="nav-item" type="button" data-page-target="library"><span aria-hidden="true">◇</span>Library</button>
-          <button class="nav-item" type="button" data-page-target="fastflags"><span aria-hidden="true">≋</span>FastFlags</button>
-          <button class="nav-item" type="button" data-page-target="settings"><span aria-hidden="true">⌘</span>Settings</button>
+          <button class="nav-item is-active" type="button" data-page-target="overview" title="Overview"><span class="nav-glyph" aria-hidden="true">✦</span><span class="nav-label">Overview</span></button>
+          <button class="nav-item" type="button" data-page-target="profiles" title="Profiles"><span class="nav-glyph" aria-hidden="true">◌</span><span class="nav-label">Profiles</span></button>
+          <button class="nav-item" type="button" data-page-target="library" title="Library"><span class="nav-glyph" aria-hidden="true">◇</span><span class="nav-label">Library</span></button>
+          <button class="nav-item" type="button" data-page-target="fastflags" title="Guarded FastFlags"><span class="nav-glyph" aria-hidden="true">≋</span><span class="nav-label">FastFlags</span></button>
+          <button class="nav-item" type="button" data-page-target="settings" title="Settings"><span class="nav-glyph" aria-hidden="true">⌘</span><span class="nav-label">Settings</span></button>
         </nav>
 
         <div class="sidebar-foot">
@@ -32,7 +32,7 @@
       <main class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow">WINDOWS DESKTOP HUB</p>
+            <div class="workspace-trail"><span class="trail-orb" aria-hidden="true"></span><span>LAUNCHPAD</span><i aria-hidden="true">/</i><span>OFFICIAL CLIENT WORKSPACE</span></div>
             <h1 id="page-title">Good to see you.</h1>
           </div>
           <div class="topbar-actions">
@@ -44,9 +44,10 @@
         <section class="page is-active" id="page-overview" data-page="overview" aria-labelledby="overview-title">
           <div class="hero-grid">
             <article class="hero-card">
-              <p class="eyebrow">ECLIPSE / SETUP FIRST</p>
-              <h2 id="overview-title">Your Roblox desktop space, built around the official client.</h2>
-              <p class="hero-copy">Install Roblox once, then keep trusted launch shortcuts, local preferences, and client health in a focused workspace. Eclipse never handles your Roblox sign-in.</p>
+              <div class="hero-topline"><p class="eyebrow">ECLIPSE / OFFICIAL ROUTE</p><span class="hero-live" id="hero-readiness"><i></i>Checking client</span></div>
+              <h2 id="overview-title">Everything you need for a clearer Roblox launch.</h2>
+              <p class="hero-copy">A private desktop launchpad for the official client: installation health, focused shortcuts, local profiles, and carefully guarded preferences.</p>
+              <div class="hero-actions"><button class="hero-link" type="button" data-action="open-catalog">Explore experiences <span aria-hidden="true">→</span></button><span>Account sign-in always stays with Roblox.</span></div>
               <form class="quick-launch" id="quick-launch-form">
                 <label for="quick-place-id">Launch an experience</label>
                 <div class="input-action-row">
@@ -65,6 +66,7 @@
             </article>
           </div>
 
+          <div class="deck-heading"><div><p class="eyebrow">YOUR CONTROL DECK</p><h3>Ready when you are.</h3></div><span>PRIVATE • LOCAL • OFFICIAL</span></div>
           <div class="overview-cards">
             <article class="info-card" id="installation-card">
               <div class="card-icon">↗</div>

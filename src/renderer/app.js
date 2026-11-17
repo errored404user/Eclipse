@@ -151,6 +151,9 @@ function renderInstallation() {
   status.append(document.createElement('span'), document.createTextNode(ready ? 'Client detected' : 'Setup required'));
 
   $('#sidebar-readiness').textContent = ready ? 'Official client ready' : 'Setup required';
+  const heroReadiness = $('#hero-readiness');
+  heroReadiness.classList.toggle('is-ready', ready);
+  heroReadiness.replaceChildren(document.createElement('i'), document.createTextNode(ready ? 'Official client ready' : 'Setup required'));
   $('#installation-heading').textContent = ready ? 'Roblox Player detected' : 'Roblox Player not detected';
   $('#installation-copy').textContent = installation.message;
   $('#quick-launch-button').disabled = !ready;
