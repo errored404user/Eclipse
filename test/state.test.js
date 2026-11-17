@@ -251,4 +251,5 @@ test('guarded FastFlags derive reviewed values and flag renderer conflicts', () 
   });
   assert.equal(conflicting.preferences.renderer, 'roblox-default');
   assert.match(conflicting.issues[0], /Multiple renderer overrides/);
+  assert.match(conflicting.issues[0], /will not apply a renderer choice until you restore/);
 });

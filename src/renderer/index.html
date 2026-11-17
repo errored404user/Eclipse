@@ -214,7 +214,7 @@
           <article class="deployment-hero">
             <div class="deployment-badge" aria-hidden="true">↗</div>
             <div><p class="eyebrow">OFFICIAL PLAYER</p><h3 id="deployment-heading">Checking local installation</h3><p id="deployment-copy">Eclipse is checking the standard Windows Roblox Player location.</p></div>
-            <div class="deployment-actions"><button class="button button-primary" type="button" data-page-target="installation">Open install guide</button><button class="button button-secondary" type="button" data-action="refresh-installation">Check again</button></div>
+            <div class="deployment-actions"><button class="button button-primary official-handoff official-deployment-handoff" id="deployment-official-handoff" type="button" data-action="open-official-roblox"><span aria-hidden="true">↗</span><span id="deployment-handoff-label">Open official Roblox</span></button><button class="button button-secondary" type="button" data-page-target="installation">Open install guide</button><button class="button button-secondary" type="button" data-action="refresh-installation">Check again</button></div>
           </article>
 
           <div class="deployment-grid">
@@ -222,6 +222,16 @@
             <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">UPDATE POLICY</p><h3>Roblox-managed updates</h3></div><span class="panel-index">02</span></div><p>Roblox’s official Player selects its own production deployment and updates itself. Eclipse does not override client channels, domains, or update sources.</p><span class="availability-badge good">Official defaults retained</span></article>
             <article class="panel deployment-card"><div class="panel-heading"><div><p class="eyebrow">REPAIR PATH</p><h3>Reinstall through Roblox</h3></div><span class="panel-index">03</span></div><p>If the player is missing or damaged, download and run the current installer from Roblox. This preserves the official installation and verification path.</p><button class="text-button" type="button" data-action="open-download">Open Roblox download <span>→</span></button></article>
           </div>
+
+          <article class="deployment-troubleshoot">
+            <div><p class="eyebrow">SAFE TROUBLESHOOTING</p><h3>Still not ready?</h3><p>Use these browser-led checks before trying again. Eclipse never repairs the Player, changes client files, or handles your Roblox sign-in.</p></div>
+            <ol class="troubleshoot-list">
+              <li><span>01</span><div><strong>Close the Player</strong><small>Finish any Roblox installation or update, then fully close the Player before changing reviewed settings.</small></div></li>
+              <li><span>02</span><div><strong>Use Roblox’s official route</strong><small>Open Roblox home to sign in or access the current installer from Roblox’s own site.</small></div></li>
+              <li><span>03</span><div><strong>Return and re-check</strong><small>Refresh Eclipse’s local detection after Roblox completes its own process.</small></div></li>
+            </ol>
+            <div class="troubleshoot-actions"><button class="button button-secondary" type="button" data-action="open-roblox-home">Open official Roblox home</button><button class="button button-primary" type="button" data-action="refresh-installation">Re-check installation</button></div>
+          </article>
         </section>
 
         <section class="page" id="page-installation" data-page="installation" aria-labelledby="installation-guide-title" hidden>
@@ -254,8 +264,12 @@
 
           <article class="fastflag-warning">
             <div class="warning-symbol" aria-hidden="true">!</div>
-            <div><p class="eyebrow">POLICY-SAFE SCOPE</p><h3>No ban guarantee—only a constrained official-file workflow.</h3><p>Roblox controls its allowlist and can change it at any time. Eclipse writes only its reviewed entries to <code>ClientAppSettings.json</code>, creates a backup first, and leaves unrelated entries untouched.</p></div>
+            <div><p class="eyebrow">POLICY-SAFE SCOPE</p><h3>Reviewed local controls—not a performance, safety, or compatibility guarantee.</h3><p>Roblox controls its allowlist and can change it at any time. Eclipse writes only its reviewed entries to <code>ClientAppSettings.json</code>, creates a backup first, and leaves unrelated entries untouched.</p></div>
             <button class="button button-secondary" type="button" data-action="open-fastflag-reference">Read Roblox guidance</button>
+          </article>
+
+          <article class="fastflag-policy-strip">
+            <span aria-hidden="true">✓</span><p><strong>Fixed catalog only.</strong> Eclipse offers texture quality, grass-motion reduction, a DPI troubleshooting option, MSAA, and one renderer choice. It does not add FPS controls, arbitrary keys, flag-file import/export, cache changes, or a generic editor.</p>
           </article>
 
           <div class="fastflag-status" id="fastflag-status" role="status"><span class="status-orb"></span><div><strong>Checking guarded configuration</strong><small>Reading local ClientSettings safely.</small></div></div>
@@ -264,7 +278,7 @@
           <form id="fastflags-form" class="fastflag-grid">
             <fieldset id="fastflag-controls">
               <legend>Reviewed local overrides</legend>
-              <p class="fieldset-copy">Changes apply the next time Roblox starts. Close any running Roblox Player before applying them.</p>
+              <p class="fieldset-copy">Changes apply the next time Roblox starts. Close any running Roblox Player before applying them; use “Restore Roblox defaults” if a reviewed choice causes a problem.</p>
               <div class="field-grid fastflag-fields">
                 <label>Texture quality
                   <select data-fastflag="textureQuality">
@@ -273,6 +287,7 @@
                     <option value="medium">Medium</option>
                     <option value="high">High — more VRAM</option>
                   </select>
+                  <small class="control-note">Controls only the reviewed texture-quality override. It does not set a frame-rate limit.</small>
                 </label>
                 <label>Anti-aliasing
                   <select data-fastflag="antiAliasing">
@@ -281,6 +296,7 @@
                     <option value="2x">2×</option>
                     <option value="4x">4×</option>
                   </select>
+                  <small class="control-note">A visual smoothing choice. Higher samples can use more graphics resources.</small>
                 </label>
                 <label>Renderer compatibility
                   <select data-fastflag="renderer">
@@ -289,18 +305,24 @@
                     <option value="vulkan">Vulkan</option>
                     <option value="opengl">OpenGL</option>
                   </select>
+                  <small class="control-note">Troubleshooting only. Return to automatic when a compatibility issue is resolved.</small>
                 </label>
-                <div class="fastflag-summary-card"><span aria-hidden="true">◌</span><p><strong>Automatic is recommended.</strong> Select a renderer only to troubleshoot an observed compatibility issue. Renderer choices are mutually exclusive.</p></div>
+                <div class="fastflag-summary-card"><span aria-hidden="true">◌</span><p><strong>Automatic is recommended.</strong> Select a renderer only to troubleshoot an observed compatibility issue. Renderer choices are mutually exclusive; Eclipse pauses apply when it detects a conflict rather than guessing.</p></div>
               </div>
-              <label class="toggle-row"><span><strong>Minimize grass motion</strong><small>Use the reviewed reduced-motion factor for grass animation. This is a visual comfort setting only.</small></span><input type="checkbox" data-fastflag="grassMotion"><i></i></label>
-              <label class="toggle-row"><span><strong>Disable DPI scaling</strong><small>Use only if the Roblox interface is visibly blurry or incorrectly scaled on your display.</small></span><input type="checkbox" data-fastflag="disableDpiScaling"><i></i></label>
+              <label class="toggle-row"><span><strong>Minimize grass motion</strong><small>Uses the reviewed reduced-motion factor for grass animation. This is a visual comfort setting only and does not affect gameplay.</small></span><input type="checkbox" data-fastflag="grassMotion"><i></i></label>
+              <label class="toggle-row"><span><strong>Disable DPI scaling</strong><small>Use only when the Roblox interface is visibly blurry or incorrectly scaled on your display. Restore defaults if it does not help.</small></span><input type="checkbox" data-fastflag="disableDpiScaling"><i></i></label>
             </fieldset>
             <aside class="fastflag-sidecard">
               <p class="eyebrow">CONFIGURATION STATUS</p>
               <h3 id="fastflag-status-heading">Checking ClientSettings</h3>
               <dl class="fastflag-details" id="fastflag-details"></dl>
-              <p class="side-note">Eclipse preserves entries it does not own. Restoring defaults removes only the eight reviewed FastFlag keys managed by Eclipse.</p>
-              <div class="fastflag-actions"><button class="button button-primary" id="fastflag-apply" type="submit">Apply reviewed settings</button><button class="button button-secondary" type="button" data-action="reset-fastflags">Restore Roblox defaults</button></div>
+              <section class="fastflag-review" aria-live="polite">
+                <div class="fastflag-review-heading"><div><p class="eyebrow">REVIEWED SELECTION</p><h4 id="fastflag-review-heading">Current reviewed selection</h4></div><span id="fastflag-review-count">Checking</span></div>
+                <p id="fastflag-review-copy">Comparing Eclipse’s fixed controls with Roblox defaults.</p>
+                <dl class="fastflag-comparison" id="fastflag-comparison"></dl>
+              </section>
+              <p class="side-note">Eclipse preserves entries it does not own. Restore defaults removes only the eight reviewed FastFlag keys managed by Eclipse; it never restores or imports arbitrary flag files.</p>
+              <div class="fastflag-actions"><button class="button button-primary" id="fastflag-apply" type="submit">Apply reviewed settings</button><button class="button button-secondary" type="button" data-action="request-fastflags-reset">Restore Roblox defaults</button></div>
             </aside>
           </form>
         </section>
@@ -318,6 +340,7 @@
             <article class="release-entry"><span class="release-index">02</span><div><p class="eyebrow">REVIEWED CLIENT SETTINGS</p><h3>Guarded FastFlags</h3><p>Introduced a fixed accessibility and renderer-compatibility catalog with backups, managed-key reset, no generic editor, and no enforcement guarantee.</p></div></article>
             <article class="release-entry"><span class="release-index">03</span><div><p class="eyebrow">ECLIPSE EXPERIENCE</p><h3>Launcher, integration boundaries, and deployment</h3><p>Added the Eclipse startup launcher, optional local player-presence check, privacy statements, and official-only deployment/install guidance.</p></div></article>
             <article class="release-entry"><span class="release-index">04</span><div><p class="eyebrow">LOCAL OWNERSHIP</p><h3>Organization and recovery</h3><p>Added pinned profile search, Eclipse-only backup/restore with import review, local experience collections, and a configurable core dashboard.</p></div></article>
+            <article class="release-entry"><span class="release-index">05</span><div><p class="eyebrow">SAFER DECISIONS</p><h3>Reviewed settings and official handoff</h3><p>Added a live reviewed-FastFlag comparison, conflict-first restore flow, per-control guidance, status-aware official Roblox actions, and browser-led installation troubleshooting.</p></div></article>
           </div>
 
           <article class="guide-boundary"><span aria-hidden="true">✦</span><div><h3>Feature history, not a safety claim.</h3><p>Eclipse remains Windows-only and official-client-only. It does not handle Roblox credentials, alter client binaries, automate gameplay, or promise compatibility with future Roblox changes.</p></div></article>
@@ -414,6 +437,10 @@
 
     <section class="confirm-overlay" id="backup-import-preview" role="dialog" aria-modal="true" aria-labelledby="backup-preview-title" hidden>
       <div class="confirm-dialog backup-dialog"><p class="eyebrow">REVIEW ECLIPSE BACKUP</p><h2 id="backup-preview-title">Replace this Eclipse setup?</h2><p id="backup-preview-copy">Review the local data in this backup before continuing.</p><dl class="backup-summary" id="backup-preview-summary"></dl><p class="backup-warning">Importing replaces Eclipse-owned profiles, experience collections, saved experiences, preferences, and workspace state. It does not change Roblox files, accounts, or FastFlag configuration.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-backup-import">Cancel</button><button class="button button-primary" type="button" data-action="confirm-backup-import">Replace Eclipse data</button></div></div>
+    </section>
+
+    <section class="confirm-overlay" id="fastflag-reset-confirmation" role="dialog" aria-modal="true" aria-labelledby="fastflag-reset-title" hidden>
+      <div class="confirm-dialog"><p class="eyebrow">RESTORE REVIEWED DEFAULTS</p><h2 id="fastflag-reset-title">Remove Eclipse-managed overrides?</h2><p>Only Eclipse’s eight reviewed FastFlag keys will be removed from <code>ClientAppSettings.json</code>. Unrelated entries stay intact. Restart Roblox after restoring defaults.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-fastflags-reset">Cancel</button><button class="button button-primary" type="button" data-action="confirm-fastflags-reset">Restore reviewed defaults</button></div></div>
     </section>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>

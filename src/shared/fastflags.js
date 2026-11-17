@@ -170,7 +170,7 @@ function deriveFastFlagPreferences(value) {
   if (activeRenderers.length === 1) {
     preferences.renderer = activeRenderers[0];
   } else if (activeRenderers.length > 1) {
-    issues.push('Multiple renderer overrides are active. Eclipse will restore a single selection when you apply changes.');
+    issues.push('Multiple renderer overrides are active. Eclipse will not apply a renderer choice until you restore its reviewed defaults.');
   }
 
   const hasManagedOverrides = MANAGED_FASTFLAG_KEYS.some((key) => Object.hasOwn(flags, key));

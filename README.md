@@ -25,7 +25,7 @@ Eclipse opens with a compact launcher for the most common next steps:
 
 The **Integrations** page currently offers one optional local-only signal: whether `RobloxPlayerBeta.exe` is running on Windows. This check is off by default, is evaluated only when Eclipse refreshes its local dashboard, and does not read account, game, place, server, or activity-history data. It is never uploaded. Discord Rich Presence is visibly marked unavailable in this release; Eclipse makes no claim that it is active.
 
-A dedicated **Install guide** turns official-client detection into four clear steps: check the local Player, open Roblox’s official download page, run Roblox’s installer, then re-check in Eclipse. It provides guidance only—Eclipse never installs, repairs, redistributes, or modifies Roblox.
+A dedicated **Install guide** turns official-client detection into four clear steps: check the local Player, open Roblox’s official download page, run Roblox’s installer, then re-check in Eclipse. Eclipse’s status-aware handoffs open Roblox’s official home when the Player is detected and the official download page when it is not; a separate browser-led troubleshooting path never installs, repairs, redistributes, or modifies Roblox.
 
 ## Local organization and backup
 
@@ -54,7 +54,8 @@ Eclipse implements a narrow **Guarded FastFlags** page for reviewed client-side 
 - Eclipse applies only its fixed catalog: texture quality, minimized grass motion, a DPI-scaling workaround, 1×/2×/4× anti-aliasing, and a mutually exclusive Direct3D 11/Vulkan/OpenGL renderer choice.
 - It writes only `%LOCALAPPDATA%\\Roblox\\ClientSettings\\ClientAppSettings.json`, after detecting the official Roblox Player.
 - It never touches cache files, IXP settings, binaries, networking, scheduling, or gameplay settings.
-- Before modifying an existing configuration, Eclipse creates `ClientAppSettings.eclipse-backup.json` beside it. Restore defaults removes only Eclipse-managed keys and preserves unrelated entries.
+- Before modifying an existing configuration, Eclipse creates `ClientAppSettings.eclipse-backup.json` beside it. A live fixed-control comparison shows the current or proposed reviewed selection before it is applied.
+- Renderer conflicts and unrecognized managed values are surfaced as restore-first issues: Eclipse pauses application rather than guessing. Restore defaults requires confirmation, removes only Eclipse-managed keys, and preserves unrelated entries.
 - Malformed JSON or symbolic links are blocked rather than overwritten.
 
 These controls are selected from an allowlisted local configuration route, but **they are not a promise against moderation action or instability**. Use Roblox defaults whenever a setting causes a problem, and restart Roblox after applying a change.
