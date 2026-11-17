@@ -36,6 +36,7 @@
           <button class="nav-item" type="button" data-page-target="deployment" title="Deployment"><span class="nav-glyph" aria-hidden="true">⇣</span><span class="nav-label">Deployment</span></button>
           <button class="nav-item" type="button" data-page-target="installation" title="Install guide"><span class="nav-glyph" aria-hidden="true">?</span><span class="nav-label">Install guide</span></button>
           <button class="nav-item" type="button" data-page-target="fastflags" title="Guarded FastFlags"><span class="nav-glyph" aria-hidden="true">≋</span><span class="nav-label">FastFlags</span></button>
+          <button class="nav-item" type="button" data-page-target="release" title="Release notes"><span class="nav-glyph" aria-hidden="true">◫</span><span class="nav-label">Release notes</span></button>
           <button class="nav-item" type="button" data-page-target="settings" title="Settings"><span class="nav-glyph" aria-hidden="true">⌘</span><span class="nav-label">Settings</span></button>
         </nav>
 
@@ -82,28 +83,35 @@
             </article>
           </div>
 
-          <div class="deck-heading"><div><p class="eyebrow">YOUR CONTROL DECK</p><h3>Ready when you are.</h3></div><span>PRIVATE • LOCAL • OFFICIAL</span></div>
-          <div class="overview-cards">
-            <article class="info-card" id="installation-card">
+          <div class="deck-heading" id="dashboard-widgets-heading"><div><p class="eyebrow">YOUR CONTROL DECK</p><h3>Ready when you are.</h3></div><span>PRIVATE • LOCAL • OFFICIAL</span></div>
+          <div class="overview-cards" id="dashboard-widgets">
+            <article class="info-card" id="installation-card" data-dashboard-widget="client">
               <div class="card-icon">↗</div>
               <p class="eyebrow">CLIENT STATUS</p>
               <h3 id="installation-heading">Checking installation</h3>
               <p id="installation-copy">Looking for the official Roblox Player installation.</p>
               <div class="card-actions"><button class="text-button" type="button" data-action="open-download">Open official download <span>→</span></button><button class="text-button quiet" type="button" data-action="refresh-installation">Check again</button></div>
             </article>
-            <article class="info-card">
+            <article class="info-card" data-dashboard-widget="profiles">
               <div class="card-icon">◌</div>
               <p class="eyebrow">LOCAL PROFILES</p>
               <h3 id="profile-count">0 profiles</h3>
               <p>Organize local preferences without storing a Roblox account or credentials.</p>
               <button class="text-button" type="button" data-page-target="profiles">Manage profiles <span>→</span></button>
             </article>
-            <article class="info-card">
+            <article class="info-card" data-dashboard-widget="library">
               <div class="card-icon">◇</div>
               <p class="eyebrow">SAVED EXPERIENCES</p>
               <h3 id="favorite-count">0 saved</h3>
               <p>Keep a compact, private library of Roblox experience shortcuts.</p>
               <button class="text-button" type="button" data-page-target="library">Open library <span>→</span></button>
+            </article>
+            <article class="info-card" data-dashboard-widget="deployment">
+              <div class="card-icon">⇣</div>
+              <p class="eyebrow">OFFICIAL DELIVERY</p>
+              <h3 id="deployment-widget-heading">Installation help available</h3>
+              <p id="deployment-widget-copy">Follow the guided official-client checklist to install and re-check Roblox Player.</p>
+              <button class="text-button" type="button" data-page-target="installation">Open install guide <span>→</span></button>
             </article>
           </div>
         </section>
@@ -133,21 +141,36 @@
 
         <section class="page" id="page-library" data-page="library" aria-labelledby="library-title" hidden>
           <div class="section-heading">
-            <div><p class="eyebrow">YOUR SHORTLIST</p><h2 id="library-title">Saved experiences.</h2></div>
-            <p>Use an experience’s numeric Roblox place ID to create a personal shortcut. Eclipse validates it before saving.</p>
+            <div><p class="eyebrow">YOUR SHORTLIST</p><h2 id="library-title">Saved experiences, clearly grouped.</h2></div>
+            <p>Keep numeric Roblox experience shortcuts private and local. Collections are Eclipse-only labels; they never identify an account, game session, or Roblox server.</p>
           </div>
-          <div class="two-column-grid">
-            <article class="panel">
+          <div class="library-workspace">
+            <article class="panel library-add-panel">
               <h3>Save an experience</h3>
               <form id="favorite-form" class="stacked-form">
                 <label>Experience ID<input name="placeId" inputmode="numeric" maxlength="18" required placeholder="e.g. 1818"></label>
                 <label>Display name<input name="title" maxlength="60" placeholder="Optional; defaults to Experience ID"></label>
+                <label>Local collection<select id="favorite-collection" name="collectionId"><option value="">No collection</option></select></label>
                 <button class="button button-primary" type="submit">Save experience</button>
               </form>
               <div class="panel-divider"></div>
               <button class="button button-secondary full-width" type="button" data-action="open-catalog">Browse official Roblox catalog</button>
             </article>
-            <div class="list-panel"><div class="list-heading"><h3>Library</h3><span id="favorite-list-count" class="count-badge">0</span></div><div id="favorites-list" class="card-list"></div></div>
+
+            <article class="panel collections-panel">
+              <div class="list-heading"><div><p class="eyebrow">LOCAL COLLECTIONS</p><h3>Organize shortcuts</h3></div><span id="collection-list-count" class="count-badge">0</span></div>
+              <form id="collection-form" class="stacked-form collection-form">
+                <input id="collection-id" name="collectionId" type="hidden">
+                <label>Collection name<input id="collection-name" name="name" maxlength="32" required placeholder="e.g. Weekend play"></label>
+                <label>Local note<textarea id="collection-description" name="description" maxlength="120" rows="2" placeholder="Optional private reminder"></textarea></label>
+                <label>Accent<select id="collection-color" name="color"><option value="violet">Violet</option><option value="sky">Sky</option><option value="mint">Mint</option><option value="amber">Amber</option><option value="rose">Rose</option></select></label>
+                <div class="collection-form-actions"><button class="button button-primary" id="collection-submit" type="submit">Create collection</button><button class="button button-secondary" id="cancel-collection-edit" type="button" data-action="cancel-collection-edit" hidden>Cancel</button></div>
+              </form>
+              <div class="panel-divider"></div>
+              <div id="collections-list" class="collection-list"></div>
+            </article>
+
+            <div class="list-panel library-list-panel"><div class="list-heading"><div><h3 id="library-list-title">Library</h3><p id="library-filter-copy" class="library-filter-copy">All local saved experience shortcuts.</p></div><div class="library-list-actions"><button class="text-button quiet" id="clear-library-filter" type="button" data-action="clear-library-filter" hidden>Show all</button><span id="favorite-list-count" class="count-badge">0</span></div></div><div id="favorites-list" class="card-list"></div></div>
           </div>
         </section>
 
@@ -281,6 +304,24 @@
           </form>
         </section>
 
+        <section class="page" id="page-release" data-page="release" aria-labelledby="release-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">LOCAL RELEASE NOTES</p><h2 id="release-title">What Eclipse delivers.</h2></div>
+            <p>This feature history is packaged with Eclipse. It does not fetch remote update data, collect usage analytics, or promise future release dates.</p>
+          </div>
+
+          <article class="release-hero"><div class="release-mark" aria-hidden="true">✦</div><div><p class="eyebrow">CURRENT FOUNDATION</p><h3 id="release-version">Eclipse</h3><p>A Windows-first, privacy-conscious companion for the official Roblox client. Eclipse keeps organization local and its boundaries explicit.</p></div><span class="availability-badge good">Local notes</span></article>
+
+          <div class="release-timeline">
+            <article class="release-entry"><span class="release-index">01</span><div><p class="eyebrow">OFFICIAL CLIENT WORKSPACE</p><h3>Foundation launchpad</h3><p>Added local profiles, saved numeric experience shortcuts, installation detection, official browser routes, validated preferences, and an installation-first launch gate.</p></div></article>
+            <article class="release-entry"><span class="release-index">02</span><div><p class="eyebrow">REVIEWED CLIENT SETTINGS</p><h3>Guarded FastFlags</h3><p>Introduced a fixed accessibility and renderer-compatibility catalog with backups, managed-key reset, no generic editor, and no enforcement guarantee.</p></div></article>
+            <article class="release-entry"><span class="release-index">03</span><div><p class="eyebrow">ECLIPSE EXPERIENCE</p><h3>Launcher, integration boundaries, and deployment</h3><p>Added the Eclipse startup launcher, optional local player-presence check, privacy statements, and official-only deployment/install guidance.</p></div></article>
+            <article class="release-entry"><span class="release-index">04</span><div><p class="eyebrow">LOCAL OWNERSHIP</p><h3>Organization and recovery</h3><p>Added pinned profile search, Eclipse-only backup/restore with import review, local experience collections, and a configurable core dashboard.</p></div></article>
+          </div>
+
+          <article class="guide-boundary"><span aria-hidden="true">✦</span><div><h3>Feature history, not a safety claim.</h3><p>Eclipse remains Windows-only and official-client-only. It does not handle Roblox credentials, alter client binaries, automate gameplay, or promise compatibility with future Roblox changes.</p></div></article>
+        </section>
+
         <section class="page" id="page-settings" data-page="settings" aria-labelledby="settings-title" hidden>
           <div class="section-heading">
             <div><p class="eyebrow">PREFERENCES &amp; HEALTH</p><h2 id="settings-title">Shape your Eclipse.</h2></div>
@@ -305,7 +346,7 @@
 
             <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">LAUNCH &amp; NAVIGATION</p><h3>Choose your flow</h3></div><span class="panel-index">03</span></div>
               <div class="field-grid one-column">
-                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="integrations">Integrations</option><option value="deployment">Deployment</option><option value="installation">Install guide</option><option value="fastflags">FastFlags</option><option value="settings">Settings</option></select></label>
+                <label>Start page<select data-setting="startPage"><option value="overview">Overview</option><option value="library">Library</option><option value="profiles">Profiles</option><option value="integrations">Integrations</option><option value="deployment">Deployment</option><option value="installation">Install guide</option><option value="fastflags">FastFlags</option><option value="release">Release notes</option><option value="settings">Settings</option></select></label>
               </div>
               <label class="toggle-row"><span><strong>Remember last page</strong><small>Open Eclipse where you left off instead of using the selected start page.</small></span><input type="checkbox" data-setting="rememberLastPage"><i></i></label>
               <label class="toggle-row"><span><strong>Show startup launcher</strong><small>Show Eclipse’s compact launcher when the app opens. Turn it off to go directly to your workspace.</small></span><input type="checkbox" data-setting="showStartupLauncher"><i></i></label>
@@ -319,9 +360,17 @@
               <label class="toggle-row"><span><strong>Show experience IDs</strong><small>Display numeric place IDs in your local saved-experience library.</small></span><input type="checkbox" data-setting="showExperienceId"><i></i></label>
               <label class="toggle-row"><span><strong>Show installation path</strong><small>Reveal the locally detected Roblox path in Diagnostics. Hidden by default.</small></span><input type="checkbox" data-setting="showInstallationPath"><i></i></label>
             </article>
+
+            <article class="panel settings-panel"><div class="panel-heading"><div><p class="eyebrow">OVERVIEW DASHBOARD</p><h3>Show what helps</h3></div><span class="panel-index">05</span></div>
+              <p class="settings-panel-copy">Choose which local core-status cards appear on the Overview page. The layout stays fixed and no widget fetches remote data.</p>
+              <label class="toggle-row"><span><strong>Official client status</strong><small>Show detection and launch-readiness status.</small></span><input type="checkbox" data-setting="showClientWidget"><i></i></label>
+              <label class="toggle-row"><span><strong>Local profiles</strong><small>Show your count of locally stored profile labels.</small></span><input type="checkbox" data-setting="showProfilesWidget"><i></i></label>
+              <label class="toggle-row"><span><strong>Saved experiences</strong><small>Show the local saved-shortcut count.</small></span><input type="checkbox" data-setting="showLibraryWidget"><i></i></label>
+              <label class="toggle-row"><span><strong>Official deployment help</strong><small>Show the link to the guided installation checklist.</small></span><input type="checkbox" data-setting="showDeploymentWidget"><i></i></label>
+            </article>
           </div>
 
-          <article class="backup-panel"><div><p class="eyebrow">LOCAL BACKUP</p><h3>Take your Eclipse setup with you.</h3><p>Export or restore a portable JSON file containing Eclipse-owned profiles, saved experiences, preferences, and workspace choices. It never includes Roblox credentials, sessions, client files, or FastFlag configuration.</p></div><div class="backup-actions"><button class="button button-secondary" type="button" data-action="export-backup">Export Eclipse data</button><button class="button button-primary" type="button" data-action="preview-backup-import">Import backup</button></div></article>
+          <article class="backup-panel"><div><p class="eyebrow">LOCAL BACKUP</p><h3>Take your Eclipse setup with you.</h3><p>Export or restore a portable JSON file containing Eclipse-owned profiles, experience collections, saved experiences, preferences, and workspace choices. It never includes Roblox credentials, sessions, client files, or FastFlag configuration.</p></div><div class="backup-actions"><button class="button button-secondary" type="button" data-action="export-backup">Export Eclipse data</button><button class="button button-primary" type="button" data-action="preview-backup-import">Import backup</button></div></article>
           <div class="settings-footer"><div><h3>Restore defaults</h3><p>Reset Eclipse preferences and its remembered page. Your profiles and saved experiences are kept.</p></div><button class="button button-secondary" type="button" data-action="reset-settings">Restore defaults</button></div>
           <article class="diagnostics-card"><div><p class="eyebrow">SYSTEM CHECK</p><h3>Diagnostics</h3></div><dl class="diagnostics" id="diagnostics-list"></dl><button class="button button-secondary" type="button" data-action="refresh-installation">Refresh client check</button></article>
           <article class="safety-note"><span>✦</span><div><h3>Safety is an Eclipse feature.</h3><p>Nothing in Eclipse accesses Roblox credentials, alters Roblox files, injects into the client, or automates gameplay.</p></div></article>
@@ -363,7 +412,7 @@
     </section>
 
     <section class="confirm-overlay" id="backup-import-preview" role="dialog" aria-modal="true" aria-labelledby="backup-preview-title" hidden>
-      <div class="confirm-dialog backup-dialog"><p class="eyebrow">REVIEW ECLIPSE BACKUP</p><h2 id="backup-preview-title">Replace this Eclipse setup?</h2><p id="backup-preview-copy">Review the local data in this backup before continuing.</p><dl class="backup-summary" id="backup-preview-summary"></dl><p class="backup-warning">Importing replaces Eclipse-owned profiles, saved experiences, preferences, and workspace state. It does not change Roblox files, accounts, or FastFlag configuration.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-backup-import">Cancel</button><button class="button button-primary" type="button" data-action="confirm-backup-import">Replace Eclipse data</button></div></div>
+      <div class="confirm-dialog backup-dialog"><p class="eyebrow">REVIEW ECLIPSE BACKUP</p><h2 id="backup-preview-title">Replace this Eclipse setup?</h2><p id="backup-preview-copy">Review the local data in this backup before continuing.</p><dl class="backup-summary" id="backup-preview-summary"></dl><p class="backup-warning">Importing replaces Eclipse-owned profiles, experience collections, saved experiences, preferences, and workspace state. It does not change Roblox files, accounts, or FastFlag configuration.</p><div class="confirm-actions"><button class="button button-secondary" type="button" data-action="cancel-backup-import">Cancel</button><button class="button button-primary" type="button" data-action="confirm-backup-import">Replace Eclipse data</button></div></div>
     </section>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>

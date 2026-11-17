@@ -8,6 +8,7 @@ const pageTitles = {
   deployment: 'Deployment',
   installation: 'Install guide',
   fastflags: 'Guarded FastFlags',
+  release: 'Release notes',
   settings: 'Settings'
 };
 
@@ -16,6 +17,8 @@ let initializedPage = false;
 let pendingPlaceId = null;
 let pendingBackupToken = null;
 let profileSearch = '';
+let libraryCollectionFilter = null;
+let editingCollectionId = null;
 let launcherVisible = true;
 
 const $ = (selector) => document.querySelector(selector);
@@ -139,16 +142,32 @@ function sortFavorites(favorites) {
 }
 
 function renderFavorites() {
-  const favorites = sortFavorites(dashboard.state.favorites);
-  $('#favorite-count').textContent = `${favorites.length} saved`;
+  const allFavorites = sortFavorites(dashboard.state.favorites);
+  const collections = new Map(dashboard.state.collections.map((collection) => [collection.id, collection]));
+  if (libraryCollectionFilter && !collections.has(libraryCollectionFilter)) {
+    libraryCollectionFilter = null;
+  }
+  const favorites = libraryCollectionFilter
+    ? allFavorites.filter((favorite) => favorite.collectionId === libraryCollectionFilter)
+    : allFavorites;
+  const selectedCollection = libraryCollectionFilter ? collections.get(libraryCollectionFilter) : null;
+
+  $('#favorite-count').textContent = `${allFavorites.length} saved`;
   $('#favorite-list-count').textContent = String(favorites.length);
+  $('#library-list-title').textContent = selectedCollection ? selectedCollection.name : 'Library';
+  $('#library-filter-copy').textContent = selectedCollection
+    ? `Showing ${favorites.length} ${favorites.length === 1 ? 'shortcut' : 'shortcuts'} in ${selectedCollection.name}.`
+    : 'All local saved experience shortcuts.';
+  $('#clear-library-filter').hidden = !selectedCollection;
   const list = $('#favorites-list');
   list.replaceChildren();
 
   if (favorites.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'empty-state';
-    empty.textContent = 'Save an experience ID to create a private launch shortcut.';
+    empty.textContent = selectedCollection
+      ? 'No saved experiences are assigned to this local collection yet.'
+      : 'Save an experience ID to create a private launch shortcut.';
     list.append(empty);
     return;
   }
@@ -157,12 +176,22 @@ function renderFavorites() {
     const item = document.createElement('article');
     item.className = 'list-card favorite-card';
     const detail = document.createElement('div');
+    const titleRow = document.createElement('div');
+    titleRow.className = 'favorite-title-row';
     const title = document.createElement('h4');
     title.textContent = favorite.title;
+    titleRow.append(title);
+    const collection = favorite.collectionId ? collections.get(favorite.collectionId) : null;
+    if (collection) {
+      const badge = document.createElement('span');
+      badge.className = `collection-badge accent-${collection.color}`;
+      badge.textContent = collection.name;
+      titleRow.append(badge);
+    }
     const meta = document.createElement('p');
     const idLabel = dashboard.state.settings.showExperienceId ? `Experience ID ${favorite.placeId} · ` : '';
     meta.textContent = `${idLabel}Saved ${formatDate(favorite.addedAt)}`;
-    detail.append(title, meta);
+    detail.append(titleRow, meta);
     const actions = document.createElement('div');
     actions.className = 'inline-actions';
     actions.append(
@@ -172,6 +201,106 @@ function renderFavorites() {
     item.append(detail, actions);
     list.append(item);
   }
+}
+
+function renderCollections() {
+  const collections = [...dashboard.state.collections]
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
+  const select = $('#favorite-collection');
+  const selectedValue = select.value;
+  select.replaceChildren();
+  const ungrouped = document.createElement('option');
+  ungrouped.value = '';
+  ungrouped.textContent = 'No collection';
+  select.append(ungrouped);
+  for (const collection of collections) {
+    const option = document.createElement('option');
+    option.value = collection.id;
+    option.textContent = collection.name;
+    select.append(option);
+  }
+  select.value = collections.some((collection) => collection.id === selectedValue) ? selectedValue : '';
+
+  $('#collection-list-count').textContent = String(collections.length);
+  const list = $('#collections-list');
+  list.replaceChildren();
+  if (collections.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state compact-empty';
+    empty.textContent = 'Create a local collection to group saved experience shortcuts.';
+    list.append(empty);
+  }
+
+  for (const collection of collections) {
+    const item = document.createElement('article');
+    item.className = `collection-card accent-${collection.color}`;
+    const detail = document.createElement('div');
+    const title = document.createElement('h4');
+    title.textContent = collection.name;
+    const copy = document.createElement('p');
+    copy.textContent = collection.description || 'No local note added.';
+    detail.append(title, copy);
+    const actions = document.createElement('div');
+    actions.className = 'collection-actions';
+    actions.append(
+      createButton('View', 'filter-collection', { collectionId: collection.id }, 'text-button compact'),
+      createButton('Edit', 'edit-collection', { collectionId: collection.id }, 'text-button quiet'),
+      createButton('Delete', 'remove-collection', { collectionId: collection.id })
+    );
+    item.append(detail, actions);
+    list.append(item);
+  }
+
+  if (editingCollectionId && !collections.some((collection) => collection.id === editingCollectionId)) {
+    resetCollectionForm();
+  }
+}
+
+function startCollectionEdit(collectionId) {
+  const collection = dashboard.state.collections.find((entry) => entry.id === collectionId);
+  if (!collection) return;
+  editingCollectionId = collection.id;
+  $('#collection-id').value = collection.id;
+  $('#collection-name').value = collection.name;
+  $('#collection-description').value = collection.description;
+  $('#collection-color').value = collection.color;
+  $('#collection-submit').textContent = 'Save collection';
+  $('#cancel-collection-edit').hidden = false;
+  $('#collection-name').focus();
+}
+
+function resetCollectionForm() {
+  editingCollectionId = null;
+  $('#collection-form').reset();
+  $('#collection-id').value = '';
+  $('#collection-submit').textContent = 'Create collection';
+  $('#cancel-collection-edit').hidden = true;
+}
+
+function renderDashboardWidgets() {
+  const { settings } = dashboard.state;
+  const widgetSettings = {
+    client: settings.showClientWidget,
+    profiles: settings.showProfilesWidget,
+    library: settings.showLibraryWidget,
+    deployment: settings.showDeploymentWidget
+  };
+  $$('[data-dashboard-widget]').forEach((widget) => {
+    widget.hidden = widgetSettings[widget.dataset.dashboardWidget] !== true;
+  });
+  const visibleCount = Object.values(widgetSettings).filter(Boolean).length;
+  $('#dashboard-widgets-heading').hidden = visibleCount === 0;
+  $('#dashboard-widgets').hidden = visibleCount === 0;
+  $('#deployment-widget-heading').textContent = dashboard.diagnostics.ready
+    ? 'Official client ready'
+    : 'Installation help available';
+  $('#deployment-widget-copy').textContent = dashboard.diagnostics.ready
+    ? 'Review the guided official-client checklist whenever you need it.'
+    : 'Follow the official-only checklist to install and re-check Roblox Player.';
+}
+
+function renderReleaseNotes() {
+  $('#release-version').textContent = `Eclipse ${dashboard.diagnostics.appVersion}`;
 }
 
 function renderInstallation() {
@@ -427,13 +556,16 @@ function renderSettings() {
 
 function render() {
   renderProfiles();
+  renderCollections();
   renderFavorites();
+  renderDashboardWidgets();
   renderInstallation();
   renderDiagnostics();
   renderIntegrations();
   renderDeployment();
   renderInstallationGuide();
   renderFastFlags();
+  renderReleaseNotes();
   renderSettings();
   renderLauncher();
 }
@@ -488,6 +620,7 @@ function showBackupPreview(preview) {
   const rows = [
     ['Local profiles', String(preview.summary.profileCount)],
     ['Pinned profiles', String(preview.summary.pinnedProfileCount)],
+    ['Local collections', String(preview.summary.collectionCount)],
     ['Saved experiences', String(preview.summary.favoriteCount)],
     ['Eclipse preferences', String(preview.summary.preferenceCount)]
   ];
@@ -579,6 +712,18 @@ $('#favorite-form').addEventListener('submit', async (event) => {
   if (succeeded) event.currentTarget.reset();
 });
 
+$('#collection-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const payload = Object.fromEntries(form);
+  const isEditing = Boolean(editingCollectionId);
+  const succeeded = await runOperation(
+    () => isEditing ? window.eclipse.updateCollection(payload) : window.eclipse.createCollection(payload),
+    isEditing ? 'Local collection updated.' : 'Local collection created.'
+  );
+  if (succeeded) resetCollectionForm();
+});
+
 $('#profile-search').addEventListener('input', (event) => {
   profileSearch = event.currentTarget.value;
   renderProfiles();
@@ -643,6 +788,20 @@ document.addEventListener('click', (event) => {
   if (action === 'launch-experience') requestLaunch(trigger.dataset.placeId);
   if (action === 'toggle-profile-pin') runOperation(() => window.eclipse.toggleProfilePin(trigger.dataset.profileId), 'Profile pin updated.');
   if (action === 'remove-profile') runOperation(() => window.eclipse.removeProfile(trigger.dataset.profileId), 'Profile removed.');
+  if (action === 'filter-collection') {
+    libraryCollectionFilter = trigger.dataset.collectionId;
+    renderFavorites();
+  }
+  if (action === 'clear-library-filter') {
+    libraryCollectionFilter = null;
+    renderFavorites();
+  }
+  if (action === 'edit-collection') startCollectionEdit(trigger.dataset.collectionId);
+  if (action === 'cancel-collection-edit') resetCollectionForm();
+  if (action === 'remove-collection') runOperation(
+    () => window.eclipse.removeCollection(trigger.dataset.collectionId),
+    'Collection deleted. Saved experiences remain ungrouped.'
+  );
   if (action === 'export-backup') exportBackup();
   if (action === 'preview-backup-import') previewBackupImport();
   if (action === 'cancel-backup-import') closeBackupPreview();

@@ -2,12 +2,14 @@
 
 const { randomUUID } = require('node:crypto');
 
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
 const MAX_PROFILES = 12;
 const MAX_FAVORITES = 48;
+const MAX_COLLECTIONS = 16;
 const PROFILE_COLORS = new Set(['violet', 'sky', 'mint', 'amber', 'rose']);
 const PROFILE_ID_PATTERN = /^profile_[a-z0-9-]{20,}$/i;
-const UI_PAGES = ['overview', 'profiles', 'library', 'integrations', 'deployment', 'installation', 'fastflags', 'settings'];
+const COLLECTION_ID_PATTERN = /^collection_[a-z0-9-]{20,}$/i;
+const UI_PAGES = ['overview', 'profiles', 'library', 'integrations', 'deployment', 'installation', 'fastflags', 'release', 'settings'];
 const SETTING_OPTIONS = Object.freeze({
   theme: ['midnight', 'aurora', 'carbon'],
   accent: ['violet', 'sky', 'mint', 'amber', 'rose'],
@@ -27,6 +29,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   notifications: true,
   activityTracking: false,
   showStartupLauncher: true,
+  showClientWidget: true,
+  showProfilesWidget: true,
+  showLibraryWidget: true,
+  showDeploymentWidget: true,
   confirmLaunch: true,
   rememberLastPage: true,
   startPage: 'overview',
@@ -47,6 +53,7 @@ function createDefaultState() {
       lastPage: 'overview'
     },
     profiles: [],
+    collections: [],
     favorites: []
   };
 }
@@ -166,6 +173,27 @@ function normalizeProfile(value) {
   };
 }
 
+function normalizeCollection(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const name = boundedText(value.name, 32);
+  if (!name) {
+    return null;
+  }
+
+  const candidateId = boundedText(value.id, 64);
+  const color = boundedText(value.color, 12);
+  return {
+    id: COLLECTION_ID_PATTERN.test(candidateId) ? candidateId : `collection_${randomUUID()}`,
+    name,
+    description: boundedText(value.description, 120),
+    color: PROFILE_COLORS.has(color) ? color : 'violet',
+    createdAt: validDate(value.createdAt)
+  };
+}
+
 function normalizeFavorite(value) {
   if (!value || typeof value !== 'object') {
     return null;
@@ -174,10 +202,12 @@ function normalizeFavorite(value) {
   try {
     const placeId = toPlaceId(value.placeId);
     const title = boundedText(value.title, 60);
+    const collectionId = boundedText(value.collectionId, 64);
 
     return {
       placeId,
       title: title || `Experience ${placeId}`,
+      collectionId: COLLECTION_ID_PATTERN.test(collectionId) ? collectionId : null,
       addedAt: validDate(value.addedAt)
     };
   } catch {
@@ -202,6 +232,21 @@ function normalizeState(value) {
     state.profiles.push(profile);
   }
 
+  const collectionIds = new Set();
+  const collectionNames = new Set();
+  for (const rawCollection of Array.isArray(source.collections) ? source.collections : []) {
+    const collection = normalizeCollection(rawCollection);
+    const normalizedName = collection?.name.toLocaleLowerCase();
+    if (!collection || collectionIds.has(collection.id) || collectionNames.has(normalizedName)
+      || state.collections.length >= MAX_COLLECTIONS) {
+      continue;
+    }
+
+    collectionIds.add(collection.id);
+    collectionNames.add(normalizedName);
+    state.collections.push(collection);
+  }
+
   const favoriteIds = new Set();
   for (const rawFavorite of Array.isArray(source.favorites) ? source.favorites : []) {
     const favorite = normalizeFavorite(rawFavorite);
@@ -209,6 +254,7 @@ function normalizeState(value) {
       continue;
     }
 
+    favorite.collectionId = collectionIds.has(favorite.collectionId) ? favorite.collectionId : null;
     favoriteIds.add(favorite.placeId);
     state.favorites.push(favorite);
   }
@@ -233,13 +279,37 @@ function createProfile(input) {
   };
 }
 
+function collectionDetails(input) {
+  const name = boundedText(input?.name, 32);
+  if (!name) {
+    throw new Error('Collection name is required.');
+  }
+
+  const color = boundedText(input?.color, 12);
+  return {
+    name,
+    description: boundedText(input?.description, 120),
+    color: PROFILE_COLORS.has(color) ? color : 'violet'
+  };
+}
+
+function createCollection(input) {
+  return {
+    id: `collection_${randomUUID()}`,
+    ...collectionDetails(input),
+    createdAt: new Date().toISOString()
+  };
+}
+
 function createFavorite(input) {
   const placeId = toPlaceId(input?.placeId);
   const title = boundedText(input?.title, 60);
+  const collectionId = boundedText(input?.collectionId, 64);
 
   return {
     placeId,
     title: title || `Experience ${placeId}`,
+    collectionId: COLLECTION_ID_PATTERN.test(collectionId) ? collectionId : null,
     addedAt: new Date().toISOString()
   };
 }
@@ -250,6 +320,7 @@ function cloneState(state) {
 
 module.exports = {
   DEFAULT_SETTINGS,
+  MAX_COLLECTIONS,
   MAX_FAVORITES,
   MAX_PROFILES,
   SETTING_OPTIONS,
@@ -257,6 +328,8 @@ module.exports = {
   UI_PAGES,
   boundedText,
   cloneState,
+  collectionDetails,
+  createCollection,
   createDefaultSettings,
   createDefaultState,
   createFavorite,

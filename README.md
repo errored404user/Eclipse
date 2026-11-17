@@ -29,17 +29,20 @@ A dedicated **Install guide** turns official-client detection into four clear st
 
 ## Local organization and backup
 
-Profiles are local labels with a name, note, color, and optional pin. Pinned profiles remain at the top, and profile search looks only through local profile names and notes.
+Profiles are local labels with a name, note, color, and optional pin. Pinned profiles remain at the top, and profile search looks only through local profile names and notes. Saved experience shortcuts can optionally belong to one local collection with a name, color, and note. Deleting a collection leaves its shortcuts intact and ungrouped.
 
-Eclipse can export a portable, versioned JSON backup of **Eclipse-owned state only**: profiles, saved experience shortcuts, preferences, and workspace state. It excludes Roblox credentials, sessions, client files, and Guarded FastFlag configuration. Importing a backup first displays its counts and then requires explicit confirmation before replacing the current Eclipse-owned data. Backup files are selected with the operating system’s native file dialog; the renderer never receives arbitrary file-system paths.
+The Overview dashboard contains independently showable/hideable core local-status cards for official-client readiness, profiles, saved shortcuts, and installation help. The layout is fixed, and no widget fetches remote data.
+
+Eclipse can export a portable, versioned JSON backup of **Eclipse-owned state only**: profiles, experience collections, saved experience shortcuts, preferences, and workspace state. It excludes Roblox credentials, sessions, client files, and Guarded FastFlag configuration. Importing a backup first displays its counts and then requires explicit confirmation before replacing the current Eclipse-owned data. Backup files are selected with the operating system’s native file dialog; the renderer never receives arbitrary file-system paths.
 
 ## What works today
 
 - Detects common Windows Roblox client installation locations without changing them.
 - Provides a setup-first onboarding flow and blocks experience launches until the official player is detected.
 - Opens official Roblox game and catalog pages in the user's default browser, allowing Roblox's official flow to launch the client.
-- Stores locally named launch profiles and favorite experience IDs in an atomic JSON state file.
-- Provides sixteen validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, optional local activity presence, startup-launcher visibility, launch confirmation, navigation, library presentation, and diagnostic privacy.
+- Stores local profiles, named experience collections, and favorite experience IDs in an atomic JSON state file.
+- Includes a packaged, in-app feature-history page with no remote update check or usage telemetry.
+- Provides twenty validated, persisted settings that control theme, accent, density, text size, motion, contrast, focus mode, notifications, optional local activity presence, startup-launcher visibility, core dashboard cards, launch confirmation, navigation, library presentation, and diagnostic privacy.
 - Provides input validation, bounded state, diagnostics, and a hardened Electron IPC boundary.
 - Uses a native desktop UI with no remote web content, no Node.js access in the renderer, and no arbitrary IPC channels.
 
@@ -78,7 +81,7 @@ src/
   shared/backup.js        Versioned Eclipse-owned backup envelope and validation helpers
   shared/fastflags.js     Fixed FastFlag catalog, validation, and pure configuration transforms
   renderer/               Local HTML, CSS, and browser-only UI logic
-test/state.test.js        Node unit tests for state, readiness, and guarded FastFlag behavior
+test/state.test.js        Node unit tests for state, collections, backups, readiness, and guarded FastFlag behavior
 ```
 
 The UI is intentionally separated from local system access. Future official integrations should be implemented as narrowly scoped main-process adapters, with explicit user consent and tests.

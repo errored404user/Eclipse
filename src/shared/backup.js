@@ -39,6 +39,7 @@ function summarizeBackup(state) {
   return {
     profileCount: normalized.profiles.length,
     pinnedProfileCount: normalized.profiles.filter((profile) => profile.pinned).length,
+    collectionCount: normalized.collections.length,
     favoriteCount: normalized.favorites.length,
     preferenceCount: Object.keys(normalized.settings).length
   };

@@ -3,7 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  MAX_COLLECTIONS,
   MAX_FAVORITES,
+  createCollection,
   createFavorite,
   createProfile,
   normalizeSettingsPatch,
@@ -32,14 +34,18 @@ test('normalizes persisted state, drops malformed records, and removes duplicate
       { id: 'profile_12345678901234567890', name: '  Main\nSetup ', description: ' First   profile ', color: 'mint', pinned: true, createdAt: '2026-01-01' },
       { name: '   ' }
     ],
+    collections: [
+      { id: 'collection_12345678901234567890', name: '  Weekend   ', description: ' Local   picks ', color: 'sky', createdAt: '2026-01-01' },
+      { name: '  ' }
+    ],
     favorites: [
-      { placeId: '1818', title: ' Classic   Crossroads ', addedAt: '2026-01-02' },
+      { placeId: '1818', title: ' Classic   Crossroads ', collectionId: 'collection_12345678901234567890', addedAt: '2026-01-02' },
       { placeId: 1818, title: 'Duplicate' },
       { placeId: 'not-an-id', title: 'Bad' }
     ]
   });
 
-  assert.equal(state.schemaVersion, 3);
+  assert.equal(state.schemaVersion, 4);
   assert.equal(state.settings.reduceMotion, true);
   assert.equal(state.settings.activityTracking, true);
   assert.equal(state.settings.showStartupLauncher, false);
@@ -50,9 +56,13 @@ test('normalizes persisted state, drops malformed records, and removes duplicate
   assert.deepEqual(state.profiles[0].name, 'Main Setup');
   assert.deepEqual(state.profiles[0].description, 'First profile');
   assert.equal(state.profiles[0].pinned, true);
+  assert.equal(state.collections.length, 1);
+  assert.equal(state.collections[0].name, 'Weekend');
+  assert.equal(state.collections[0].description, 'Local picks');
   assert.equal(state.favorites.length, 1);
   assert.equal(state.favorites[0].placeId, 1818);
   assert.equal(state.favorites[0].title, 'Classic Crossroads');
+  assert.equal(state.favorites[0].collectionId, 'collection_12345678901234567890');
 });
 
 test('settings use safe defaults and reject malformed update patches', () => {
@@ -62,6 +72,7 @@ test('settings use safe defaults and reject malformed update patches', () => {
       highContrast: 'true',
       activityTracking: 'true',
       showStartupLauncher: 'false',
+      showClientWidget: 'false',
       startPage: 'unknown-page',
       librarySort: 'title'
     },
@@ -72,10 +83,11 @@ test('settings use safe defaults and reject malformed update patches', () => {
   assert.equal(state.settings.highContrast, false);
   assert.equal(state.settings.activityTracking, false);
   assert.equal(state.settings.showStartupLauncher, true);
+  assert.equal(state.settings.showClientWidget, true);
   assert.equal(state.settings.startPage, 'overview');
   assert.equal(state.settings.librarySort, 'title');
   assert.equal(state.ui.lastPage, 'overview');
-  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, showStartupLauncher: false, theme: 'carbon' }), { highContrast: true, activityTracking: true, showStartupLauncher: false, theme: 'carbon' });
+  assert.deepEqual(normalizeSettingsPatch({ highContrast: true, activityTracking: true, showStartupLauncher: false, showClientWidget: false, theme: 'carbon' }), { highContrast: true, activityTracking: true, showStartupLauncher: false, showClientWidget: false, theme: 'carbon' });
   assert.throws(() => normalizeSettingsPatch({ theme: 'untrusted-theme' }), /theme setting is invalid/);
   assert.throws(() => normalizeSettingsPatch({ highContrast: 'true' }), /highContrast setting must be enabled or disabled/);
   assert.throws(() => normalizeSettingsPatch({ activityTracking: 'true' }), /activityTracking setting must be enabled or disabled/);
@@ -83,8 +95,9 @@ test('settings use safe defaults and reject malformed update patches', () => {
   assert.throws(() => normalizeSettingsPatch({ unknown: true }), /Unsupported setting/);
 });
 
-test('profile and favorite creators enforce required valid user inputs', () => {
+test('profile, collection, and favorite creators enforce required valid user inputs', () => {
   assert.throws(() => createProfile({ name: '   ' }), /Profile name is required/);
+  assert.throws(() => createCollection({ name: '   ' }), /Collection name is required/);
   assert.throws(() => createFavorite({ placeId: 'anything' }), /valid numeric Roblox experience ID/);
   assert.equal(toPlaceId('0001818'), 1818);
 
@@ -94,9 +107,16 @@ test('profile and favorite creators enforce required valid user inputs', () => {
   assert.equal(profile.color, 'sky');
   assert.equal(profile.pinned, false);
 
-  const favorite = createFavorite({ placeId: '1818', title: '  Crossroads ' });
+  const collection = createCollection({ name: '  Weekend  ', description: '  Quiet picks ', color: 'sky' });
+  assert.match(collection.id, /^collection_/);
+  assert.equal(collection.name, 'Weekend');
+  assert.equal(collection.description, 'Quiet picks');
+  assert.equal(collection.color, 'sky');
+
+  const favorite = createFavorite({ placeId: '1818', title: '  Crossroads ', collectionId: collection.id });
   assert.equal(favorite.placeId, 1818);
   assert.equal(favorite.title, 'Crossroads');
+  assert.equal(favorite.collectionId, collection.id);
 });
 
 test('state retains a bounded number of unique favorite entries', () => {
@@ -111,12 +131,39 @@ test('state retains a bounded number of unique favorite entries', () => {
   assert.equal(state.favorites.at(-1).placeId, MAX_FAVORITES);
 });
 
+test('collections are bounded and dangling saved-experience assignments are removed', () => {
+  const collections = Array.from({ length: MAX_COLLECTIONS + 3 }, (_, index) => ({
+    id: `collection_${String(index).padStart(20, '0')}`,
+    name: `Collection ${index + 1}`
+  }));
+  const state = normalizeState({
+    collections,
+    favorites: [
+      { placeId: 1818, title: 'Assigned', collectionId: collections[0].id },
+      { placeId: 1819, title: 'Dangling', collectionId: 'collection_99999999999999999999' }
+    ]
+  });
+
+  assert.equal(state.collections.length, MAX_COLLECTIONS);
+  assert.equal(state.favorites[0].collectionId, collections[0].id);
+  assert.equal(state.favorites[1].collectionId, null);
+
+  const duplicateNames = normalizeState({
+    collections: [
+      { id: 'collection_11111111111111111111', name: 'Weekend' },
+      { id: 'collection_22222222222222222222', name: '  weekend  ' }
+    ]
+  });
+  assert.equal(duplicateNames.collections.length, 1);
+});
+
 test('versioned Eclipse backups validate and retain only normalized local state', () => {
   const source = normalizeState({
     settings: { theme: 'carbon', showStartupLauncher: false },
     ui: { lastPage: 'installation' },
     profiles: [{ id: 'profile_12345678901234567890', name: 'Pinned local setup', pinned: true, color: 'sky' }],
-    favorites: [{ placeId: 1818, title: 'Crossroads' }]
+    collections: [{ id: 'collection_12345678901234567890', name: 'Archive', color: 'mint' }],
+    favorites: [{ placeId: 1818, title: 'Crossroads', collectionId: 'collection_12345678901234567890' }]
   });
   const envelope = createBackupEnvelope(source, '2026-11-17T00:00:00.000Z');
 
@@ -126,6 +173,7 @@ test('versioned Eclipse backups validate and retain only normalized local state'
   assert.deepEqual(summarizeBackup(envelope.state), {
     profileCount: 1,
     pinnedProfileCount: 1,
+    collectionCount: 1,
     favoriteCount: 1,
     preferenceCount: Object.keys(source.settings).length
   });
@@ -135,6 +183,8 @@ test('versioned Eclipse backups validate and retain only normalized local state'
   assert.equal(restored.settings.showStartupLauncher, false);
   assert.equal(restored.ui.lastPage, 'installation');
   assert.equal(restored.profiles[0].pinned, true);
+  assert.equal(restored.collections[0].name, 'Archive');
+  assert.equal(restored.favorites[0].collectionId, 'collection_12345678901234567890');
   assert.throws(() => validateBackupEnvelope({ format: 'other', version: 1, state: {} }), /not a supported Eclipse backup/);
   assert.throws(() => validateBackupEnvelope({ format: BACKUP_FORMAT, version: BACKUP_VERSION, state: { settings: {}, ui: {} } }), /missing required local state/);
 });

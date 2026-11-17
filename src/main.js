@@ -8,9 +8,12 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const {
+  MAX_COLLECTIONS,
   MAX_FAVORITES,
   MAX_PROFILES,
   cloneState,
+  collectionDetails,
+  createCollection,
   createDefaultState,
   createFavorite,
   createProfile,
@@ -415,6 +418,18 @@ function requireProfileId(value) {
   return value;
 }
 
+function requireCollectionId(value) {
+  if (typeof value !== 'string' || !/^collection_[a-z0-9-]{20,}$/i.test(value)) {
+    throw invalidRequest('The collection identifier is invalid.');
+  }
+  return value;
+}
+
+function collectionNameTaken(collections, name, excludedId = null) {
+  const normalizedName = name.toLocaleLowerCase();
+  return collections.some((collection) => collection.id !== excludedId && collection.name.toLocaleLowerCase() === normalizedName);
+}
+
 async function detectRobloxInstallation() {
   if (process.platform !== 'win32') {
     return {
@@ -631,12 +646,76 @@ function registerIpcHandlers(store) {
     });
   }));
 
+  ipcMain.handle('eclipse:collection:create', guarded(async (payload) => {
+    let collection;
+    try {
+      collection = createCollection(requireObject(payload, 'Collection details are required.'));
+    } catch (error) {
+      throw invalidRequest(error.message);
+    }
+
+    return store.update((state) => {
+      if (state.collections.length >= MAX_COLLECTIONS) {
+        throw invalidRequest(`Eclipse supports up to ${MAX_COLLECTIONS} local collections.`);
+      }
+      if (collectionNameTaken(state.collections, collection.name)) {
+        throw invalidRequest('A local collection already uses that name.');
+      }
+      state.collections.unshift(collection);
+      return state;
+    });
+  }));
+
+  ipcMain.handle('eclipse:collection:update', guarded(async (payload) => {
+    const collectionId = requireCollectionId(payload?.collectionId);
+    let details;
+    try {
+      details = collectionDetails(requireObject(payload, 'Collection details are required.'));
+    } catch (error) {
+      throw invalidRequest(error.message);
+    }
+
+    return store.update((state) => {
+      const collection = state.collections.find((entry) => entry.id === collectionId);
+      if (!collection) {
+        throw invalidRequest('That local collection no longer exists.');
+      }
+      if (collectionNameTaken(state.collections, details.name, collectionId)) {
+        throw invalidRequest('A local collection already uses that name.');
+      }
+      Object.assign(collection, details);
+      return state;
+    });
+  }));
+
+  ipcMain.handle('eclipse:collection:remove', guarded(async (payload) => {
+    const collectionId = requireCollectionId(payload?.collectionId);
+    return store.update((state) => {
+      const collectionExists = state.collections.some((entry) => entry.id === collectionId);
+      if (!collectionExists) {
+        throw invalidRequest('That local collection no longer exists.');
+      }
+      state.collections = state.collections.filter((collection) => collection.id !== collectionId);
+      state.favorites = state.favorites.map((favorite) => favorite.collectionId === collectionId
+        ? { ...favorite, collectionId: null }
+        : favorite);
+      return state;
+    });
+  }));
+
   ipcMain.handle('eclipse:favorite:add', guarded(async (payload) => {
     const favorite = createFavorite(requireObject(payload, 'Experience details are required.'));
     return store.update((state) => {
+      if (favorite.collectionId && !state.collections.some((collection) => collection.id === favorite.collectionId)) {
+        throw invalidRequest('Choose an existing local collection or leave it ungrouped.');
+      }
       const existingIndex = state.favorites.findIndex((entry) => entry.placeId === favorite.placeId);
       if (existingIndex >= 0) {
-        state.favorites[existingIndex] = { ...state.favorites[existingIndex], title: favorite.title };
+        state.favorites[existingIndex] = {
+          ...state.favorites[existingIndex],
+          title: favorite.title,
+          collectionId: favorite.collectionId
+        };
       } else {
         if (state.favorites.length >= MAX_FAVORITES) {
           throw invalidRequest(`Eclipse supports up to ${MAX_FAVORITES} saved experiences.`);
