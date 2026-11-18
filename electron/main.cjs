@@ -5,12 +5,17 @@ const fastFlags = require('./fast-flags.cjs');
 const { createDiscordPresence } = require('./discord-presence.cjs');
 const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
 const { createPlayerLaunchWindow, launchStates, sendLaunchState } = require('./launch-window.cjs');
+const { navigationPageFromArguments, placeIdFromArguments, startupStatus, taskbarJumpList } = require('./system-integration.cjs');
+const { readRecentPlaceIds, writeRecentPlaceIds } = require('./taskbar-recents.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
 
 let mainWindow;
 let activeLaunchWindow;
 let activeLaunchTimer;
+let recentLaunchPlaceIds = [];
+let pendingNavigationPage = navigationPageFromArguments(process.argv);
+let pendingLaunchPlaceId = placeIdFromArguments(process.argv);
 const robloxBootstrapper = createRobloxBootstrapper();
 const discordPresence = createDiscordPresence({ applicationId: process.env.ECLIPSE_DISCORD_CLIENT_ID });
 discordPresence.on('status', (status) => {
@@ -66,6 +71,7 @@ async function launchRobloxPlayer(placeId) {
     await robloxBootstrapper.ensureReady();
     sendLaunchState(launch.window, 'starting');
     const result = await openOfficialUrl(`roblox://experiences/start?placeId=${placeId}`);
+    rememberRecentLaunch(placeId);
     sendLaunchState(launch.window, 'connecting');
     setTimeout(() => {
       if (activeLaunchWindow === launch.window) sendLaunchState(launch.window, 'complete');
@@ -77,6 +83,42 @@ async function launchRobloxPlayer(placeId) {
     scheduleLaunchWindowClose(launch.window, 7000);
     throw error;
   }
+}
+
+function openNavigationPage(page) {
+  if (!page) return;
+  pendingNavigationPage = page;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send('system:navigate', page);
+  }
+}
+
+function refreshJumpList() {
+  if (process.platform !== 'win32') return;
+  app.setJumpList(taskbarJumpList(process.execPath, recentLaunchPlaceIds));
+}
+
+function taskbarRecentsPath() {
+  return path.join(app.getPath('userData'), 'taskbar-recent-places.json');
+}
+
+function rememberRecentLaunch(placeId) {
+  const validPlaceId = normalizePlaceId(placeId);
+  if (!validPlaceId) return;
+  recentLaunchPlaceIds = [validPlaceId, ...recentLaunchPlaceIds.filter((item) => item !== validPlaceId)].slice(0, 6);
+  refreshJumpList();
+  void writeRecentPlaceIds(taskbarRecentsPath(), recentLaunchPlaceIds).catch(() => {});
+}
+
+function currentStartupStatus() {
+  const supportsWindowsStartup = process.platform === 'win32' && app.isPackaged;
+  return startupStatus({
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    loginItemSettings: supportsWindowsStartup ? app.getLoginItemSettings() : {}
+  });
 }
 
 function createMainWindow() {
@@ -99,14 +141,37 @@ function createMainWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, '..', 'app', 'index.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    if (pendingNavigationPage) mainWindow.webContents.send('system:navigate', pendingNavigationPage);
+    if (pendingLaunchPlaceId) {
+      const placeId = pendingLaunchPlaceId;
+      pendingLaunchPlaceId = 0;
+      void launchRobloxPlayer(placeId);
+    }
+  });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true));
   mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false));
 }
 
 app.setAppUserModelId('app.eclipse.client');
-app.whenReady().then(() => {
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+if (hasSingleInstanceLock) {
+app.on('second-instance', (_event, commandLine) => {
+  openNavigationPage(navigationPageFromArguments(commandLine));
+  const placeId = placeIdFromArguments(commandLine);
+  if (placeId) {
+    pendingLaunchPlaceId = placeId;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      pendingLaunchPlaceId = 0;
+      void launchRobloxPlayer(placeId);
+    }
+  }
+});
+
+app.whenReady().then(async () => {
   ipcMain.handle('window:minimize', () => mainWindow?.minimize());
   ipcMain.handle('window:toggle-maximize', () => {
     if (!mainWindow) return false;
@@ -136,6 +201,15 @@ app.whenReady().then(() => {
 
   ipcMain.handle('roblox-bootstrapper:status', () => robloxBootstrapper.status());
   ipcMain.handle('roblox-bootstrapper:update', () => robloxBootstrapper.installOrUpdate());
+  ipcMain.handle('roblox-bootstrapper:repair', () => robloxBootstrapper.repair());
+
+  ipcMain.handle('system:startup-status', () => currentStartupStatus());
+  ipcMain.handle('system:set-startup', (_event, enabled) => {
+    const current = currentStartupStatus();
+    if (!current.supported) return current;
+    app.setLoginItemSettings({ openAtLogin: enabled === true, openAsHidden: false });
+    return currentStartupStatus();
+  });
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
   ipcMain.handle('roblox:launch-place', async (_event, placeId) => {
@@ -152,11 +226,15 @@ app.whenReady().then(() => {
     throw new Error('Unsupported official Roblox action.');
   });
 
+  recentLaunchPlaceIds = await readRecentPlaceIds(taskbarRecentsPath());
+  refreshJumpList();
   createMainWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    else mainWindow?.focus();
   });
 });
+}
 
 app.on('before-quit', () => discordPresence.close());
 

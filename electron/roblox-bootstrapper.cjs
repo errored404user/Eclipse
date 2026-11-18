@@ -301,6 +301,9 @@ class RobloxBootstrapper extends EventEmitter {
       supported: true,
       installed: Boolean(installed),
       installedVersion: installed?.versionGuid || '',
+      installedDirectoryPresent: Boolean(installed?.directory),
+      installedExecutablePresent: Boolean(installed?.executablePath),
+      installedModifiedAt: installed?.modifiedAt ? new Date(installed.modifiedAt).toISOString() : '',
       latestVersion: latest?.versionGuid || '',
       latestClientVersion: latest?.version || '',
       updateAvailable: Boolean(latest && (!installed || installed.versionGuid !== latest.versionGuid)),
@@ -323,7 +326,7 @@ class RobloxBootstrapper extends EventEmitter {
     return null;
   }
 
-  async installOrUpdate() {
+  async installOrUpdate({ force = false } = {}) {
     if (!this.supported()) throw new RobloxBootstrapperError('Eclipse bootstrapper support is available from the Windows desktop app only.', 'UNSUPPORTED_PLATFORM');
     if (this.operation) return this.operation;
 
@@ -332,7 +335,7 @@ class RobloxBootstrapper extends EventEmitter {
       const latest = await getOfficialClientVersion(this.fetchImpl);
       this.latest = latest;
       const current = await locateRobloxPlayer(this.versionsPath);
-      if (current?.versionGuid === latest.versionGuid) {
+      if (!force && current?.versionGuid === latest.versionGuid) {
         this.emitProgress('ready', 'The installed Roblox Player is current.');
         return { ...(await this.inspect({ refresh: false })), changed: false };
       }
@@ -375,6 +378,10 @@ class RobloxBootstrapper extends EventEmitter {
     } finally {
       this.operation = null;
     }
+  }
+
+  async repair() {
+    return this.installOrUpdate({ force: true });
   }
 
   async ensureReady() {

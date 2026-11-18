@@ -7,19 +7,24 @@ const storageKeys = {
   recent: 'eclipse.roblox.recent.v1',
   settings: 'eclipse.settings.v1',
   integrations: 'eclipse.integrations.v1',
-  profile: 'eclipse.profile.v1'
+  profile: 'eclipse.profile.v1',
+  fastFlagProfiles: 'eclipse.fastflag-profiles.v1',
+  launchHistory: 'eclipse.launch-history.v1'
 };
 
 const state = {
   page: 'home',
-  library: readStored(storageKeys.library, []),
-  recent: readStored(storageKeys.recent, []),
-  settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
+  library: readStored(storageKeys.library, []).map(normalizeGame).filter(Boolean).sort((left, right) => Number(right.pinned) - Number(left.pinned)),
+  recent: readStored(storageKeys.recent, []).map(normalizeGame).filter(Boolean),
+  settings: normalizeSettings(readStored(storageKeys.settings, {})),
   integrations: normalizeIntegrations(readStored(storageKeys.integrations, {})),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
-  discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '' },
+  launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
+  discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '', sort: 'featured', filter: 'all' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
-  fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
+  startup: { status: null, busy: false },
+  fastFlags: { ...defaultFastFlagSelection(), status: null, profileId: '', busy: false, message: '' },
+  fastFlagProfiles: normalizeSavedFastFlagProfiles(readStored(storageKeys.fastFlagProfiles, []))
 };
 
 const browserRoblox = {
@@ -59,10 +64,22 @@ const browserBootstrapper = {
     };
   },
   async update() { throw new Error('The Eclipse bootstrapper runs in the Windows desktop app.'); },
+  async repair() { throw new Error('The Eclipse bootstrapper runs in the Windows desktop app.'); },
   onProgress() { return () => {}; }
 };
 
 const bootstrapper = window.eclipseBootstrapper || browserBootstrapper;
+
+const browserSystem = {
+  async startupStatus() { return { supported: false, enabled: false, reason: 'Launch on startup is available in the packaged Windows Eclipse app.' }; },
+  async setStartup() { return this.startupStatus(); },
+  onNavigate() { return () => {}; }
+};
+
+const system = window.eclipseSystem || browserSystem;
+if (window.eclipseSystem) {
+  window.eclipseSystem.onNavigate((page) => setPage(page));
+}
 
 const browserFastFlags = {
   async getStatus() { return { supported: false, reason: 'Fast Flags can be applied from the Windows Eclipse desktop app.' }; },
@@ -144,6 +161,64 @@ function normalizeIntegrations(value) {
     discordRichPresence: value?.discordRichPresence === true,
     discordClientId: /^\d{17,20}$/.test(discordClientId) ? discordClientId : ''
   };
+}
+
+function normalizeSettings(value) {
+  const scale = Number(value?.uiScale);
+  return {
+    reducedMotion: value?.reducedMotion === true,
+    compactCards: value?.compactCards === true,
+    highContrast: value?.highContrast === true,
+    uiScale: [1, 1.1, 1.2, 1.3].includes(scale) ? scale : 1,
+    clock24Hour: value?.clock24Hour === true
+  };
+}
+
+function defaultFastFlagSelection() {
+  return { profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic' };
+}
+
+function normalizeFastFlagSelection(value = {}) {
+  const profile = ['default', 'performance', 'balanced', 'quality'].includes(value.profile) ? value.profile : 'balanced';
+  const integer = (candidate, allowed, fallback) => allowed.includes(Number(candidate)) ? Number(candidate) : fallback;
+  return {
+    profile,
+    msaa: integer(value.msaa, [0, 1, 2, 4], profile === 'default' ? 0 : ({ performance: 1, balanced: 2, quality: 4 }[profile] || 2)),
+    fpsCap: integer(value.fpsCap, [0, 60, 120, 144, 165, 240], 0),
+    preserveDisplayScaling: value.preserveDisplayScaling === true,
+    meshDetailEnabled: value.meshDetailEnabled === true,
+    meshDetail: integer(value.meshDetail, [0, 1, 2, 3], 3),
+    frmQualityEnabled: value.frmQualityEnabled === true,
+    frmQuality: integer(value.frmQuality, Array.from({ length: 21 }, (_item, index) => index + 1), 21),
+    renderingMode: ['automatic', 'd3d11', 'vulkan'].includes(value.renderingMode) ? value.renderingMode : 'automatic'
+  };
+}
+
+function normalizeSavedFastFlagProfiles(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set();
+  return value.flatMap((item) => {
+    const id = String(item?.id || '').trim();
+    const name = String(item?.name || '').trim().replace(/\s+/g, ' ').slice(0, 36);
+    if (!/^[a-z0-9_-]{8,48}$/i.test(id) || !name || ids.has(id)) return [];
+    ids.add(id);
+    return [{ id, name, settings: normalizeFastFlagSelection(item.settings), updatedAt: validLocalTimestamp(item.updatedAt) }];
+  }).slice(0, 20);
+}
+
+function validLocalTimestamp(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
+function normalizeLaunchHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const placeId = Number(item?.placeId);
+    if (!Number.isSafeInteger(placeId) || placeId <= 0) return [];
+    const launchedAt = validLocalTimestamp(item.launchedAt);
+    return [{ placeId, name: String(item.name || '').trim().slice(0, 160), launchedAt }];
+  }).slice(0, 30);
 }
 
 function saveIntegrations() {
@@ -354,10 +429,8 @@ function safeImageUrl(value) {
 }
 
 function formatCount(value) {
-  const count = Number(value) || 0;
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(count >= 10_000 ? 0 : 1)}K`;
-  return String(count);
+  const count = Math.max(0, Number(value) || 0);
+  return new Intl.NumberFormat(undefined, { notation: count >= 1_000 ? 'compact' : 'standard', maximumFractionDigits: count >= 1_000 ? 1 : 0 }).format(count);
 }
 
 function formatDate(value) {
@@ -367,7 +440,13 @@ function formatDate(value) {
   if (days <= 0) return 'Today';
   if (days === 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function formatLocalLaunchTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', hour12: !state.settings.clock24Hour }).format(date);
 }
 
 function showToast(message) {
@@ -389,7 +468,9 @@ function normalizeGame(game) {
     creator: String(game.creator || '').slice(0, 120),
     playing: Math.max(0, Number(game.playing) || 0),
     rating: Number.isFinite(Number(game.rating)) ? Number(game.rating) : null,
-    imageUrl: safeImageUrl(game.imageUrl)
+    imageUrl: safeImageUrl(game.imageUrl),
+    pinned: game.pinned === true,
+    launchedAt: game.launchedAt ? validLocalTimestamp(game.launchedAt) : ''
   };
 }
 
@@ -438,6 +519,21 @@ function removeGame(universeId) {
   writeStored(storageKeys.library, state.library);
 }
 
+function togglePinnedGame(universeId) {
+  state.library = state.library.map((game) => game.universeId === Number(universeId) ? { ...game, pinned: !game.pinned } : game);
+  state.library.sort((left, right) => Number(right.pinned) - Number(left.pinned));
+  writeStored(storageKeys.library, state.library);
+}
+
+function addLaunchHistory(placeId, game) {
+  if (!state.integrations.activityTracking) return;
+  const numericId = Number(placeId);
+  if (!Number.isSafeInteger(numericId) || numericId <= 0) return;
+  const entry = { placeId: numericId, name: String(game?.name || '').slice(0, 160), launchedAt: new Date().toISOString() };
+  state.launchHistory = [entry, ...state.launchHistory.filter((item) => item.placeId !== numericId)].slice(0, 30);
+  writeStored(storageKeys.launchHistory, state.launchHistory);
+}
+
 function addRecent(game) {
   if (!state.integrations.activityTracking) return;
   const safeGame = normalizeGame(game);
@@ -448,9 +544,12 @@ function addRecent(game) {
 }
 
 function setSettings() {
+  state.settings = normalizeSettings(state.settings);
   writeStored(storageKeys.settings, state.settings);
   document.documentElement.classList.toggle('reduce-motion', Boolean(state.settings.reducedMotion));
   document.documentElement.classList.toggle('compact-cards', Boolean(state.settings.compactCards));
+  document.documentElement.classList.toggle('high-contrast', Boolean(state.settings.highContrast));
+  document.documentElement.style.setProperty('--ui-scale', String(state.settings.uiScale));
 }
 
 function pageHeader(eyebrow, title, description, actions = '') {
@@ -478,15 +577,15 @@ function gameCard(game, options = {}) {
   const hue = Number(game.universeId) % 280;
   const saved = isSaved(game);
   const secondaryAction = options.library
-    ? `<button class="card-icon-button" type="button" data-action="remove-game" data-universe-id="${game.universeId}" aria-label="Remove ${escapeHtml(game.name)} from library">×</button>`
-    : `<button class="card-icon-button ${saved ? 'saved' : ''}" type="button" data-action="save-game" data-place-id="${game.placeId}" aria-label="${saved ? 'Saved in' : 'Save'} ${escapeHtml(game.name)}">${saved ? '✓' : '+'}</button>`;
+    ? `<div class="game-cover-actions"><button class="card-icon-button ${game.pinned ? 'saved' : ''}" type="button" data-action="pin-game" data-universe-id="${game.universeId}" aria-label="${game.pinned ? 'Unpin' : 'Pin'} ${escapeHtml(game.name)}">${game.pinned ? '★' : '☆'}</button><button class="card-icon-button" type="button" data-action="remove-game" data-universe-id="${game.universeId}" aria-label="Remove ${escapeHtml(game.name)} from library">×</button></div>`
+    : `<div class="game-cover-actions"><button class="card-icon-button ${saved ? 'saved' : ''}" type="button" data-action="save-game" data-place-id="${game.placeId}" aria-label="${saved ? 'Saved in' : 'Save'} ${escapeHtml(game.name)}">${saved ? '✓' : '+'}</button></div>`;
   const rating = game.rating === null || game.rating === undefined ? '' : `<span>${game.rating}% liked</span>`;
 
   return `<article class="game-card panel" data-game-place="${game.placeId}">
     <div class="game-cover" style="--cover-hue:${hue}">
       ${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}
       <div class="game-cover-shade"></div>
-      <div class="game-cover-actions">${secondaryAction}</div>
+      ${secondaryAction}
       <button class="card-play" type="button" data-action="launch-game" data-place-id="${game.placeId}" aria-label="Play ${escapeHtml(game.name)}"><span class="play-icon"></span></button>
     </div>
     <div class="game-copy">
@@ -522,14 +621,14 @@ function renderHome() {
   const recent = state.recent.slice(0, 4);
   const saved = state.library.slice(0, 4);
   const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
-  const primary = recent[0] || saved[0];
+  const primary = saved.find((game) => game.pinned) || recent[0] || saved[0];
 
   pageContent.innerHTML = `<div class="page-shell home-page">
     ${pageHeader('Your Roblox orbit', `${greeting}.`, 'Launch an official Roblox experience, keep your own library, and explore what is live now.', '<button class="primary-button" type="button" data-page-link="discover"><span class="play-icon"></span> Discover Roblox</button>')}
     ${primary ? featuredGame(primary) : emptyState('◌', 'Your library starts with Roblox.', 'Save official Roblox experiences from Discover. Eclipse keeps the list on this device and never creates custom games.', '<button class="primary-button" type="button" data-page-link="discover">Browse live Roblox games</button>')}
     <section class="content-section">
       <div class="section-heading"><div><p class="section-kicker">Recent launches</p><h2>Continue playing</h2></div>${recent.length ? '<button class="text-button" type="button" data-page-link="library">Open library <span>→</span></button>' : ''}</div>
-      ${recent.length ? `<div class="game-grid home-game-grid">${recent.map((game) => gameCard(game)).join('')}</div>` : '<p class="section-note">Games you start through Eclipse appear here. Roblox Player handles your account session.</p>'}
+      ${recent.length ? `<div class="game-grid home-game-grid">${recent.map((game) => gameCard(game)).join('')}</div><p class="section-note">Last Eclipse handoff: ${escapeHtml(formatLocalLaunchTime(recent[0].launchedAt))}. This records only Eclipse’s request to Roblox Player, not game or server state.</p>` : '<p class="section-note">Games you start through Eclipse appear here. Roblox Player handles your account session.</p>'}
     </section>
     <section class="home-utility-grid">
       <article class="utility-panel panel"><span class="utility-symbol">◈</span><div><p class="section-kicker">Eclipse profile</p><h3>${escapeHtml(state.profile.created ? state.profile.displayName : 'Make Eclipse yours')}</h3><p>${state.profile.created ? 'Your display name is stored only in this Eclipse workspace.' : 'Create a local profile to personalize this device.'}</p></div><button class="text-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'} <span>→</span></button></article>
@@ -548,7 +647,7 @@ function renderDiscover() {
         <input id="game-search" name="query" maxlength="100" value="${escapeHtml(state.discover.query)}" placeholder="Search official Roblox experiences" autocomplete="off" />
         <button class="primary-button" type="submit">Search</button>
       </form>
-      <div class="discovery-toolbar"><span><i></i><span data-discovery-context>${state.discover.query ? `Search results for “${escapeHtml(state.discover.query)}”` : 'Official Roblox collections'}</span></span><button class="quiet-button compact-button" type="button" data-action="refresh-discover">Refresh</button></div>
+      <div class="discovery-toolbar"><span><i></i><span data-discovery-context>${state.discover.query ? `Official Roblox search · “${escapeHtml(state.discover.query)}”` : 'Official Roblox Explore collections'}</span></span><div class="discovery-controls"><label><span class="sr-only">Sort experiences</span><select data-discovery-sort><option value="featured" ${state.discover.sort === 'featured' ? 'selected' : ''}>Official order</option><option value="players" ${state.discover.sort === 'players' ? 'selected' : ''}>Most playing</option><option value="rating" ${state.discover.sort === 'rating' ? 'selected' : ''}>Highest rated</option><option value="name" ${state.discover.sort === 'name' ? 'selected' : ''}>Name</option></select></label><label><span class="sr-only">Filter experiences</span><select data-discovery-filter><option value="all" ${state.discover.filter === 'all' ? 'selected' : ''}>All</option><option value="popular" ${state.discover.filter === 'popular' ? 'selected' : ''}>1K+ playing</option><option value="rated" ${state.discover.filter === 'rated' ? 'selected' : ''}>Rated</option></select></label><button class="quiet-button compact-button" type="button" data-action="refresh-discover">Refresh</button></div></div>
       <div class="discovery-collections" data-discovery-collections aria-label="Official Roblox collections"></div>
     </section>
     <div class="discovery-feature" data-discovery-feature></div>
@@ -564,6 +663,18 @@ function discoveryCollectionChips() {
   return state.discover.collections.map((collection) => `<button class="discovery-collection-chip ${collection.id === active?.id ? 'active' : ''}" type="button" data-action="select-discover-collection" data-discovery-collection="${escapeHtml(collection.id)}" aria-pressed="${collection.id === active?.id ? 'true' : 'false'}">${escapeHtml(collection.title)}</button>`).join('');
 }
 
+function displayDiscoverGames(games) {
+  const filtered = games.filter((game) => {
+    if (state.discover.filter === 'popular') return Number(game.playing) >= 1000;
+    if (state.discover.filter === 'rated') return Number.isFinite(Number(game.rating));
+    return true;
+  });
+  if (state.discover.sort === 'players') return [...filtered].sort((left, right) => Number(right.playing) - Number(left.playing));
+  if (state.discover.sort === 'rating') return [...filtered].sort((left, right) => Number(right.rating ?? -1) - Number(left.rating ?? -1));
+  if (state.discover.sort === 'name') return [...filtered].sort((left, right) => left.name.localeCompare(right.name));
+  return filtered;
+}
+
 function updateDiscoverView() {
   const feature = pageContent.querySelector('[data-discovery-feature]');
   const grid = pageContent.querySelector('[data-game-grid]');
@@ -575,9 +686,10 @@ function updateDiscoverView() {
   if (!feature || !grid || !footer || !context || !collections || !kicker || !title) return;
 
   const activeCollection = activeDiscoverCollection();
-  const visibleGames = state.discover.query ? state.discover.games : activeCollection?.games || state.discover.games;
+  const rawVisibleGames = state.discover.query ? state.discover.games : activeCollection?.games || state.discover.games;
+  const visibleGames = displayDiscoverGames(rawVisibleGames);
   const collectionTitle = activeCollection?.title || 'Popular on Roblox';
-  context.textContent = state.discover.query ? `Search results for “${state.discover.query}”` : `${collectionTitle} from Roblox`;
+  context.textContent = state.discover.query ? `Official Roblox search · “${state.discover.query}”` : `${collectionTitle} · official Roblox Explore`;
   collections.innerHTML = discoveryCollectionChips();
   kicker.textContent = state.discover.query ? 'Search results' : 'Official Roblox collection';
   title.textContent = state.discover.query ? 'Official matches' : collectionTitle;
@@ -597,7 +709,10 @@ function updateDiscoverView() {
   if (!visibleGames.length) {
     feature.innerHTML = '';
     grid.innerHTML = '';
-    footer.innerHTML = emptyState('○', 'No official Roblox experiences found.', 'Try another search term or refresh the official Roblox collections.', '<button class="primary-button" type="button" data-action="refresh-discover">Show Roblox collections</button>');
+    const filteredEmpty = rawVisibleGames.length > 0;
+    footer.innerHTML = filteredEmpty
+      ? emptyState('○', 'No experiences match this view.', 'The official Roblox result set is loaded, but none match the local filter you selected.', '<button class="primary-button" type="button" data-action="clear-discover-filters">Clear filters</button>')
+      : emptyState('○', 'No official Roblox experiences found.', 'Try another search term or refresh the official Roblox collections.', '<button class="primary-button" type="button" data-action="refresh-discover">Show Roblox collections</button>');
     return;
   }
 
@@ -645,7 +760,7 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
 
 function renderLibrary() {
   pageContent.innerHTML = `<div class="page-shell library-page">
-    ${pageHeader('Your library', 'Saved Roblox experiences.', 'Library items are official Roblox places you saved in Eclipse. They are stored locally on this device.', '<button class="primary-button" type="button" data-page-link="discover">Discover games</button>')}
+    ${pageHeader('Your library', 'Saved Roblox experiences.', 'Library items are official Roblox places you saved in Eclipse. Pin favorites to keep them first; the list stays only on this device.', '<button class="primary-button" type="button" data-page-link="discover">Discover games</button>')}
     <section class="content-section"><div class="section-heading"><div><p class="section-kicker">Saved locally</p><h2>${state.library.length ? `${state.library.length} saved ${state.library.length === 1 ? 'experience' : 'experiences'}` : 'Nothing saved yet'}</h2></div></div>
     ${state.library.length ? `<div class="game-grid">${state.library.map((game) => gameCard(game, { library: true })).join('')}</div>` : emptyState('◇', 'Save official games you want to revisit.', 'Open Discover to browse live Roblox experiences, then use the plus button on a game card to add it here.', '<button class="primary-button" type="button" data-page-link="discover">Open Discover</button>')}</section>
   </div>`;
@@ -658,8 +773,8 @@ const fastFlagProfiles = {
   quality: { label: 'Quality', detail: 'Higher texture quality with 4× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '3' }, msaa: 4 }
 };
 
-function fastFlagPreview() {
-  const selection = state.fastFlags;
+function fastFlagPreviewFor(source) {
+  const selection = normalizeFastFlagSelection(source);
   const flags = { ...fastFlagProfiles[selection.profile].flags };
   if ([1, 2, 4].includes(Number(selection.msaa))) flags.FIntDebugForceMSAASamples = String(selection.msaa);
   if ([60, 120, 144, 165, 240].includes(Number(selection.fpsCap))) flags.DFIntTaskSchedulerTargetFps = String(selection.fpsCap);
@@ -676,8 +791,119 @@ function fastFlagPreview() {
   return flags;
 }
 
+function fastFlagPreview() {
+  return fastFlagPreviewFor(state.fastFlags);
+}
+
 function fastFlagToggle(field, checked, title, description, disabled) {
   return `<label class="ff-toggle"><input type="checkbox" data-fastflag-field="${field}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}/><span></span><b>${title}</b><small>${description}</small></label>`;
+}
+
+function fastFlagSelection() {
+  return normalizeFastFlagSelection(state.fastFlags);
+}
+
+function saveFastFlagProfiles() {
+  state.fastFlagProfiles = normalizeSavedFastFlagProfiles(state.fastFlagProfiles);
+  writeStored(storageKeys.fastFlagProfiles, state.fastFlagProfiles);
+}
+
+function activeSavedFastFlagProfile() {
+  return state.fastFlagProfiles.find((item) => item.id === state.fastFlags.profileId) || null;
+}
+
+function persistActiveFastFlagProfile() {
+  const active = activeSavedFastFlagProfile();
+  if (!active) return;
+  active.settings = fastFlagSelection();
+  active.updatedAt = new Date().toISOString();
+  saveFastFlagProfiles();
+}
+
+function managedFlagDifferenceCount(left, right) {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return [...keys].filter((key) => left[key] !== right[key]).length;
+}
+
+function createSavedFastFlagProfile() {
+  if (state.fastFlagProfiles.length >= 20) return showToast('Keep up to 20 local Fast Flag profiles.');
+  const name = String(window.prompt('Name this local Fast Flag profile:', 'My graphics profile') || '').trim().replace(/\s+/g, ' ').slice(0, 36);
+  if (!name) return;
+  const id = `ff_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+  state.fastFlagProfiles.push({ id, name, settings: fastFlagSelection(), updatedAt: new Date().toISOString() });
+  state.fastFlags.profileId = id;
+  saveFastFlagProfiles();
+  updateFastFlagsPanel();
+  showToast(`Saved “${name}” locally.`);
+}
+
+function duplicateSavedFastFlagProfile() {
+  const active = activeSavedFastFlagProfile();
+  if (!active) return createSavedFastFlagProfile();
+  if (state.fastFlagProfiles.length >= 20) return showToast('Keep up to 20 local Fast Flag profiles.');
+  const name = String(window.prompt('Name the duplicate:', `${active.name} copy`) || '').trim().replace(/\s+/g, ' ').slice(0, 36);
+  if (!name) return;
+  const id = `ff_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+  state.fastFlagProfiles.push({ id, name, settings: fastFlagSelection(), updatedAt: new Date().toISOString() });
+  state.fastFlags.profileId = id;
+  saveFastFlagProfiles();
+  updateFastFlagsPanel();
+  showToast(`Duplicated “${active.name}”.`);
+}
+
+function renameSavedFastFlagProfile() {
+  const active = activeSavedFastFlagProfile();
+  if (!active) return showToast('Select a saved profile before renaming it.');
+  const name = String(window.prompt('Rename local Fast Flag profile:', active.name) || '').trim().replace(/\s+/g, ' ').slice(0, 36);
+  if (!name) return;
+  active.name = name;
+  active.updatedAt = new Date().toISOString();
+  saveFastFlagProfiles();
+  updateFastFlagsPanel();
+  showToast('Local Fast Flag profile renamed.');
+}
+
+function deleteSavedFastFlagProfile() {
+  const active = activeSavedFastFlagProfile();
+  if (!active) return showToast('Built-in presets are always available and cannot be deleted.');
+  if (!window.confirm(`Delete the local Fast Flag profile “${active.name}”?`)) return;
+  state.fastFlagProfiles = state.fastFlagProfiles.filter((item) => item.id !== active.id);
+  state.fastFlags.profileId = '';
+  saveFastFlagProfiles();
+  updateFastFlagsPanel();
+  showToast('Local Fast Flag profile deleted.');
+}
+
+function exportSavedFastFlagProfiles() {
+  const payload = { schema: 'eclipse-fastflags/v1', exportedAt: new Date().toISOString(), profiles: normalizeSavedFastFlagProfiles(state.fastFlagProfiles) };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'eclipse-fastflag-profiles.json';
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  showToast('Validated local Fast Flag profiles exported.');
+}
+
+async function importSavedFastFlagProfiles(file) {
+  if (!file || file.size > 180_000 || !/\.json$/i.test(file.name || '')) throw new Error('Choose an Eclipse Fast Flag JSON export smaller than 180 KB.');
+  const parsed = JSON.parse(await file.text());
+  if (!parsed || parsed.schema !== 'eclipse-fastflags/v1') throw new Error('This is not an Eclipse Fast Flag profile export.');
+  const imported = normalizeSavedFastFlagProfiles(parsed.profiles);
+  if (!imported.length) throw new Error('No validated Eclipse-managed profiles were found in that export.');
+  const existingByName = new Set(state.fastFlagProfiles.map((profile) => profile.name.toLocaleLowerCase()));
+  for (const profile of imported) {
+    if (state.fastFlagProfiles.length >= 20) break;
+    let name = profile.name;
+    let counter = 2;
+    while (existingByName.has(name.toLocaleLowerCase())) name = `${profile.name.slice(0, 31)} ${counter++}`;
+    state.fastFlagProfiles.push({ ...profile, id: `ff_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`, name, updatedAt: new Date().toISOString() });
+    existingByName.add(name.toLocaleLowerCase());
+  }
+  saveFastFlagProfiles();
+  updateFastFlagsPanel();
+  showToast('Validated Eclipse-managed Fast Flag profiles imported.');
 }
 
 function fastFlagsPanel() {
@@ -686,8 +912,14 @@ function fastFlagsPanel() {
   const supported = status?.supported === true;
   const disabled = busy || !supported;
   const flags = fastFlagPreview();
-  const profileButtons = Object.entries(fastFlagProfiles).map(([key, item]) => `<button class="ff-profile ${profile === key ? 'selected' : ''}" type="button" data-action="fastflag-profile" data-fastflag-profile="${key}" ${disabled ? 'disabled' : ''}><strong>${item.label}</strong><span>${item.detail}</span></button>`).join('');
+  const profileButtons = Object.entries(fastFlagProfiles).map(([key, item]) => `<button class="ff-profile ${profile === key && !selection.profileId ? 'selected' : ''}" type="button" data-action="fastflag-profile" data-fastflag-profile="${key}" ${disabled ? 'disabled' : ''}><strong>${item.label}</strong><span>${item.detail}</span></button>`).join('');
+  const savedProfileButtons = state.fastFlagProfiles.map((item) => {
+    const changes = managedFlagDifferenceCount(fastFlagPreview(), { ...fastFlagProfiles[item.settings.profile].flags, ...fastFlagPreviewFor(item.settings) });
+    return `<button class="ff-profile ff-profile-saved ${selection.profileId === item.id ? 'selected' : ''}" type="button" data-action="select-saved-fastflag-profile" data-saved-fastflag-profile="${escapeHtml(item.id)}" ${disabled ? 'disabled' : ''}><strong>${escapeHtml(item.name)}</strong><span>${changes ? `${changes} managed change${changes === 1 ? '' : 's'}` : 'Matches current settings'}</span></button>`;
+  }).join('');
   const flagsJson = Object.keys(flags).length ? JSON.stringify(flags, null, 2) : '{}';
+  const appliedChangeCount = managedFlagDifferenceCount(status?.managedFlags || {}, flags);
+  const activeLocalProfile = activeSavedFastFlagProfile();
   const statusText = status
     ? supported
       ? `${Object.keys(status.managedFlags || {}).length ? 'Existing Eclipse-managed flags found.' : 'No Eclipse-managed flags are currently applied.'}`
@@ -697,7 +929,9 @@ function fastFlagsPanel() {
 
   return `<section class="fastflags-panel panel">
     <div class="ff-heading"><div><p class="section-kicker"><i></i> Fast Flags</p><h2>Managed graphics controls</h2><p>Choose a supported preset, then fine-tune the same rendering controls used by established Roblox launchers. Roblox decides which local flags it accepts.</p></div><span class="ff-status ${supported ? 'available' : ''}"><i></i>${supported ? 'Windows player detected' : 'Desktop app required'}</span></div>
-    <div class="ff-profile-grid">${profileButtons}</div>
+    <div class="ff-profile-grid">${profileButtons}${savedProfileButtons}</div>
+    <div class="ff-profile-actions"><span>${state.fastFlagProfiles.length ? `${state.fastFlagProfiles.length} local profile${state.fastFlagProfiles.length === 1 ? '' : 's'} · settings never leave this device` : 'Save a named local profile for repeatable Eclipse-managed settings.'}</span><div><button class="quiet-button compact-button" type="button" data-action="fastflag-profile-create">Save current</button><button class="quiet-button compact-button" type="button" data-action="fastflag-profile-duplicate">Duplicate</button><button class="quiet-button compact-button" type="button" data-action="fastflag-profile-rename">Rename</button><button class="quiet-button compact-button" type="button" data-action="fastflag-profile-delete">Delete</button><button class="quiet-button compact-button" type="button" data-action="fastflag-profile-export">Export</button><label class="quiet-button compact-button ff-import-button">Import<input type="file" data-fastflag-import accept="application/json,.json" /></label></div></div>
+    <details class="ff-profile-inspect"><summary>Inspect changes · ${activeLocalProfile ? escapeHtml(activeLocalProfile.name) : 'current preset'} · ${appliedChangeCount} difference${appliedChangeCount === 1 ? '' : 's'} from currently applied managed flags</summary><p>Comparison includes only Eclipse-managed keys. Unrelated ClientAppSettings values are not read into profiles or exports.</p></details>
     <form class="ff-options" data-fastflags-form>
       <section class="ff-setting-group"><h3>Geometry</h3><div class="ff-setting-card ${meshDetailEnabled ? 'is-expanded' : ''}"><div class="ff-setting-top"><div><strong>Mesh detail</strong><p>Control how detailed meshes appear in-game.</p></div>${fastFlagToggle('meshDetailEnabled', meshDetailEnabled, 'Enable override', 'Lower qualities can make meshes disappear.', disabled)}</div>${meshDetailEnabled ? `<div class="ff-range-area"><p>Lower qualities may cause meshes to disappear.</p><div class="ff-range-line"><span>Lowest quality</span><input type="range" min="0" max="3" step="1" value="${meshDetail}" data-fastflag-field="meshDetail" aria-label="Mesh detail" ${disabled ? 'disabled' : ''}/><span>Highest quality</span><output data-fastflag-output="meshDetail">${meshDetail}</output></div></div>` : ''}</div></section>
       <section class="ff-setting-group"><h3>Rendering &amp; graphics</h3><div class="ff-setting-card ff-choice-card"><div><strong>Anti-aliasing quality (MSAA)</strong><p>Choose the managed sample count for Roblox Player.</p></div><label class="ff-select"><span class="sr-only">Anti-aliasing quality</span><select data-fastflag-field="msaa" ${disabled ? 'disabled' : ''}><option value="0" ${Number(msaa) === 0 ? 'selected' : ''}>Roblox default</option><option value="1" ${Number(msaa) === 1 ? 'selected' : ''}>1×</option><option value="2" ${Number(msaa) === 2 ? 'selected' : ''}>2×</option><option value="4" ${Number(msaa) === 4 ? 'selected' : ''}>4×</option></select></label></div>
@@ -727,13 +961,17 @@ async function refreshFastFlagsStatus() {
     state.fastFlags.status = { supported: false, reason: error instanceof Error ? error.message : 'Fast Flag support could not be checked.' };
   }
   updateFastFlagsPanel();
+  if (state.page === 'tools') renderTools();
 }
 
 async function applyFastFlags() {
   state.fastFlags.busy = true;
   updateFastFlagsPanel();
   try {
-    const result = await fastFlags.apply({ profile: state.fastFlags.profile, msaa: state.fastFlags.msaa, fpsCap: state.fastFlags.fpsCap, preserveDisplayScaling: state.fastFlags.preserveDisplayScaling, meshDetailEnabled: state.fastFlags.meshDetailEnabled, meshDetail: state.fastFlags.meshDetail, frmQualityEnabled: state.fastFlags.frmQualityEnabled, frmQuality: state.fastFlags.frmQuality, renderingMode: state.fastFlags.renderingMode });
+    const selection = fastFlagSelection();
+    Object.assign(state.fastFlags, selection);
+    persistActiveFastFlagProfile();
+    const result = await fastFlags.apply(selection);
     state.fastFlags.status = result;
     state.fastFlags.message = 'Fast Flags were written. Restart Roblox Player to use them.';
     showToast('Fast Flags applied to Roblox Player.');
@@ -774,6 +1012,42 @@ function bootstrapperErrorMessage(error) {
   return message;
 }
 
+function sanitizeDiagnosticText(value) {
+  return String(value || '')
+    .replace(/[A-Za-z]:\\Users\\[^\\\s]+/gi, '%USERPROFILE%')
+    .replace(/\/home\/[^/\s]+/g, '~')
+    .replace(/[\r\n]+/g, ' ')
+    .slice(0, 600);
+}
+
+function playerDiagnostics() {
+  const { status, progress, error } = state.bootstrapper;
+  const safePath = sanitizeDiagnosticText(status?.managedLocation).replace('%USERPROFILE%\\AppData\\Local', '%LOCALAPPDATA%');
+  return [
+    'Eclipse Player Health diagnostics',
+    `Platform: ${window.eclipseBootstrapper ? 'Windows desktop bridge' : 'Browser preview'}`,
+    `Installed: ${status?.installed === true ? 'yes' : 'no'}`,
+    `Installed version: ${status?.installedVersion || 'not detected'}`,
+    `Official latest version: ${status?.latestVersion || 'not checked'}`,
+    `Update available: ${status?.updateAvailable === true ? 'yes' : 'no'}`,
+    `Install folder state: ${status?.installedDirectoryPresent ? 'detected' : 'not detected'}`,
+    `Versions location: ${safePath || 'not available'}`,
+    `Fast Flags: ${state.fastFlags.status?.supported ? `${Object.keys(state.fastFlags.status.managedFlags || {}).length} Eclipse-managed setting(s)` : 'not available'}`,
+    `Update check: ${status?.checkError ? 'unavailable' : 'completed or not requested'}`,
+    `Current Eclipse operation: ${progress?.phase || 'idle'}`,
+    `Sanitized error: ${sanitizeDiagnosticText(error || status?.checkError || 'none')}`
+  ].join('\n');
+}
+
+async function copyPlayerDiagnostics() {
+  try {
+    await navigator.clipboard.writeText(playerDiagnostics());
+    showToast('Sanitized Player Health diagnostics copied.');
+  } catch {
+    showToast('Eclipse could not access the clipboard. Select and copy the diagnostics shown here.');
+  }
+}
+
 function bootstrapperPanel() {
   const { status, busy, progress, error } = state.bootstrapper;
   const desktopSupported = Boolean(window.eclipseBootstrapper);
@@ -800,7 +1074,9 @@ function bootstrapperPanel() {
   const note = error || status?.checkError || status?.reason || (status?.installed
     ? 'Eclipse checks the official Windows Player release before it launches an experience. The Roblox protocol association stays unchanged.'
     : 'Eclipse downloads only from official Roblox distribution endpoints, validates the Windows signature, then runs the official installer.');
-  return `<article class="tool-panel panel bootstrapper-panel"><p class="section-kicker"><i></i> Eclipse bootstrapper</p><div class="bootstrapper-heading"><div><h2>Official Roblox Player</h2><p>Keep the installed Windows Player ready without sharing a Roblox password or changing your system’s Roblox link handler.</p></div><span class="bootstrapper-status ${status?.installed && !status?.updateAvailable && !error ? 'ready' : busy ? 'working' : ''}"><i></i>${escapeHtml(statusLabel)}</span></div><div class="bootstrapper-actions"><button class="primary-button" type="button" data-action="bootstrapper-update" ${actionDisabled ? 'disabled' : ''}>${escapeHtml(actionLabel)}</button>${status?.latestVersion ? `<small>Official release: ${escapeHtml(status.latestVersion)}</small>` : ''}</div><p class="bootstrapper-note"><i></i>${escapeHtml(note)}</p></article>`;
+  const installedText = status?.installed ? `${status.installedVersion || 'Detected'} · folder ${status.installedDirectoryPresent ? 'present' : 'unavailable'}` : 'No official Player folder detected';
+  const flagText = state.fastFlags.status?.supported ? `${Object.keys(state.fastFlags.status.managedFlags || {}).length} Eclipse-managed setting(s)` : 'Fast Flag status pending';
+  return `<article class="tool-panel panel bootstrapper-panel"><p class="section-kicker"><i></i> Player Health & Repair Center</p><div class="bootstrapper-heading"><div><h2>Official Roblox Player</h2><p>Inspect the installed Windows Player, its official release check, and Eclipse-managed graphics settings. Repair uses the existing signed official installer path only.</p></div><span class="bootstrapper-status ${status?.installed && !status?.updateAvailable && !error ? 'ready' : busy ? 'working' : ''}"><i></i>${escapeHtml(statusLabel)}</span></div><div class="health-grid"><div><span>Installed Player</span><strong>${escapeHtml(installedText)}</strong></div><div><span>Official release</span><strong>${escapeHtml(status?.latestVersion || 'Waiting for check')}</strong></div><div><span>Fast Flags</span><strong>${escapeHtml(flagText)}</strong></div></div><div class="bootstrapper-actions"><button class="primary-button" type="button" data-action="bootstrapper-update" ${actionDisabled ? 'disabled' : ''}>${escapeHtml(actionLabel)}</button><button class="quiet-button" type="button" data-action="bootstrapper-repair" ${actionDisabled ? 'disabled' : ''}>Repair Player</button><button class="quiet-button" type="button" data-action="copy-player-diagnostics">Copy diagnostics</button>${status?.installed ? '<button class="quiet-button" type="button" data-action="open-fastflags">Review Fast Flags</button>' : ''}</div><p class="bootstrapper-note"><i></i>${escapeHtml(note)}</p><details class="health-diagnostics"><summary>Sanitized diagnostics</summary><pre>${escapeHtml(playerDiagnostics())}</pre></details></article>`;
 }
 
 async function refreshBootstrapperStatus({ render = true } = {}) {
@@ -816,16 +1092,16 @@ async function refreshBootstrapperStatus({ render = true } = {}) {
   return state.bootstrapper.status;
 }
 
-async function updateRobloxPlayer() {
+async function updateRobloxPlayer({ repair = false } = {}) {
   if (state.bootstrapper.busy) return;
   state.bootstrapper.busy = true;
   state.bootstrapper.error = '';
-  state.bootstrapper.progress = { phase: 'checking', detail: 'Checking the official Roblox Windows Player release.', busy: true };
+  state.bootstrapper.progress = { phase: 'checking', detail: repair ? 'Preparing the official Roblox Player repair.' : 'Checking the official Roblox Windows Player release.', busy: true };
   renderTools();
   try {
-    const result = await bootstrapper.update();
+    const result = repair ? await bootstrapper.repair() : await bootstrapper.update();
     state.bootstrapper.status = result;
-    showToast(result.changed ? 'Official Roblox Player is ready.' : 'Official Roblox Player is already current.');
+    showToast(repair ? 'The official Roblox Player repair path completed.' : result.changed ? 'Official Roblox Player is ready.' : 'Official Roblox Player is already current.');
   } catch (error) {
     state.bootstrapper.error = bootstrapperErrorMessage(error);
     showToast(state.bootstrapper.error);
@@ -839,11 +1115,15 @@ async function updateRobloxPlayer() {
 
 function renderTools() {
   if (!state.bootstrapper.status && !state.bootstrapper.busy) Promise.resolve().then(() => refreshBootstrapperStatus());
+  if (!state.fastFlags.status) Promise.resolve().then(() => refreshFastFlagsStatus());
+  const launchHistory = state.launchHistory.slice(0, 6);
+  const launchHistoryMarkup = launchHistory.length ? `<ul class="launch-history-list">${launchHistory.map((item) => `<li><div><strong>${escapeHtml(item.name || `Place ${item.placeId}`)}</strong><span>Place ${item.placeId} · ${escapeHtml(formatLocalLaunchTime(item.launchedAt))}</span></div><button class="quiet-button compact-button" type="button" data-action="relaunch-place" data-place-id="${item.placeId}">Relaunch</button></li>`).join('')}</ul>` : '<p class="form-note">Recent Eclipse handoffs appear here. This is local request history, not Roblox gameplay history.</p>';
   pageContent.innerHTML = `<div class="page-shell tools-page">
     ${pageHeader('Roblox Player', 'Eclipse bootstrapper.', 'Eclipse checks, installs, and updates the official Windows Roblox Player before an Eclipse launch. It never handles Roblox credentials or takes over your Roblox links.', '')}
     <div class="tools-grid">
       ${bootstrapperPanel()}
       <article class="tool-panel panel"><p class="section-kicker"><i></i> Launch an experience</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse prepares the official Player, then requests the existing Roblox protocol handler to open the experience.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored. Eclipse does not change the <code>roblox://</code> link handler.</p></article>
+      <article class="tool-panel panel"><p class="section-kicker"><i></i> Local launch history</p><h2>Recent place handoffs</h2><p>Relaunch a place Eclipse previously requested. Times reflect this device’s local handoff record only.</p>${launchHistoryMarkup}</article>
       <article class="tool-panel panel"><p class="section-kicker">Eclipse profile</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'Create your local workspace')}</h2><p>Eclipse profiles personalize this device only. They are not Roblox accounts, do not sign you in to Roblox, and never collect Roblox credentials.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit Eclipse profile' : 'Create Eclipse profile'}</button></div></article>
       <article class="tool-panel panel tool-wide"><p class="section-kicker">How bootstrapper launches work</p><ol class="protocol-list"><li><span>1</span><p>Eclipse checks the installed Windows Player against Roblox’s official release service.</p></li><li><span>2</span><p>If needed, Eclipse validates and runs the signed official Roblox installer. It never downloads client files from third parties.</p></li><li><span>3</span><p>Eclipse requests <code>roblox://experiences/start?placeId=…</code>. Roblox keeps account sign-in, connection, and gameplay under its own control.</p></li></ol></article>
     </div>
@@ -897,10 +1177,36 @@ function renderIntegrations() {
   </div>`;
 }
 
+async function refreshStartupStatus({ render = true } = {}) {
+  try {
+    state.startup.status = await system.startupStatus();
+  } catch (error) {
+    state.startup.status = { supported: false, enabled: false, reason: error instanceof Error ? error.message : 'Startup status is unavailable.' };
+  }
+  if (render && state.page === 'settings') renderSettings();
+  return state.startup.status;
+}
+
+async function updateStartup(enabled) {
+  state.startup.busy = true;
+  renderSettings();
+  try {
+    state.startup.status = await system.setStartup(enabled);
+    showToast(state.startup.status.enabled ? 'Eclipse will launch when you sign in to Windows.' : 'Eclipse will no longer launch when you sign in to Windows.');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Eclipse could not update the startup preference.');
+  } finally {
+    state.startup.busy = false;
+    if (state.page === 'settings') renderSettings();
+  }
+}
+
 function renderSettings() {
+  if (!state.startup.status && !state.startup.busy) Promise.resolve().then(() => refreshStartupStatus());
+  const startup = state.startup.status || { supported: false, enabled: false, reason: 'Checking Windows integration…' };
   pageContent.innerHTML = `<div class="page-shell settings-page">
-    ${pageHeader('Settings', 'Make Eclipse yours.', 'These interface preferences and your optional Eclipse profile stay on this device.', '')}
-    <section class="settings-list panel"><div class="setting-row"><div><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div></section>
+    ${pageHeader('Settings', 'Make Eclipse yours.', 'Interface and Windows preferences remain local to this device. Eclipse never requests Roblox account credentials.', '')}
+    <section class="settings-list panel"><div class="setting-row"><div><p class="section-kicker">Accessibility</p><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions. Eclipse also honors your system reduced-motion preference.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>High contrast surfaces</h2><p>Increase boundaries and text separation across Eclipse panels.</p></div><label class="toggle"><input type="checkbox" data-setting="highContrast" ${state.settings.highContrast ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Interface scale</h2><p>Use a larger text and control scale without changing Windows settings.</p></div><label class="settings-select"><span class="sr-only">Interface scale</span><select data-setting-select="uiScale"><option value="1" ${state.settings.uiScale === 1 ? 'selected' : ''}>Default</option><option value="1.1" ${state.settings.uiScale === 1.1 ? 'selected' : ''}>Large 110%</option><option value="1.2" ${state.settings.uiScale === 1.2 ? 'selected' : ''}>Larger 120%</option><option value="1.3" ${state.settings.uiScale === 1.3 ? 'selected' : ''}>Largest 130%</option></select></label></div><div class="setting-row"><div><p class="section-kicker">Layout & locale</p><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Use a 24-hour clock</h2><p>Format local Eclipse launch times using your locale with 24-hour time.</p></div><label class="toggle"><input type="checkbox" data-setting="clock24Hour" ${state.settings.clock24Hour ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><p class="section-kicker">Windows integration</p><h2>Launch Eclipse at sign-in</h2><p>${escapeHtml(startup.supported ? 'Optional. Eclipse adds no Roblox protocol ownership and retains only its own Windows startup preference.' : startup.reason || 'Available in the packaged Windows app.')}</p></div><label class="toggle ${!startup.supported || state.startup.busy ? 'is-disabled' : ''}"><input type="checkbox" data-startup-setting ${startup.enabled ? 'checked' : ''} ${!startup.supported || state.startup.busy ? 'disabled' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div></section>
   </div>`;
 }
 
@@ -948,8 +1254,9 @@ async function launchGame(placeId) {
   }
   try {
     await roblox.launchPlace(numericId);
+    addLaunchHistory(numericId, game);
     if (game) addRecent(game);
-    showToast('Asked Roblox Player to launch. If it is not installed, use Player tools to download it.');
+    showToast('Eclipse handed the place to Roblox Player. Eclipse cannot confirm Roblox connection or gameplay state.');
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Roblox Player could not be started.');
   }
@@ -997,6 +1304,23 @@ function wireShell() {
   document.querySelector('[data-mobile-menu]').addEventListener('click', () => sidebar.classList.toggle('open'));
 }
 
+document.addEventListener('keydown', (event) => {
+  const target = event.target;
+  const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    setPage('discover');
+    window.setTimeout(() => document.querySelector('[data-discovery-form] input')?.focus(), 0);
+    return;
+  }
+  if (typing || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) || !target.matches?.('[data-page]')) return;
+  const pages = [...document.querySelectorAll('[data-page]')];
+  const index = pages.indexOf(target);
+  const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? pages.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + pages.length) % pages.length;
+  event.preventDefault();
+  pages[nextIndex]?.focus();
+});
+
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('button');
   if (!button) return;
@@ -1012,7 +1336,11 @@ document.addEventListener('click', async (event) => {
     updateProfileDialogAvatar();
   }
   if (action === 'refresh-discord') await refreshDiscordStatus();
-  if (action === 'launch-game') await launchGame(button.dataset.placeId);
+  if (action === 'bootstrapper-update') await updateRobloxPlayer();
+  if (action === 'bootstrapper-repair') await updateRobloxPlayer({ repair: true });
+  if (action === 'copy-player-diagnostics') await copyPlayerDiagnostics();
+  if (action === 'open-fastflags') setPage('fastflags');
+  if (action === 'launch-game' || action === 'relaunch-place') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'save-game') {
     const game = gameForPlace(button.dataset.placeId);
@@ -1024,12 +1352,22 @@ document.addEventListener('click', async (event) => {
       showToast(`${game.name} was saved to your library.`);
     }
   }
+  if (action === 'pin-game') {
+    togglePinnedGame(button.dataset.universeId);
+    renderLibrary();
+    showToast('Favorite pin updated in your local library.');
+  }
   if (action === 'remove-game') {
     removeGame(button.dataset.universeId);
     renderLibrary();
     showToast('Removed from your local Eclipse library.');
   }
   if (action === 'refresh-discover') await loadDiscover({ resetToPopular: !state.discover.query });
+  if (action === 'clear-discover-filters') {
+    state.discover.filter = 'all';
+    state.discover.sort = 'featured';
+    renderDiscover();
+  }
   if (action === 'load-more') await loadDiscover({ append: true });
   if (action === 'select-discover-collection' && !state.discover.query) {
     const collectionId = String(button.dataset.discoveryCollection || '');
@@ -1043,8 +1381,22 @@ document.addEventListener('click', async (event) => {
     const profile = button.dataset.fastflagProfile;
     state.fastFlags.profile = profile;
     state.fastFlags.msaa = fastFlagProfiles[profile]?.msaa ?? 0;
+    state.fastFlags.profileId = '';
     updateFastFlagsPanel();
   }
+  if (action === 'select-saved-fastflag-profile') {
+    const saved = state.fastFlagProfiles.find((item) => item.id === button.dataset.savedFastflagProfile);
+    if (saved) {
+      Object.assign(state.fastFlags, saved.settings, { profileId: saved.id });
+      updateFastFlagsPanel();
+      showToast(`Loaded “${saved.name}”.`);
+    }
+  }
+  if (action === 'fastflag-profile-create') createSavedFastFlagProfile();
+  if (action === 'fastflag-profile-duplicate') duplicateSavedFastFlagProfile();
+  if (action === 'fastflag-profile-rename') renameSavedFastFlagProfile();
+  if (action === 'fastflag-profile-delete') deleteSavedFastFlagProfile();
+  if (action === 'fastflag-profile-export') exportSavedFastFlagProfiles();
   if (action === 'fastflag-reset') await resetFastFlags();
 });
 
@@ -1095,6 +1447,17 @@ document.addEventListener('input', (event) => {
 });
 
 document.addEventListener('change', async (event) => {
+  const fastFlagImport = event.target.closest('[data-fastflag-import]');
+  if (fastFlagImport) {
+    try {
+      await importSavedFastFlagProfiles(fastFlagImport.files?.[0]);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Fast Flag profiles could not be imported.');
+    } finally {
+      fastFlagImport.value = '';
+    }
+    return;
+  }
   const profileImageInput = event.target.closest('[data-profile-image-input]');
   if (profileImageInput) {
     setPendingProfileImage(profileImageInput.files?.[0]);
@@ -1103,7 +1466,15 @@ document.addEventListener('change', async (event) => {
   const fastFlagInput = event.target.closest('[data-fastflag-field]');
   if (fastFlagInput) {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : fastFlagInput.dataset.fastflagType === 'string' ? fastFlagInput.value : Number(fastFlagInput.value);
+    persistActiveFastFlagProfile();
     updateFastFlagsPanel();
+    return;
+  }
+  const discoverySort = event.target.closest('[data-discovery-sort], [data-discovery-filter]');
+  if (discoverySort) {
+    if (discoverySort.matches('[data-discovery-sort]')) state.discover.sort = discoverySort.value;
+    if (discoverySort.matches('[data-discovery-filter]')) state.discover.filter = discoverySort.value;
+    updateDiscoverView();
     return;
   }
   const discordClientInput = event.target.closest('[data-discord-client-id]');
@@ -1133,6 +1504,19 @@ document.addEventListener('change', async (event) => {
       discordRichPresence: state.integrations.discordRichPresence ? 'Discord Rich Presence enabled. Eclipse will show Open Eclipse when Discord Desktop connects.' : 'Discord Rich Presence disabled and cleared.'
     };
     showToast(messages[field]);
+    return;
+  }
+  const startupInput = event.target.closest('[data-startup-setting]');
+  if (startupInput) {
+    await updateStartup(startupInput.checked);
+    return;
+  }
+  const select = event.target.closest('[data-setting-select]');
+  if (select) {
+    state.settings[select.dataset.settingSelect] = Number(select.value);
+    setSettings();
+    renderSettings();
+    showToast('Eclipse interface scale saved on this device.');
     return;
   }
   const input = event.target.closest('[data-setting]');

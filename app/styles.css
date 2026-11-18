@@ -164,3 +164,39 @@ html { scroll-behavior: smooth; }.content { scroll-behavior: smooth; }.page-shel
 .bootstrapper-note > i { margin-top: 5px; background: #a78de3; box-shadow: 0 0 7px rgba(167,141,227,.5); }
 @keyframes bootstrapper-pulse { 50% { opacity: .38; transform: scale(.74); } }
 @media (max-width: 560px) { .bootstrapper-heading { align-items: stretch; flex-direction: column; }.bootstrapper-status { max-width: none; width: fit-content; } }
+
+/* Player Health, saved Fast Flag profiles, local launch workflow, and accessibility controls. */
+:root { --ui-scale: 1; }
+.high-contrast { --border: rgba(239, 231, 255, .36); --border-strong: rgba(241, 232, 255, .58); --text-muted: #d0c7df; --text-faint: #b0a5c0; --surface: rgba(35, 29, 46, .96); --surface-raised: rgba(44, 37, 57, .98); }
+.high-contrast .panel { box-shadow: 0 0 0 1px rgba(240, 231, 255, .1), 0 9px 40px rgba(0,0,0,.22); }
+.high-contrast .game-cover-shade { background: linear-gradient(180deg, transparent 24%, rgba(8, 6, 12, .78)); }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid var(--accent-bright); outline-offset: 3px; }
+.discovery-controls { display: flex; align-items: center; gap: 7px; }
+.discovery-controls select, .settings-select select { max-width: 144px; padding: 7px 27px 7px 9px; border: 1px solid var(--border); border-radius: 8px; outline: 0; color: #e7e0f6; background: #211c2a; font: inherit; font-size: 10px; }
+.discovery-controls select:focus, .settings-select select:focus { border-color: rgba(188,162,255,.65); box-shadow: 0 0 0 3px rgba(128,91,221,.13); }
+.health-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.health-grid > div { display: grid; gap: 4px; min-width: 0; padding: 10px; border: 1px solid rgba(211,194,255,.1); border-radius: 9px; background: rgba(5,4,8,.19); }
+.health-grid span { color: #9388a3; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.health-grid strong { overflow: hidden; color: #e9e2f8; font-size: 10px; font-weight: 600; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.health-diagnostics { border-top: 1px solid var(--border); color: #afa4bd; font-size: 10px; }
+.health-diagnostics summary { padding: 10px 0 0; color: #d1c4ee; cursor: pointer; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.health-diagnostics pre { max-height: 174px; margin: 10px 0 0; padding: 10px; overflow: auto; border: 1px solid rgba(211,194,255,.1); border-radius: 8px; color: #bfb2de; background: rgba(5,4,8,.25); font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.launch-history-list { display: grid; gap: 7px; padding: 0; margin: 3px 0 0; list-style: none; }
+.launch-history-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(211,194,255,.08); }
+.launch-history-list li:last-child { border-bottom: 0; }
+.launch-history-list div { display: grid; min-width: 0; gap: 3px; }
+.launch-history-list strong { overflow: hidden; color: #ebe5f9; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.launch-history-list span { overflow: hidden; color: #9f96ad; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.ff-profile-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 9px 2px 0; border-top: 1px solid rgba(211,194,255,.08); color: #958b9f; font-size: 9px; line-height: 1.45; }
+.ff-profile-actions > div { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.ff-profile-actions .compact-button { padding: 6px 8px; font-size: 9px; }
+.ff-import-button { display: inline-flex; align-items: center; cursor: pointer; }
+.ff-import-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.ff-profile-saved strong::before { display: inline-block; width: 5px; height: 5px; margin: 0 6px 1px 0; border-radius: 50%; background: #b89aff; box-shadow: 0 0 8px rgba(184,154,255,.6); content: ""; vertical-align: middle; }
+@media (max-width: 800px) { .discovery-toolbar { align-items: flex-start; flex-direction: column; }.discovery-controls { width: 100%; flex-wrap: wrap; }.discovery-controls select { max-width: none; }.health-grid { grid-template-columns: 1fr; }.ff-profile-actions { align-items: flex-start; flex-direction: column; }.ff-profile-actions > div { justify-content: flex-start; } }
+@media (max-width: 560px) { .launch-history-list li { align-items: flex-start; flex-direction: column; }.launch-history-list .quiet-button { width: 100%; justify-content: center; } .discovery-controls label { flex: 1 1 45%; }.discovery-controls select { width: 100%; } }
+/* Chromium desktop scaling keeps the Eclipse shell inside its viewport while enlarging all controls and text. */
+.app-window { zoom: var(--ui-scale); width: calc(100% / var(--ui-scale)); height: calc(100dvh / var(--ui-scale)); max-height: calc(100dvh / var(--ui-scale)); }
+.ff-profile-inspect { margin-top: 10px; padding: 9px 2px 0; border-top: 1px solid rgba(211,194,255,.08); color: #9d93ab; font-size: 10px; line-height: 1.5; }
+.ff-profile-inspect summary { color: #d4c8ef; cursor: pointer; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.ff-profile-inspect p { margin: 8px 0 0; }

@@ -22,9 +22,21 @@ contextBridge.exposeInMainWorld('eclipseRoblox', {
   openOfficial: (action, placeId) => ipcRenderer.invoke('roblox:open-official', action, placeId)
 });
 
+contextBridge.exposeInMainWorld('eclipseSystem', {
+  startupStatus: () => ipcRenderer.invoke('system:startup-status'),
+  setStartup: (enabled) => ipcRenderer.invoke('system:set-startup', enabled === true),
+  onNavigate: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, page) => callback(typeof page === 'string' ? page : '');
+    ipcRenderer.on('system:navigate', listener);
+    return () => ipcRenderer.removeListener('system:navigate', listener);
+  }
+});
+
 contextBridge.exposeInMainWorld('eclipseBootstrapper', {
   status: () => ipcRenderer.invoke('roblox-bootstrapper:status'),
   update: () => ipcRenderer.invoke('roblox-bootstrapper:update'),
+  repair: () => ipcRenderer.invoke('roblox-bootstrapper:repair'),
   onProgress: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, progress) => callback(progress);

@@ -71,6 +71,8 @@ test('detects the current installed Windows Roblox Player and compares it to the
     assert.equal(status.supported, true);
     assert.equal(status.installed, true);
     assert.equal(status.installedVersion, latestVersion);
+    assert.equal(status.installedDirectoryPresent, true);
+    assert.equal(status.installedExecutablePresent, true);
     assert.equal(status.latestVersion, latestVersion);
     assert.equal(status.updateAvailable, false);
   });
@@ -119,6 +121,38 @@ test('updates only through the official installer path, validates its signature,
     assert.equal(migrated.FFlagTargetSetting, 'keep');
     assert.equal(migrated.FFlagUnrelatedSetting, undefined);
     await assert.rejects(fs.access(path.join(root, 'EclipseDownload', `${latestVersion}-Roblox.exe`)));
+  });
+});
+
+test('uses the same signed official installer path for a requested Player repair', async () => {
+  await withTemporaryRoblox(async ({ root, env, versionsPath }) => {
+    await createPlayer(versionsPath, latestVersion);
+    const requestedUrls = [];
+    const spawnImpl = () => {
+      const child = new EventEmitter();
+      process.nextTick(() => child.emit('close', 0));
+      return child;
+    };
+    const bootstrapper = createRobloxBootstrapper({
+      platform: 'win32',
+      env,
+      temporaryRoot: path.join(root, 'EclipseRepairDownload'),
+      spawnImpl,
+      fetchImpl: async (url) => {
+        requestedUrls.push(String(url));
+        if (String(url).includes('/v2/client-version/WindowsPlayer')) {
+          return new Response(JSON.stringify({ clientVersionUpload: latestVersion, version: '0.1.2.3' }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
+        assert.equal(url, installerUrlFor(latestVersion));
+        return new Response(Buffer.from('MZ signed official installer'), { status: 200, headers: { 'content-length': '28' } });
+      }
+    });
+    const result = await bootstrapper.repair();
+    assert.equal(result.changed, true);
+    assert.deepEqual(requestedUrls, [
+      'https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer',
+      installerUrlFor(latestVersion)
+    ]);
   });
 });
 
