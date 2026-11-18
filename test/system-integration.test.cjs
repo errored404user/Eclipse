@@ -12,6 +12,7 @@ const {
 test('limits Windows destinations to Eclipse-owned pages', () => {
   assert.equal(navigationPage('tools'), 'tools');
   assert.equal(navigationPage('FASTFLAGS'), 'fastflags');
+  assert.equal(navigationPage('mods'), 'mods');
   assert.equal(navigationPage('roblox://experiences/start'), '');
   assert.equal(navigationPageFromArguments(['--some-other-flag', '--eclipse-page=library']), 'library');
   assert.equal(navigationPageFromArguments(['--eclipse-page=../../settings']), '');
@@ -21,11 +22,12 @@ test('limits Windows destinations to Eclipse-owned pages', () => {
 
 test('builds taskbar destinations without taking ownership of Roblox protocol links', () => {
   const tasks = taskbarTasks('C:\\Program Files\\Eclipse\\Eclipse.exe');
-  assert.equal(tasks.length, 4);
+  assert.equal(tasks.length, 5);
   assert.deepEqual(tasks.map((task) => task.arguments), [
     '--eclipse-page=home',
     '--eclipse-page=discover',
     '--eclipse-page=library',
+    '--eclipse-page=mods',
     '--eclipse-page=tools'
   ]);
   assert.equal(tasks.some((task) => task.program.includes('roblox:')), false);

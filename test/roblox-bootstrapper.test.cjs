@@ -124,10 +124,44 @@ test('updates only through the official installer path, validates its signature,
   });
 });
 
+test('stops an official install before download when local Player pack recovery fails', async () => {
+  await withTemporaryRoblox(async ({ root, env, versionsPath }) => {
+    await createPlayer(versionsPath, oldVersion);
+    const contexts = [];
+    const requestedUrls = [];
+    let spawned = false;
+    const bootstrapper = createRobloxBootstrapper({
+      platform: 'win32',
+      env,
+      temporaryRoot: path.join(root, 'EclipseBlockedUpdate'),
+      beforeInstall: async (context) => {
+        contexts.push(context);
+        throw new Error('Local Player pack backup requires repair.');
+      },
+      spawnImpl: () => {
+        spawned = true;
+        return new EventEmitter();
+      },
+      fetchImpl: async (url) => {
+        requestedUrls.push(String(url));
+        return new Response(JSON.stringify({ clientVersionUpload: latestVersion, version: '0.1.2.3' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+    });
+    await assert.rejects(() => bootstrapper.installOrUpdate(), /Local Player pack backup requires repair/);
+    assert.equal(contexts.length, 1);
+    assert.equal(contexts[0].current.versionGuid, oldVersion);
+    assert.equal(contexts[0].latest.versionGuid, latestVersion);
+    assert.equal(contexts[0].force, false);
+    assert.equal(spawned, false);
+    assert.deepEqual(requestedUrls, ['https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer']);
+  });
+});
+
 test('uses the same signed official installer path for a requested Player repair', async () => {
   await withTemporaryRoblox(async ({ root, env, versionsPath }) => {
     await createPlayer(versionsPath, latestVersion);
     const requestedUrls = [];
+    const beforeInstallContexts = [];
     const spawnImpl = () => {
       const child = new EventEmitter();
       process.nextTick(() => child.emit('close', 0));
@@ -137,6 +171,7 @@ test('uses the same signed official installer path for a requested Player repair
       platform: 'win32',
       env,
       temporaryRoot: path.join(root, 'EclipseRepairDownload'),
+      beforeInstall: async (context) => beforeInstallContexts.push(context),
       spawnImpl,
       fetchImpl: async (url) => {
         requestedUrls.push(String(url));
@@ -149,6 +184,10 @@ test('uses the same signed official installer path for a requested Player repair
     });
     const result = await bootstrapper.repair();
     assert.equal(result.changed, true);
+    assert.equal(beforeInstallContexts.length, 1);
+    assert.equal(beforeInstallContexts[0].current.versionGuid, latestVersion);
+    assert.equal(beforeInstallContexts[0].latest.versionGuid, latestVersion);
+    assert.equal(beforeInstallContexts[0].force, true);
     assert.deepEqual(requestedUrls, [
       'https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer',
       installerUrlFor(latestVersion)

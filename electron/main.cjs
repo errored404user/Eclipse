@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
@@ -7,6 +7,7 @@ const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
 const { createPlayerLaunchWindow, launchStates, sendLaunchState } = require('./launch-window.cjs');
 const { navigationPageFromArguments, placeIdFromArguments, startupStatus, taskbarJumpList } = require('./system-integration.cjs');
 const { readRecentPlaceIds, writeRecentPlaceIds } = require('./taskbar-recents.cjs');
+const { createPlayerMods } = require('./player-mods.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
 
@@ -16,7 +17,10 @@ let activeLaunchTimer;
 let recentLaunchPlaceIds = [];
 let pendingNavigationPage = navigationPageFromArguments(process.argv);
 let pendingLaunchPlaceId = placeIdFromArguments(process.argv);
-const robloxBootstrapper = createRobloxBootstrapper();
+let playerMods;
+const robloxBootstrapper = createRobloxBootstrapper({
+  beforeInstall: async (context) => playerMods?.prepareForPlayerUpdate(context)
+});
 const discordPresence = createDiscordPresence({ applicationId: process.env.ECLIPSE_DISCORD_CLIENT_ID });
 discordPresence.on('status', (status) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('discord:status', status);
@@ -172,6 +176,7 @@ app.on('second-instance', (_event, commandLine) => {
 });
 
 app.whenReady().then(async () => {
+  playerMods = createPlayerMods({ storageRoot: path.join(app.getPath('userData'), 'PlayerMods') });
   ipcMain.handle('window:minimize', () => mainWindow?.minimize());
   ipcMain.handle('window:toggle-maximize', () => {
     if (!mainWindow) return false;
@@ -192,6 +197,28 @@ app.whenReady().then(async () => {
   ipcMain.handle('fastflags:status', () => fastFlags.getStatus());
   ipcMain.handle('fastflags:apply', (_event, options) => fastFlags.apply(options));
   ipcMain.handle('fastflags:reset', () => fastFlags.reset());
+
+  ipcMain.handle('mods:status', () => playerMods.status());
+  ipcMain.handle('mods:import-package', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import Eclipse Player Pack',
+      properties: ['openFile'],
+      filters: [{ name: 'Eclipse Player pack', extensions: ['eclipsepack'] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return { ...(await playerMods.status()), canceled: true };
+    return { ...(await playerMods.importPackage(result.filePaths[0])), canceled: false };
+  });
+  ipcMain.handle('mods:import-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import Player Pack Folder',
+      properties: ['openDirectory']
+    });
+    if (result.canceled || !result.filePaths[0]) return { ...(await playerMods.status()), canceled: true };
+    return { ...(await playerMods.importFolder(result.filePaths[0])), canceled: false };
+  });
+  ipcMain.handle('mods:set-enabled', (_event, id, enabled) => playerMods.setEnabled(String(id || ''), enabled === true));
+  ipcMain.handle('mods:restore', () => playerMods.restoreActive());
+  ipcMain.handle('mods:remove', (_event, id) => playerMods.removePack(String(id || '')));
 
   ipcMain.handle('discord:status', () => discordPresence.status());
   ipcMain.handle('discord:configure', (_event, options = {}) => discordPresence.configure({

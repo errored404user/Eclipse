@@ -10,6 +10,7 @@ Eclipse is a Windows desktop bootstrapper and launcher for official Roblox exper
 - **Eclipse bootstrapper (Windows desktop)** detects the installed Roblox Player, checks Roblox’s official Windows Player release service before Eclipse launches, and downloads only the official Roblox installer when installation or an update is needed. Eclipse verifies the installer with Windows Authenticode before it runs, then confirms the installed version. It does not change the system `roblox://` association.
 - **Tools** validates a Roblox place ID, asks the bootstrapper to prepare the official Player, then requests the existing official `roblox://experiences/start?placeId=…` protocol handler. The Eclipse Player Handoff reports Eclipse-owned install/handoff stages only—it never claims Roblox game or server state.
 - **Fast Flags** has a dedicated sidebar destination for Windows-only Default, Performance, Balanced, and Quality rendering profiles; 1×, 2×, and 4× MSAA; mesh-detail and FRM-quality overrides; an Automatic, Direct3D 11, or Vulkan renderer preference; optional frame-rate targets; and a display-scaling option. Eclipse accepts only these bounded managed settings, merges only its managed keys into `ClientAppSettings.json`, and can remove only those keys again. During an official Player update, Eclipse carries only those managed keys into the new Player folder.
+- **Mods** is a Windows-only local Player Packs workspace for validated texture/UI and sound assets. It imports a local `.eclipsepack` ZIP or developer manifest folder, applies only while Roblox Player is closed, stores versioned original-file backups, and restores them in one click. Packages never contain code: executables, scripts, injectors, DLLs, credentials, network permissions, arbitrary paths, and undeclared files are rejected. An official Player update or repair restores originals, disables every active pack, and marks it for compatibility review rather than migrating it automatically.
 - **Integrations** keeps an optional local history of launch requests Eclipse starts. On the desktop app, Discord Rich Presence uses Discord’s local IPC connection to show **Open Eclipse** while Eclipse is running. It requires a public Discord Application ID, never asks for Discord credentials, and does not pretend to know Roblox server/gameplay state.
 - **Eclipse profile** is a single-click local editor in the sidebar for an optional display name and profile image. JPEG, PNG, and WebP images are center-cropped to a bounded local avatar; no image is uploaded. The profile creates no online account, never requests Roblox credentials, and is not connected to a Roblox account.
 - **Settings** persist only Eclipse interface preferences locally, including a Reduce interface motion option that also suppresses Eclipse animations.
@@ -43,6 +44,29 @@ npm run desktop:dev
 The first bootstrapper release is **Windows desktop only**. Before an Eclipse launch it checks `WindowsPlayer` release metadata from Roblox’s official client-settings service. If Roblox Player is missing or out of date, Eclipse downloads the official web installer from Roblox’s download endpoint and falls back only to Roblox’s official setup CDN launcher if that endpoint is unavailable. It checks that the download is a Windows executable, requires a valid Windows Authenticode signature, runs it, and confirms the new Player version folder.
 
 Eclipse does not download Roblox Player from third-party mirrors, never accepts Roblox credentials, and does not register itself as the `roblox://` protocol handler. If an update check is temporarily unavailable but an installed Player exists, Eclipse leaves the installed Player in place and requests the existing Roblox protocol handoff; if no Player is installed, it asks you to retry when Roblox’s official deployment service is reachable.
+
+### Local Player Packs
+
+Player Packs are intentionally a constrained local-asset workflow, not an extension, loader, or injection system. Import a `.eclipsepack` archive (a ZIP with `manifest.json`) or select a local developer folder. A pack declares each asset and the only supported targets are existing files under `content/textures/**` and `content/sounds/**` in the installed Player version.
+
+```json
+{
+  "schema": "eclipse-player-pack/v1",
+  "id": "violet-interface",
+  "name": "Violet Interface",
+  "version": "1.0.0",
+  "description": "A local visual pack",
+  "assets": [
+    {
+      "source": "assets/interface.png",
+      "target": "content/textures/interface.png",
+      "kind": "texture"
+    }
+  ]
+}
+```
+
+Only PNG/JPEG/WebP texture files and OGG/MP3/WAV sound files with matching content signatures and target extensions are accepted. Eclipse limits package size, asset count, asset size, and total extraction size; rejects archive traversal, undeclared archive entries, external folder symlinks, duplicate targets, and non-regular Player files; and keeps all imported data and backups in Electron user data. Roblox Player must be completely closed before enabling, disabling, restoring, or removing an active pack. If Player is updated or repaired through Eclipse, originals are restored first and all active packs are disabled for manual compatibility review.
 
 ### Enable Discord Rich Presence
 

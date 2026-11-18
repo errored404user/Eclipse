@@ -256,12 +256,13 @@ function delay(milliseconds) {
 }
 
 class RobloxBootstrapper extends EventEmitter {
-  constructor({ platform = process.platform, env = process.env, fetchImpl = globalThis.fetch, spawnImpl = spawn, temporaryRoot = '' } = {}) {
+  constructor({ platform = process.platform, env = process.env, fetchImpl = globalThis.fetch, spawnImpl = spawn, temporaryRoot = '', beforeInstall = async () => {} } = {}) {
     super();
     this.platform = platform;
     this.env = env;
     this.fetchImpl = fetchImpl;
     this.spawnImpl = spawnImpl;
+    this.beforeInstall = typeof beforeInstall === 'function' ? beforeInstall : async () => {};
     this.versionsPath = robloxVersionsPath(env);
     this.temporaryRoot = temporaryRoot || path.join(os.tmpdir(), 'Eclipse', 'Roblox');
     this.operation = null;
@@ -340,6 +341,7 @@ class RobloxBootstrapper extends EventEmitter {
         return { ...(await this.inspect({ refresh: false })), changed: false };
       }
 
+      await this.beforeInstall({ current, latest, force });
       const installerPath = path.join(this.temporaryRoot, `${latest.versionGuid}-Roblox.exe`);
       try {
         await fs.mkdir(this.temporaryRoot, { recursive: true });

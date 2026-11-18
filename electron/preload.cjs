@@ -51,6 +51,15 @@ contextBridge.exposeInMainWorld('eclipseFastFlags', {
   reset: () => ipcRenderer.invoke('fastflags:reset')
 });
 
+contextBridge.exposeInMainWorld('eclipseMods', {
+  status: () => ipcRenderer.invoke('mods:status'),
+  importPackage: () => ipcRenderer.invoke('mods:import-package'),
+  importFolder: () => ipcRenderer.invoke('mods:import-folder'),
+  setEnabled: (id, enabled) => ipcRenderer.invoke('mods:set-enabled', typeof id === 'string' ? id : '', enabled === true),
+  restore: () => ipcRenderer.invoke('mods:restore'),
+  remove: (id) => ipcRenderer.invoke('mods:remove', typeof id === 'string' ? id : '')
+});
+
 contextBridge.exposeInMainWorld('eclipseDiscord', {
   status: () => ipcRenderer.invoke('discord:status'),
   configure: (options = {}) => ipcRenderer.invoke('discord:configure', {

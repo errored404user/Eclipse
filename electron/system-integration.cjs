@@ -1,4 +1,4 @@
-const navigationPages = Object.freeze(['home', 'discover', 'library', 'tools', 'fastflags', 'integrations', 'settings']);
+const navigationPages = Object.freeze(['home', 'discover', 'library', 'tools', 'fastflags', 'mods', 'integrations', 'settings']);
 
 function navigationPage(value) {
   const page = String(value || '').trim().toLowerCase();
@@ -29,6 +29,7 @@ function taskbarTasks(executablePath) {
     ['Home', 'home', 'Open Eclipse Home'],
     ['Discover Roblox', 'discover', 'Browse official Roblox experiences in Eclipse'],
     ['Your Library', 'library', 'Open your local Eclipse library'],
+    ['Local Mods', 'mods', 'Manage local validated Player packs'],
     ['Player Tools', 'tools', 'Open official Roblox Player tools']
   ].map(([title, page, description]) => ({
     program: executablePath,

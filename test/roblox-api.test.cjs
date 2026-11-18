@@ -322,6 +322,35 @@ test('connects Discord Rich Presence through the desktop bridge with an Eclipse 
   assert.match(styles, /\.discord-presence-preview/);
 });
 
+test('provides a guarded local Player Packs workspace without a code-mod bridge', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  const preload = fs.readFileSync(path.join(root, 'electron', 'preload.cjs'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'electron', 'main.cjs'), 'utf8');
+  const engine = fs.readFileSync(path.join(root, 'electron', 'player-mods.cjs'), 'utf8');
+  assert.match(shell, /data-page="mods"/);
+  assert.match(shell, /icon-mods/);
+  assert.match(renderer, /function renderMods\(\)/);
+  assert.match(renderer, /Advanced Local Mode/);
+  assert.match(renderer, /content\/textures/);
+  assert.match(renderer, /content\/sounds/);
+  assert.match(renderer, /state\.page === 'mods'/);
+  assert.match(preload, /contextBridge\.exposeInMainWorld\('eclipseMods'/);
+  assert.match(main, /ipcMain\.handle\('mods:import-package'/);
+  assert.match(main, /ipcMain\.handle\('mods:set-enabled'/);
+  assert.match(engine, /const PACK_SCHEMA = 'eclipse-player-pack\/v1'/);
+  assert.match(engine, /MAX_PACKAGE_BYTES/);
+  assert.match(engine, /assertPlayerClosed/);
+  assert.match(engine, /prepareForPlayerUpdate/);
+  assert.match(engine, /MAX_BACKUP_BYTES/);
+  assert.match(styles, /\.mods-overview/);
+  assert.match(styles, /\.mod-pack-grid/);
+});
+
 test('keeps Fast Flags visible and lets the single profile card open a local editor with a bounded image upload', () => {
   const fs = require('node:fs');
   const path = require('node:path');

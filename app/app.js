@@ -22,6 +22,7 @@ const state = {
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '', sort: 'featured', filter: 'all' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
+  mods: { status: null, busy: false, message: '' },
   startup: { status: null, busy: false },
   fastFlags: { ...defaultFastFlagSelection(), status: null, profileId: '', busy: false, message: '' },
   fastFlagProfiles: normalizeSavedFastFlagProfiles(readStored(storageKeys.fastFlagProfiles, []))
@@ -88,6 +89,17 @@ const browserFastFlags = {
 };
 
 const fastFlags = window.eclipseFastFlags || browserFastFlags;
+
+const browserMods = {
+  async status() { return { supported: false, installed: false, playerRunning: false, packs: [], reason: 'Player packs are available in the Windows Eclipse desktop app only.' }; },
+  async importPackage() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
+  async importFolder() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
+  async setEnabled() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
+  async restore() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
+  async remove() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); }
+};
+
+const mods = window.eclipseMods || browserMods;
 
 
 const browserDiscord = {
@@ -1151,6 +1163,103 @@ function renderFastFlags() {
   refreshFastFlagsStatus();
 }
 
+function modsStatusPresentation(status = state.mods.status) {
+  if (!status) return { label: 'Inspecting Player packs…', className: '', canApply: false };
+  if (!status.supported) return { label: 'Windows desktop app required', className: '', canApply: false };
+  if (!status.installed) return { label: 'Roblox Player not installed', className: 'warning', canApply: false };
+  if (status.playerRunning) return { label: 'Close Roblox Player to change packs', className: 'warning', canApply: false };
+  return { label: `Player closed · ${status.versionGuid || 'ready'}`, className: 'ready', canApply: true };
+}
+
+function modPackCard(pack, canApply) {
+  const assets = Array.isArray(pack.assets) ? pack.assets : [];
+  const textures = assets.filter((asset) => asset.kind === 'texture').length;
+  const sounds = assets.filter((asset) => asset.kind === 'sound').length;
+  const stateLabel = pack.needsReview ? 'Review required' : pack.enabled ? 'Enabled' : 'Stored locally';
+  const cardClass = pack.needsReview ? 'review' : pack.enabled ? 'enabled' : '';
+  const actionLabel = pack.enabled ? 'Disable & restore' : pack.needsReview ? 'Review & enable' : 'Enable pack';
+  const lastApplied = pack.lastAppliedVersion ? `Applied to ${pack.lastAppliedVersion}` : 'Not applied to Player';
+  const note = pack.lastError || (pack.needsReview ? 'The official Player changed. Review this pack before enabling it again.' : lastApplied);
+  return `<article class="mod-pack panel ${cardClass}">
+    <div class="mod-pack-head"><div><p class="section-kicker">Local Player pack · v${escapeHtml(pack.version)}</p><h3>${escapeHtml(pack.name)}</h3><p>${escapeHtml(pack.description || 'Validated texture and sound replacements stored only on this device.')}</p></div><span class="mod-pack-state">${escapeHtml(stateLabel)}</span></div>
+    <div class="mod-pack-meta"><span>${assets.length} asset${assets.length === 1 ? '' : 's'}</span>${textures ? `<span>${textures} texture${textures === 1 ? '' : 's'}</span>` : ''}${sounds ? `<span>${sounds} sound${sounds === 1 ? '' : 's'}</span>` : ''}</div>
+    <p class="mod-pack-note">${escapeHtml(note)}</p>
+    <div class="mod-pack-actions"><div><button class="primary-button" type="button" data-action="mod-toggle" data-mod-id="${escapeHtml(pack.id)}" data-mod-enabled="${pack.enabled ? 'false' : 'true'}" ${canApply ? '' : 'disabled'}>${escapeHtml(actionLabel)}</button><button class="quiet-button" type="button" data-action="mod-remove" data-mod-id="${escapeHtml(pack.id)}" ${state.mods.busy || (pack.enabled && !canApply) ? 'disabled' : ''}>Remove</button></div><span class="card-meta">ID · ${escapeHtml(pack.id)}</span></div>
+  </article>`;
+}
+
+function modsFormatGuide() {
+  const manifest = `{
+  "schema": "eclipse-player-pack/v1",
+  "id": "violet-interface",
+  "name": "Violet Interface",
+  "version": "1.0.0",
+  "description": "Local visual pack",
+  "assets": [
+    {
+      "source": "assets/interface.png",
+      "target": "content/textures/interface.png",
+      "kind": "texture"
+    }
+  ]
+}`;
+  return `<details class="mods-format"><summary>Local pack format and safety rules</summary><p>Import a <code>.eclipsepack</code> ZIP containing <code>manifest.json</code>, or a developer folder with the same structure. Eclipse accepts only declared PNG/JPEG/WebP textures and OGG/MP3/WAV sounds under <code>content/textures</code> or <code>content/sounds</code>. It blocks code, DLLs, injectors, scripts, executables, network permissions, and every undeclared path.</p><pre>${escapeHtml(manifest)}</pre></details>`;
+}
+
+function renderMods() {
+  if (!state.mods.status && !state.mods.busy) Promise.resolve().then(() => refreshModsStatus());
+  const status = state.mods.status;
+  const presentation = modsStatusPresentation(status);
+  const packs = Array.isArray(status?.packs) ? status.packs : [];
+  const desktopSupported = Boolean(window.eclipseMods);
+  const canImport = desktopSupported && !state.mods.busy;
+  const statusReason = status?.reason ? `<p class="mods-runtime-note">${escapeHtml(status.reason)}</p>` : '';
+  const packMarkup = packs.length
+    ? `<div class="mod-pack-grid">${packs.map((pack) => modPackCard(pack, presentation.canApply && !state.mods.busy)).join('')}</div>`
+    : emptyState('✦', 'Your local Player pack library is empty.', 'Import a validated .eclipsepack or a local developer folder. Packs are stored on this device, never uploaded, and remain disabled until you enable them while Player is closed.', '');
+  pageContent.innerHTML = `<div class="page-shell mods-page">
+    ${pageHeader('Advanced local Player packs', 'Mods.', 'Build a local texture and sound pack library with declared paths, versioned backups, and official Player repair support. Eclipse never loads mod code or contacts a mod service.', '')}
+    <section class="mods-overview">
+      <article class="mods-panel panel"><p class="section-kicker"><i></i> Player pack control</p><h2>Local assets, not injected code.</h2><p>Enable or restore a pack only after Roblox Player is fully closed. Eclipse backs up original files per Player version before any declared texture or sound is replaced.</p><span class="mods-status ${presentation.className}"><i></i>${escapeHtml(presentation.label)}</span>${statusReason}<div class="mods-actions"><button class="primary-button" type="button" data-action="mod-import-package" ${canImport ? '' : 'disabled'}>Import .eclipsepack</button><button class="quiet-button" type="button" data-action="mod-import-folder" ${canImport ? '' : 'disabled'}>Import developer folder</button><button class="quiet-button" type="button" data-action="mod-restore" ${presentation.canApply && packs.some((pack) => pack.enabled) && !state.mods.busy ? '' : 'disabled'}>${state.mods.busy ? 'Working…' : 'Restore active version'}</button><button class="text-button" type="button" data-action="refresh-mods">Refresh status <span>→</span></button></div><p class="mods-safety"><i></i><span><strong>Advanced Local Mode.</strong> Packages must declare every asset and target. On an official Player update or repair, Eclipse restores originals, disables all packs, and marks them for review.</span></p></article>
+      <aside class="mods-panel panel"><p class="section-kicker">Guardrails</p><h2>Designed to be recoverable.</h2><div class="mods-guardrails"><div><strong>Declared paths only</strong><span>Only existing files below content/textures and content/sounds are eligible.</span></div><div><strong>Versioned backups</strong><span>Original Player files are retained locally before a pack can replace them.</span></div><div><strong>Review after updates</strong><span>Official Player updates and repairs disable packs instead of carrying modifications forward.</span></div></div></aside>
+    </section>
+    <section class="mods-library content-section"><div class="mods-library-heading"><div><p class="section-kicker">Local pack vault</p><h2>${packs.length ? `${packs.length} local Player pack${packs.length === 1 ? '' : 's'}` : 'No Player packs imported'}</h2></div><p class="section-note">${packs.filter((pack) => pack.enabled).length} enabled · ${packs.filter((pack) => pack.needsReview).length} need review</p></div>${packMarkup}${modsFormatGuide()}</section>
+  </div>`;
+}
+
+async function refreshModsStatus({ render = true } = {}) {
+  try {
+    state.mods.status = await mods.status();
+    if (!state.mods.busy) state.mods.message = '';
+  } catch (error) {
+    state.mods.status = { supported: Boolean(window.eclipseMods), installed: false, playerRunning: false, packs: [], reason: error instanceof Error ? error.message : 'Player pack status is unavailable.' };
+  }
+  if (render && state.page === 'mods') renderMods();
+  return state.mods.status;
+}
+
+async function runModsOperation(operation, successMessage) {
+  if (state.mods.busy) return;
+  state.mods.busy = true;
+  state.mods.message = '';
+  if (state.page === 'mods') renderMods();
+  try {
+    const result = await operation();
+    state.mods.status = result;
+    if (!result?.canceled) {
+      state.mods.message = successMessage;
+      showToast(successMessage);
+    }
+  } catch (error) {
+    state.mods.message = error instanceof Error ? error.message : 'Eclipse could not update the local Player pack library.';
+    showToast(state.mods.message);
+  } finally {
+    state.mods.busy = false;
+    await refreshModsStatus({ render: false });
+    if (state.page === 'mods') renderMods();
+  }
+}
+
 function renderIntegrations() {
   const { activityTracking, discordRichPresence, discordClientId, discordAssetKey, discordActivityDisplay } = state.integrations;
   const status = discordStatus || {
@@ -1235,7 +1344,7 @@ function renderSettings() {
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', fastflags: 'Fast Flags', integrations: 'Integrations', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -1250,6 +1359,7 @@ function renderCurrentPage() {
   else if (state.page === 'library') renderLibrary();
   else if (state.page === 'tools') renderTools();
   else if (state.page === 'fastflags') renderFastFlags();
+  else if (state.page === 'mods') renderMods();
   else if (state.page === 'integrations') renderIntegrations();
   else if (state.page === 'settings') renderSettings();
   else renderHome();
@@ -1257,7 +1367,7 @@ function renderCurrentPage() {
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'integrations', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'mods', 'integrations', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
@@ -1422,6 +1532,15 @@ document.addEventListener('click', async (event) => {
   if (action === 'fastflag-profile-delete') deleteSavedFastFlagProfile();
   if (action === 'fastflag-profile-export') exportSavedFastFlagProfiles();
   if (action === 'fastflag-reset') await resetFastFlags();
+  if (action === 'refresh-mods') await refreshModsStatus();
+  if (action === 'mod-import-package') await runModsOperation(() => mods.importPackage(), 'Local .eclipsepack imported to Eclipse. Review it before enabling.');
+  if (action === 'mod-import-folder') await runModsOperation(() => mods.importFolder(), 'Local developer folder imported to Eclipse. Review it before enabling.');
+  if (action === 'mod-restore') await runModsOperation(() => mods.restore(), 'Original files were restored and local Player packs were disabled.');
+  if (action === 'mod-toggle') {
+    const enable = button.dataset.modEnabled === 'true';
+    await runModsOperation(() => mods.setEnabled(button.dataset.modId, enable), enable ? 'Player pack enabled with a versioned local backup.' : 'Player pack disabled and original assets restored.');
+  }
+  if (action === 'mod-remove') await runModsOperation(() => mods.remove(button.dataset.modId), 'Local Player pack removed from Eclipse.');
 });
 
 document.addEventListener('submit', async (event) => {
