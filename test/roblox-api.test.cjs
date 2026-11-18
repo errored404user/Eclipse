@@ -290,7 +290,7 @@ test('routes the complete managed Fast Flags panel through its dedicated sidebar
   assert.match(fastFlagsSlice, /refreshFastFlagsStatus\(\)/);
 });
 
-test('connects Discord Rich Presence through the desktop bridge and shows Open Eclipse', () => {
+test('connects Discord Rich Presence through the desktop bridge with an Eclipse icon asset', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
@@ -309,12 +309,17 @@ test('connects Discord Rich Presence through the desktop bridge and shows Open E
   assert.match(renderer, /data-integration="activityTracking"/);
   assert.match(renderer, /data-integration="discordRichPresence"/);
   assert.match(renderer, /data-discord-client-id/);
-  assert.match(renderer, /Show Open Eclipse in Discord/);
+  assert.match(renderer, /data-discord-asset-key/);
+  assert.match(renderer, /data-discord-display/);
+  assert.match(renderer, /Show Eclipse activity/);
+  assert.match(renderer, /Download Eclipse icon/);
   assert.match(preload, /contextBridge\.exposeInMainWorld\('eclipseDiscord'/);
   assert.match(main, /ipcMain\.handle\('discord:configure'/);
   assert.match(discord, /details: 'Open Eclipse'/);
+  assert.match(discord, /large_image: imageAssetKey/);
   assert.match(discord, /cmd: 'SET_ACTIVITY'/);
   assert.match(styles, /\.integration-client-id/);
+  assert.match(styles, /\.discord-presence-preview/);
 });
 
 test('keeps Fast Flags visible and lets the single profile card open a local editor with a bounded image upload', () => {

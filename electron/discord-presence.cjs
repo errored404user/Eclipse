@@ -5,10 +5,21 @@ const path = require('node:path');
 const DISCORD_IPC_VERSION = 1;
 const MAX_PACKET_BYTES = 1024 * 1024;
 const APPLICATION_ID_PATTERN = /^\d{17,20}$/;
+const ASSET_KEY_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+const ACTIVITY_DISPLAYS = Object.freeze(['open-eclipse', 'minimal']);
 
 function normalizeApplicationId(value) {
   const applicationId = String(value || '').trim();
   return APPLICATION_ID_PATTERN.test(applicationId) ? applicationId : '';
+}
+
+function normalizeAssetKey(value) {
+  const assetKey = String(value || '').trim();
+  return ASSET_KEY_PATTERN.test(assetKey) ? assetKey : 'eclipse';
+}
+
+function normalizeActivityDisplay(value) {
+  return ACTIVITY_DISPLAYS.includes(value) ? value : 'open-eclipse';
 }
 
 function ipcPaths(platform = process.platform, env = process.env) {
@@ -27,10 +38,16 @@ function ipcPaths(platform = process.platform, env = process.env) {
   ));
 }
 
-function openEclipseActivity(startedAt = Date.now()) {
+function openEclipseActivity(startedAt = Date.now(), options = {}) {
+  const activityDisplay = normalizeActivityDisplay(options.activityDisplay);
+  const imageAssetKey = normalizeAssetKey(options.imageAssetKey);
   return {
     details: 'Open Eclipse',
-    state: 'Roblox launcher',
+    ...(activityDisplay === 'open-eclipse' ? { state: 'Roblox launcher' } : {}),
+    assets: {
+      large_image: imageAssetKey,
+      large_text: 'Eclipse'
+    },
     timestamps: { start: Math.floor(startedAt / 1000) },
     instance: false
   };
@@ -63,6 +80,8 @@ class DiscordPresence extends EventEmitter {
     this.logger = logger;
     this.environmentApplicationId = normalizeApplicationId(environment.ECLIPSE_DISCORD_CLIENT_ID);
     this.applicationId = normalizeApplicationId(applicationId) || this.environmentApplicationId;
+    this.imageAssetKey = 'eclipse';
+    this.activityDisplay = 'open-eclipse';
     this.enabled = false;
     this.socket = null;
     this.buffer = Buffer.alloc(0);
@@ -86,6 +105,8 @@ class DiscordPresence extends EventEmitter {
       supported: true,
       configured,
       enabled: this.enabled,
+      imageAssetKey: this.imageAssetKey,
+      activityDisplay: this.activityDisplay,
       connected: this.connected,
       connecting: this.connecting,
       reason
@@ -97,23 +118,31 @@ class DiscordPresence extends EventEmitter {
   }
 
   configure(options = {}) {
-    const { applicationId, enabled } = options;
+    const { applicationId, enabled, imageAssetKey, activityDisplay } = options;
     const hasApplicationId = Object.hasOwn(options, 'applicationId');
     const hasEnabled = Object.hasOwn(options, 'enabled');
+    const hasImageAssetKey = Object.hasOwn(options, 'imageAssetKey');
+    const hasActivityDisplay = Object.hasOwn(options, 'activityDisplay');
     const nextApplicationId = hasApplicationId
       ? normalizeApplicationId(applicationId) || this.environmentApplicationId
       : this.applicationId;
+    const nextImageAssetKey = hasImageAssetKey ? normalizeAssetKey(imageAssetKey) : this.imageAssetKey;
+    const nextActivityDisplay = hasActivityDisplay ? normalizeActivityDisplay(activityDisplay) : this.activityDisplay;
     const changedApplication = nextApplicationId !== this.applicationId;
+    const changedPresentation = nextImageAssetKey !== this.imageAssetKey || nextActivityDisplay !== this.activityDisplay;
     if (changedApplication) {
       this.clearAndDisconnect();
       this.applicationId = nextApplicationId;
     }
+    this.imageAssetKey = nextImageAssetKey;
+    this.activityDisplay = nextActivityDisplay;
     if (hasEnabled) this.enabled = enabled === true;
     if (!this.enabled || !this.applicationId) {
       this.clearAndDisconnect();
       this.emitStatus();
       return this.status();
     }
+    if (changedPresentation && this.connected) this.publishOpenEclipse();
     this.connect();
     this.emitStatus();
     return this.status();
@@ -215,7 +244,13 @@ class DiscordPresence extends EventEmitter {
     if (!this.enabled || !this.connected || !this.handshaken) return false;
     return this.send(1, {
       cmd: 'SET_ACTIVITY',
-      args: { pid: process.pid, activity: openEclipseActivity(this.startedAt) },
+      args: {
+        pid: process.pid,
+        activity: openEclipseActivity(this.startedAt, {
+          imageAssetKey: this.imageAssetKey,
+          activityDisplay: this.activityDisplay
+        })
+      },
       nonce: `eclipse-${Date.now()}`
     });
   }
@@ -277,10 +312,14 @@ function createDiscordPresence(options) {
 }
 
 module.exports = {
+  ACTIVITY_DISPLAYS,
   APPLICATION_ID_PATTERN,
+  ASSET_KEY_PATTERN,
   DiscordPresence,
   createDiscordPresence,
+  normalizeActivityDisplay,
   normalizeApplicationId,
+  normalizeAssetKey,
   openEclipseActivity,
   ipcPaths
 };

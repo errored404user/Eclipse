@@ -196,7 +196,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('discord:status', () => discordPresence.status());
   ipcMain.handle('discord:configure', (_event, options = {}) => discordPresence.configure({
     applicationId: String(options.applicationId || ''),
-    enabled: options.enabled === true
+    enabled: options.enabled === true,
+    imageAssetKey: String(options.imageAssetKey || ''),
+    activityDisplay: String(options.activityDisplay || '')
   }));
 
   ipcMain.handle('roblox-bootstrapper:status', () => robloxBootstrapper.status());

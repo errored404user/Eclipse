@@ -55,7 +55,9 @@ contextBridge.exposeInMainWorld('eclipseDiscord', {
   status: () => ipcRenderer.invoke('discord:status'),
   configure: (options = {}) => ipcRenderer.invoke('discord:configure', {
     applicationId: typeof options.applicationId === 'string' ? options.applicationId : '',
-    enabled: options.enabled === true
+    enabled: options.enabled === true,
+    imageAssetKey: typeof options.imageAssetKey === 'string' ? options.imageAssetKey : '',
+    activityDisplay: typeof options.activityDisplay === 'string' ? options.activityDisplay : ''
   }),
   onStatus: (callback) => {
     if (typeof callback !== 'function') return () => {};

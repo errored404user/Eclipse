@@ -7,7 +7,9 @@ const assert = require('node:assert/strict');
 const {
   createDiscordPresence,
   ipcPaths,
+  normalizeActivityDisplay,
   normalizeApplicationId,
+  normalizeAssetKey,
   openEclipseActivity
 } = require('../electron/discord-presence.cjs');
 
@@ -48,9 +50,20 @@ test('normalizes public Discord application IDs and produces the Open Eclipse ac
   assert.equal(normalizeApplicationId(' 123456789012345678 '), '123456789012345678');
   assert.equal(normalizeApplicationId('not-a-client-id'), '');
   assert.equal(normalizeApplicationId('1234'), '');
+  assert.equal(normalizeAssetKey('eclipse_icon'), 'eclipse_icon');
+  assert.equal(normalizeAssetKey('../../not-an-asset'), 'eclipse');
+  assert.equal(normalizeActivityDisplay('minimal'), 'minimal');
+  assert.equal(normalizeActivityDisplay('playing-roblox'), 'open-eclipse');
   assert.deepEqual(openEclipseActivity(12_345), {
     details: 'Open Eclipse',
     state: 'Roblox launcher',
+    assets: { large_image: 'eclipse', large_text: 'Eclipse' },
+    timestamps: { start: 12 },
+    instance: false
+  });
+  assert.deepEqual(openEclipseActivity(12_345, { imageAssetKey: 'eclipse_icon', activityDisplay: 'minimal' }), {
+    details: 'Open Eclipse',
+    assets: { large_image: 'eclipse_icon', large_text: 'Eclipse' },
     timestamps: { start: 12 },
     instance: false
   });
@@ -92,7 +105,15 @@ test('uses Discord local IPC to publish and clear Open Eclipse presence', async 
   assert.equal(activityPacket.opcode, 1);
   assert.equal(activityPacket.payload.args.activity.details, 'Open Eclipse');
   assert.equal(activityPacket.payload.args.activity.state, 'Roblox launcher');
+  assert.deepEqual(activityPacket.payload.args.activity.assets, { large_image: 'eclipse', large_text: 'Eclipse' });
   assert.equal(presence.status().connected, true);
+
+  presence.configure({ enabled: true, imageAssetKey: 'eclipse_icon', activityDisplay: 'minimal' });
+  const updatedActivityPacket = await waitFor(() => received.find(({ payload }) => (
+    payload?.cmd === 'SET_ACTIVITY' && payload?.args?.activity?.assets?.large_image === 'eclipse_icon'
+  )));
+  assert.equal(updatedActivityPacket.payload.args.activity.state, undefined);
+  assert.deepEqual(updatedActivityPacket.payload.args.activity.assets, { large_image: 'eclipse_icon', large_text: 'Eclipse' });
 
   presence.close();
   const clearPacket = await waitFor(() => received.find(({ payload }) => payload?.cmd === 'SET_ACTIVITY' && payload?.args?.activity === null));
