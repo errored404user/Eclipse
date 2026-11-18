@@ -142,3 +142,97 @@ html { scroll-behavior: smooth; }.content { scroll-behavior: smooth; }.page-shel
 /* Direct local-profile editing and locally stored profile imagery. */
 .profile-card { position: relative; min-height: 54px; width: 100%; justify-content: flex-start; border: 1px solid rgba(211,194,255,.11); border-radius: 13px; background: linear-gradient(135deg, rgba(45,37,61,.72), rgba(20,17,29,.72)); box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }.profile-card:hover { border-color: rgba(189,164,255,.34); background: linear-gradient(135deg, rgba(57,46,78,.83), rgba(24,20,35,.88)); transform: translateY(-1px); }.profile-card:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }.profile-avatar-shell .avatar.has-image, .profile-dialog-avatar.has-image { color: transparent; background-color: #20172d; background-position: center; background-repeat: no-repeat; background-size: cover; }.profile-dialog { width: min(470px, calc(100vw - 32px)); }.profile-image-field { display: grid; gap: 7px; }.profile-image-field > span { color: #d4c9e8; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 10px; }.profile-image-field > span em { color: #837990; font-style: normal; }.profile-image-controls { display: flex; align-items: center; gap: 10px; padding: 9px; border: 1px solid rgba(211,194,255,.12); border-radius: 10px; background: rgba(5,4,8,.19); }.profile-dialog-avatar { width: 43px; height: 43px; flex-basis: 43px; border-color: rgba(223,210,255,.26); font-size: 11px; }.profile-image-upload { display: grid; min-width: 0; flex: 1; gap: 2px; color: #ece6fa; cursor: pointer; }.profile-image-upload input { position: absolute; width: 1px !important; height: 1px; padding: 0 !important; overflow: hidden; clip: rect(0, 0, 0, 0); opacity: 0; pointer-events: none; }.profile-image-upload > span { color: #d6c8ff; font-size: 10px; font-weight: 620; }.profile-image-upload small { overflow: hidden; color: #93899f; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }.profile-image-upload:hover > span { color: #f2ecff; text-decoration: underline; }.profile-image-remove { padding: 6px 7px; border: 1px solid transparent; border-radius: 7px; color: #a79cac; background: transparent; cursor: pointer; font-size: 9px; }.profile-image-remove:hover { border-color: rgba(239,116,139,.28); color: #ffdce2; background: rgba(203,74,99,.14); }.profile-image-remove[hidden] { display: none; }
 @media (max-width: 460px) { .profile-image-controls { align-items: flex-start; flex-wrap: wrap; }.profile-image-remove { margin-left: auto; } }
+
+/* Online Community: Eclipse accounts, mutual friends, and private text chat. */
+.community-page { display: grid; gap: 13px; }
+.community-page .page-header { margin-bottom: 3px; }
+.community-loading { display: flex; align-items: center; gap: 15px; padding: 22px; }
+.community-service-error { margin: 0; padding: 10px 12px; border: 1px solid rgba(234,111,139,.42); border-radius: 10px; color: #ffd9e0; background: rgba(187,51,79,.12); font-size: 11px; }
+.community-auth-layout { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(310px, .94fr); gap: 13px; }
+.community-identity-panel, .community-auth-form { padding: 25px; border-radius: 15px; }
+.community-identity-panel { min-height: 315px; background: radial-gradient(circle at 100% 0, rgba(142,101,235,.25), transparent 44%), linear-gradient(145deg, rgba(43,36,57,.93), rgba(23,20,31,.92)); }
+.community-identity-panel h2, .community-auth-form h2 { margin: 0; font-size: 21px; letter-spacing: -.045em; }
+.community-identity-panel > p:not(.section-kicker) { max-width: 485px; margin: 9px 0 0; color: #b7adbf; font-size: 12px; line-height: 1.65; }
+.community-trust-list { display: grid; gap: 10px; margin: 28px 0 0; padding: 0; list-style: none; color: #dfd5f0; font-size: 11px; }
+.community-trust-list li { display: flex; align-items: center; gap: 9px; }
+.community-trust-list i, .community-account-strip i, .community-media-status i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ae8af2; box-shadow: 0 0 9px rgba(174,138,242,.7); }
+.community-auth-form { display: grid; align-content: start; gap: 11px; border-color: rgba(205,188,255,.18); background: rgba(25,21,33,.88); }
+.community-auth-switch { display: flex; gap: 4px; width: fit-content; padding: 3px; border: 1px solid rgba(211,194,255,.13); border-radius: 9px; background: rgba(7,5,12,.3); }
+.community-auth-switch button { padding: 6px 9px; border: 0; border-radius: 6px; color: #aaa0b9; background: transparent; font: inherit; font-size: 9px; cursor: pointer; }
+.community-auth-switch button.active { color: #f1ebff; background: rgba(132,91,229,.32); }
+.community-auth-form > label { display: grid; gap: 5px; color: #cfc3e4; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.community-auth-form input, .community-find-user input, .community-report-form input, .community-report-form select { min-width: 0; width: 100%; padding: 10px 11px; border: 1px solid rgba(211,194,255,.16); border-radius: 8px; outline: 0; color: #f1ebfb; background: rgba(5,4,8,.29); font: inherit; font-size: 11px; }
+.community-auth-form input:focus, .community-find-user input:focus, .community-report-form input:focus, .community-report-form select:focus { border-color: rgba(195,165,255,.72); box-shadow: 0 0 0 3px rgba(126,89,221,.14); }
+.community-auth-form .primary-button { justify-content: center; margin-top: 4px; }
+.community-auth-form > small { color: #8c8398; font-size: 9px; line-height: 1.5; }
+.community-form-error { margin: 0; color: #ffb7c5; font-size: 10px; line-height: 1.45; }
+.community-verification { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 20px; border-color: rgba(216,187,105,.24); background: radial-gradient(circle at 100% 0, rgba(218,170,74,.13), transparent 42%), rgba(37,31,24,.82); }
+.community-verification-mark { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid rgba(235,198,119,.35); border-radius: 12px; color: #ffe0a3; background: rgba(202,151,47,.14); }
+.community-verification h2 { margin: 0; font-size: 16px; }
+.community-verification p:not(.section-kicker) { max-width: 650px; margin: 5px 0 0; color: #c4b9a7; font-size: 10px; line-height: 1.55; }
+.community-account-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 15px; }
+.community-account-strip > div { display: flex; align-items: center; gap: 9px; }
+.community-account-strip .community-contact-avatar { width: 30px; height: 30px; font-size: 9px; }
+.community-account-strip small, .community-account-strip strong { display: block; }
+.community-account-strip small { color: #91889e; font-size: 8px; }
+.community-account-strip strong { margin-top: 2px; color: #eee8f8; font-size: 11px; }
+.community-account-strip > span { display: inline-flex; align-items: center; gap: 7px; color: #bcb0d3; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; }
+.community-find-user { display: grid; grid-template-columns: minmax(0, 1fr) minmax(275px, .72fr); gap: 14px; align-items: center; padding: 18px; }
+.community-find-user h2 { margin: 0; font-size: 16px; letter-spacing: -.025em; }
+.community-find-user p:not(.section-kicker) { margin: 5px 0 0; color: #aaa0b5; font-size: 10px; line-height: 1.5; }
+.community-find-user form { display: flex; gap: 7px; }
+.community-find-user .quiet-button { flex: 0 0 auto; }
+.community-lookup-result { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid rgba(174,139,239,.23); border-radius: 10px; background: rgba(127,89,221,.09); }
+.community-lookup-result strong, .community-lookup-result small { display: block; }
+.community-lookup-result strong { color: #e9e2f5; font-size: 10px; }
+.community-lookup-result small { margin-top: 2px; color: #9f95ac; font-size: 8px; }
+.community-online-layout { margin-top: 0; }
+.community-online-contact { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px; border: 1px solid transparent; border-radius: 10px; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.community-online-contact:hover { border-color: rgba(197,174,255,.2); background: rgba(255,255,255,.035); }
+.community-online-contact.active { border-color: rgba(175,137,245,.42); background: rgba(130,88,226,.16); }
+.community-online-contact strong, .community-online-contact small { display: block; }
+.community-online-contact strong { color: #e7e0f1; font-size: 10px; }
+.community-online-contact small { margin-top: 2px; color: #958b9f; font-size: 8px; }
+.community-request-group { display: grid; gap: 7px; margin-top: 14px; padding-top: 13px; border-top: 1px solid rgba(225,215,255,.08); }
+.community-request-group h3 { margin: 0; color: #cfc3e2; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.community-request-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 8px; border: 1px solid rgba(211,194,255,.11); border-radius: 9px; background: rgba(255,255,255,.022); }
+.community-request-card strong, .community-request-card small { display: block; }
+.community-request-card strong { color: #e9e1f4; font-size: 9px; }
+.community-request-card small { margin-top: 2px; color: #938998; font-size: 8px; }
+.community-request-card > div:last-child { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 5px; }
+.compact-button { min-height: 28px; padding: 6px 8px; font-size: 8px; }
+.community-outgoing p { display: flex; align-items: center; gap: 6px; margin: 0; color: #d8cfdf; font-size: 9px; }
+.community-outgoing p small { color: #8d8395; font-size: 8px; }
+.community-online-thread { min-height: 270px; max-height: 390px; }
+.community-message { justify-self: start; max-width: min(78%, 640px); padding: 9px 11px; border: 1px solid rgba(211,194,255,.12); border-radius: 11px 11px 11px 3px; background: rgba(255,255,255,.034); }
+.community-message.own { justify-self: end; border-color: rgba(181,147,248,.28); border-radius: 11px 11px 3px 11px; background: rgba(121,79,213,.18); }
+.community-message > div { display: flex; align-items: baseline; gap: 7px; }
+.community-message strong { color: #efe9f9; font-size: 9px; }
+.community-message time { color: #958b9f; font-size: 8px; }
+.community-message p { margin: 4px 0 0; color: #d1c8dc; font-size: 10px; line-height: 1.48; white-space: pre-wrap; overflow-wrap: anywhere; }
+.community-online-composer textarea { min-height: 72px; }
+.community-report-form { display: grid; grid-template-columns: auto 160px minmax(160px, 1fr) auto; align-items: center; gap: 7px; padding: 10px 15px; border-top: 1px solid rgba(225,215,255,.08); background: rgba(13,10,19,.3); }
+.community-report-form strong { color: #bfb2d2; font-size: 9px; white-space: nowrap; }
+.community-report-form .text-button { padding: 0; border: 0; background: transparent; font-size: 9px; white-space: nowrap; }
+.community-chat-empty { display: grid; align-content: center; gap: 17px; min-height: 390px; padding: 24px; }
+.community-media-status { display: flex; align-items: flex-start; gap: 8px; max-width: 580px; padding: 11px; border: 1px solid rgba(211,194,255,.11); border-radius: 10px; color: #a99eaf; background: rgba(255,255,255,.025); font-size: 10px; line-height: 1.5; }
+.community-media-status i { flex: 0 0 6px; margin-top: 4px; background: #ad8aed; }
+.community-page > .community-safety { margin-top: 0; }
+@media (max-width: 900px) { .community-auth-layout { grid-template-columns: 1fr; }.community-identity-panel { min-height: 0; }.community-find-user { grid-template-columns: 1fr; }.community-report-form { grid-template-columns: 1fr 1fr; }.community-report-form strong { grid-column: 1 / -1; }.community-report-form .text-button { justify-self: start; } }
+@media (max-width: 600px) { .community-verification { grid-template-columns: auto minmax(0, 1fr); }.community-verification .primary-button { grid-column: 1 / -1; justify-content: center; }.community-account-strip { align-items: flex-start; flex-direction: column; }.community-find-user form { flex-direction: column; }.community-find-user .quiet-button { justify-content: center; }.community-lookup-result { grid-template-columns: auto minmax(0, 1fr); }.community-lookup-result .primary-button { grid-column: 1 / -1; justify-content: center; }.community-report-form { grid-template-columns: 1fr; }.community-online-thread { min-height: 220px; }.community-message { max-width: 92%; } }
+
+.community-chat-composers { border-top: 1px solid rgba(225,215,255,.08); }
+.community-chat-composers .community-composer { border-top: 0; }
+.community-place-invite-form { display: grid; grid-template-columns: auto minmax(150px, 1fr) auto; align-items: center; gap: 8px; padding: 9px 15px 12px; background: rgba(13,10,19,.22); }
+.community-place-invite-form label { color: #aa9eba; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; white-space: nowrap; }
+.community-place-invite-form input { min-width: 0; width: 100%; padding: 8px 9px; border: 1px solid rgba(211,194,255,.14); border-radius: 8px; outline: 0; color: #eee8f8; background: rgba(5,4,8,.25); font: inherit; font-size: 9px; }
+.community-place-invite-form input:focus { border-color: rgba(192,166,255,.62); box-shadow: 0 0 0 3px rgba(126,89,221,.12); }
+.community-place-invite-form .quiet-button { min-height: 31px; padding: 7px 9px; font-size: 8px; }
+.community-place-invite { display: flex; align-items: center; justify-content: space-between; gap: 10px; max-width: min(88%, 620px); padding: 9px 10px; border: 1px solid rgba(174,139,239,.23); border-radius: 11px; background: rgba(112,75,194,.12); }
+.community-place-invite.own { justify-self: end; border-color: rgba(180,147,248,.38); background: rgba(121,79,213,.2); }
+.community-place-invite > div { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.community-place-invite strong, .community-place-invite small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.community-place-invite strong { color: #ede6f8; font-size: 9px; }
+.community-place-invite small { margin-top: 3px; color: #a79cac; font-size: 8px; }
+.community-place-invite .community-system-mark { width: 23px; height: 23px; flex-basis: 23px; color: #e7dcff; font-size: 11px; }
+@media (max-width: 600px) { .community-place-invite-form { grid-template-columns: 1fr; }.community-place-invite-form .quiet-button { justify-content: center; }.community-place-invite { align-items: flex-start; flex-direction: column; max-width: 95%; }.community-place-invite .quiet-button { align-self: stretch; justify-content: center; } }

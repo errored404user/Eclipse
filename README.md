@@ -7,7 +7,7 @@ Eclipse is an early desktop launcher for official Roblox experiences.
 - **Home** shows locally recorded recent launches and saved Roblox experiences.
 - **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs. Selectable Roblox-provided collections expose more choices than a single trending feed, alongside search and result pagination.
 - **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games.
-- **Community** is an explicit local-only shell for bounded connection-request drafts, targeted direct-message drafts, session-only image/GIF previews, and official Roblox place-invite drafts. It does not transmit data, deliver chats, contact people, upload media, or create online accounts. A future service will use Eclipse-native accounts—not Roblox identities or credentials—and must include mutual-friend, block/report, upload-limit, and moderation-record controls before online messaging or media is enabled.
+- **Community** connects to a separately deployed Eclipse Community service when it is configured. It uses a unique Eclipse username plus email/password account, email verification, mutual friend requests, friend-only private text chat, and friend-only official Roblox place invites. It never asks for, links, stores, or uses Roblox credentials or Roblox identity. Blocking, reporting, rate limits, and moderation-ready audit records are included; media uploads are deliberately disabled until a separately hardened media pipeline exists.
 - **Tools** can validate a Roblox place ID and start the installed Roblox Player through the official `roblox://experiences/start?placeId=…` protocol. The Windows desktop app shows an Eclipse Player Handoff window while the protocol is requested, then dismisses it after the handoff completes.
 - **Fast Flags** has a dedicated sidebar destination for Windows-only Default, Performance, Balanced, and Quality rendering profiles; 1×, 2×, and 4× MSAA; mesh-detail and FRM-quality overrides; an Automatic, Direct3D 11, or Vulkan renderer preference; optional frame-rate targets; and a display-scaling option. Eclipse accepts only these bounded managed settings, merges only its managed keys into `ClientAppSettings.json`, and can remove only those keys again.
 - **Integrations** keeps an optional local history of launch requests Eclipse starts. It also stores Discord Rich Presence display preferences, while clearly showing that publishing Rich Presence still needs an Eclipse Discord application ID and a local Discord desktop connection.
@@ -27,7 +27,21 @@ npm start
 
 Open `http://localhost:4173`.
 
-The browser preview fetches live Roblox discovery data through its local Node server. Launching a game hands off to the Roblox protocol registered on your computer.
+The browser preview fetches live Roblox discovery data through its local Node server. Launching a game hands off to the Roblox protocol registered on your computer. Community remains unavailable until the production service variables below are configured; this is intentional and does not create a public account service.
+
+## Deploy Eclipse Community
+
+Community is a separate Eclipse-native service that runs from this same Node server with PostgreSQL and a transactional SMTP provider. It is **not deployed by this repository or preview**. A public release needs a real HTTPS hostname, database, mail provider, session secret, reverse proxy/hosting, operations monitoring, and moderation process.
+
+1. Copy `.env.example` to a private environment file or configure the variables in your host. Never commit the real values.
+2. Point `DATABASE_URL` at a PostgreSQL database. The service creates its tables and indexes at startup and removes expired sessions/verification links.
+3. Set `COMMUNITY_PUBLIC_URL` to the exact public HTTPS origin that serves Eclipse. It is used for email-verification links and same-origin protection.
+4. Configure SMTP and a sender address that your provider authorizes. Startup verifies the SMTP connection before it exposes Community as enabled.
+5. Put the app behind HTTPS. If a trusted reverse proxy supplies `X-Forwarded-For`, set `COMMUNITY_TRUST_PROXY=true` and make sure the proxy strips any client-provided version of that header.
+
+For a containerized server, build and run the supplied `Dockerfile` with secrets injected by the hosting platform. The app listens on `PORT` (default `4173`); TLS should terminate at the platform or reverse proxy. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the environment contract, security boundaries, backups, and launch checklist.
+
+The browser UI uses the Community API at the same public origin. The Electron app instead needs `ECLIPSE_COMMUNITY_API_URL=https://community.example` in its launch environment; the desktop bridge accepts HTTPS Community URLs only and keeps its opaque session token out of renderer storage.
 
 ## Run as a desktop application
 
@@ -50,7 +64,7 @@ npm run dist:win
 This creates a portable executable in `release/`, named similarly to:
 
 ```text
-Eclipse-0.1.0-preview.22-x64.exe
+Eclipse-0.1.0-preview.23-x64.exe
 ```
 
 To create a conventional Windows installer with Start menu and desktop shortcut options instead:

@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
+const { createCommunityApi } = require('./community-api.cjs');
 const { createPlayerLaunchWindow, sendLaunchState } = require('./launch-window.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
@@ -9,6 +10,7 @@ const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.pn
 let mainWindow;
 let activeLaunchWindow;
 let activeLaunchTimer;
+const communityApi = createCommunityApi(process.env);
 
 const officialRobloxUrls = {
   download: 'https://www.roblox.com/download'
@@ -118,6 +120,22 @@ app.whenReady().then(() => {
   ipcMain.handle('fastflags:status', () => fastFlags.getStatus());
   ipcMain.handle('fastflags:apply', (_event, options) => fastFlags.apply(options));
   ipcMain.handle('fastflags:reset', () => fastFlags.reset());
+
+  ipcMain.handle('community:status', () => communityApi.status());
+  ipcMain.handle('community:register', (_event, details) => communityApi.register(details));
+  ipcMain.handle('community:login', (_event, details) => communityApi.login(details));
+  ipcMain.handle('community:logout', () => communityApi.logout());
+  ipcMain.handle('community:me', () => communityApi.me());
+  ipcMain.handle('community:resend-verification', () => communityApi.resendVerification());
+  ipcMain.handle('community:friends', () => communityApi.friends());
+  ipcMain.handle('community:lookup', (_event, username) => communityApi.lookup(username));
+  ipcMain.handle('community:request-friend', (_event, username) => communityApi.requestFriend(username));
+  ipcMain.handle('community:respond-friend-request', (_event, id, action) => communityApi.respondFriendRequest(id, action));
+  ipcMain.handle('community:messages', (_event, friend) => communityApi.messages(friend));
+  ipcMain.handle('community:send-message', (_event, friend, body) => communityApi.sendMessage(friend, body));
+  ipcMain.handle('community:send-place-invite', (_event, friend, placeId) => communityApi.sendPlaceInvite(friend, placeId));
+  ipcMain.handle('community:block', (_event, username) => communityApi.block(username));
+  ipcMain.handle('community:report', (_event, details) => communityApi.report(details));
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
   ipcMain.handle('roblox:launch-place', async (_event, placeId) => {

@@ -1,13 +1,13 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0-preview.22",
+  "version": "0.1.0-preview.23",
   "private": true,
   "description": "Eclipse client home-shell visual prototype",
   "author": "Eclipse contributors",
   "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check electron/fast-flags.cjs && node --check electron/launch-window.cjs && node --check electron/launch-preload.cjs && node --check electron/launch.js && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
+    "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check community/service.cjs && node --check community/api.cjs && node --check electron/community-api.cjs && node --check electron/fast-flags.cjs && node --check electron/launch-window.cjs && node --check electron/launch-preload.cjs && node --check electron/launch.js && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
     "test": "node --test",
     "desktop:dev": "electron .",
     "dist:win": "electron-builder --win portable --x64",
@@ -40,5 +40,9 @@
   "devDependencies": {
     "electron": "45.3.4",
     "electron-builder": "26.18.0"
+  },
+  "dependencies": {
+    "nodemailer": "^10.6.0",
+    "pg": "^8.16.3"
   }
 }

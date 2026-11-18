@@ -7,7 +7,6 @@ const storageKeys = {
   recent: 'eclipse.roblox.recent.v1',
   settings: 'eclipse.settings.v1',
   integrations: 'eclipse.integrations.v1',
-  community: 'eclipse.community.v1',
   profile: 'eclipse.profile.v1'
 };
 
@@ -17,7 +16,7 @@ const state = {
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
   integrations: normalizeIntegrations(readStored(storageKeys.integrations, {})),
-  community: normalizeCommunity(readStored(storageKeys.community, {})),
+  community: createCommunityState(),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '' },
   fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
@@ -58,8 +57,43 @@ const browserFastFlags = {
 };
 
 const fastFlags = window.eclipseFastFlags || browserFastFlags;
+
+
+async function communityJson(path, options = {}) {
+  const response = await fetch(`/api/community${path}`, {
+    method: options.method || 'GET',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {})
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Eclipse Community request failed.');
+  return payload;
+}
+
+const browserCommunity = {
+  status: () => communityJson('/status'),
+  register: (details) => communityJson('/auth/register', { method: 'POST', body: details }),
+  login: (details) => communityJson('/auth/login', { method: 'POST', body: details }),
+  logout: () => communityJson('/auth/logout', { method: 'POST' }),
+  me: () => communityJson('/auth/me'),
+  resendVerification: () => communityJson('/auth/resend-verification', { method: 'POST' }),
+  friends: () => communityJson('/friends'),
+  lookup: (username) => communityJson(`/users/lookup?username=${encodeURIComponent(username)}`),
+  requestFriend: (username) => communityJson('/friend-requests', { method: 'POST', body: { username } }),
+  respondFriendRequest: (id, action) => communityJson(`/friend-requests/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' }),
+  messages: (friend) => communityJson(`/messages?friend=${encodeURIComponent(friend)}`),
+  sendMessage: (friend, body) => communityJson('/messages', { method: 'POST', body: { friend, body } }),
+  sendPlaceInvite: (friend, placeId) => communityJson('/place-invites', { method: 'POST', body: { friend, placeId } }),
+  block: (username) => communityJson('/blocks', { method: 'POST', body: { username } }),
+  report: (details) => communityJson('/reports', { method: 'POST', body: details })
+};
+
+const communityApi = window.eclipseCommunity || browserCommunity;
 let toastTimer;
-let communityAttachment = null;
 let pendingProfileAvatar = null;
 let profileImageRequest = 0;
 
@@ -103,63 +137,29 @@ function saveIntegrations() {
   writeStored(storageKeys.integrations, state.integrations);
 }
 
-function normalizeCommunityPlaceId(value) {
-  const text = String(value || '').trim();
-  if (!/^\d{1,15}$/.test(text)) return '';
-  const placeId = Number(text);
-  return Number.isSafeInteger(placeId) && placeId > 0 ? String(placeId) : '';
-}
-
 function normalizeCommunityHandle(value) {
   const handle = String(value || '').trim().replace(/^@+/, '').slice(0, 32);
   return /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/.test(handle) ? handle : '';
 }
 
-function normalizeCommunity(value) {
-  const connectionDrafts = Array.isArray(value?.connectionDrafts) ? value.connectionDrafts.flatMap((draft, index) => {
-    const handle = normalizeCommunityHandle(draft?.handle);
-    if (!handle) return [];
-    return [{
-      id: String(draft?.id || `connection-${index}`).slice(0, 80),
-      handle,
-      note: String(draft?.note || '').trim().slice(0, 280),
-      createdAt: String(draft?.createdAt || '')
-    }];
-  }).slice(0, 24) : [];
-  const messageDrafts = Array.isArray(value?.messageDrafts) ? value.messageDrafts.flatMap((draft, index) => {
-    const text = String(draft?.text || '').trim().slice(0, 1500);
-    const recipient = normalizeCommunityHandle(draft?.recipient);
-    const invitePlaceId = normalizeCommunityPlaceId(draft?.invitePlaceId);
-    const attachmentName = String(draft?.attachmentName || '').trim().slice(0, 160);
-    if (!text && !invitePlaceId && !attachmentName) return [];
-    return [{
-      id: String(draft?.id || `message-${index}`).slice(0, 80),
-      text,
-      recipient,
-      invitePlaceId,
-      attachmentName,
-      createdAt: String(draft?.createdAt || '')
-    }];
-  }).slice(0, 24) : [];
+function createCommunityState() {
   return {
-    connectionDrafts,
-    messageDrafts,
-    composerText: String(value?.composerText || '').slice(0, 1500),
-    composerRecipient: String(value?.composerRecipient || '').trim().replace(/^@+/, '').slice(0, 32),
-    invitePlaceId: normalizeCommunityPlaceId(value?.invitePlaceId)
+    status: null,
+    loading: false,
+    error: '',
+    user: null,
+    emailVerified: false,
+    authMode: 'login',
+    authBusy: false,
+    authError: '',
+    friends: { friends: [], incoming: [], outgoing: [] },
+    lookup: null,
+    lookupBusy: false,
+    selectedFriend: '',
+    messages: [],
+    placeInvites: [],
+    messagesBusy: false
   };
-}
-
-function saveCommunity() {
-  state.community = normalizeCommunity(state.community);
-  writeStored(storageKeys.community, state.community);
-}
-
-function createCommunityDraftId(prefix) {
-  const suffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `${prefix}-${suffix}`;
 }
 
 function profileInitials(profile = state.profile) {
@@ -306,57 +306,6 @@ function saveEclipseProfile(form) {
   closeProfileDialog();
   renderCurrentPage();
   showToast('Your local Eclipse profile was saved.');
-}
-
-function communityRequestDialog() {
-  return document.querySelector('[data-community-request-dialog]');
-}
-
-function closeCommunityRequestDialog() {
-  const dialog = communityRequestDialog();
-  if (!dialog) return;
-  if (typeof dialog.close === 'function' && dialog.open) dialog.close();
-  else dialog.removeAttribute('open');
-}
-
-function openCommunityRequestDialog() {
-  const dialog = communityRequestDialog();
-  if (!dialog) return;
-  const form = dialog.querySelector('[data-community-request-form]');
-  const error = dialog.querySelector('[data-community-request-error]');
-  form?.reset();
-  if (error) error.hidden = true;
-  if (typeof dialog.showModal === 'function') dialog.showModal();
-  else dialog.setAttribute('open', '');
-  window.setTimeout(() => dialog.querySelector('[name="handle"]')?.focus(), 0);
-}
-
-function saveCommunityConnectionDraft(form) {
-  const handle = normalizeCommunityHandle(new FormData(form).get('handle'));
-  const note = String(new FormData(form).get('note') || '').trim().slice(0, 280);
-  const error = form.querySelector('[data-community-request-error]');
-  if (!handle) {
-    if (error) {
-      error.textContent = 'Use a 3–32 character Eclipse handle with letters, numbers, dots, underscores, or dashes.';
-      error.hidden = false;
-    }
-    form.querySelector('[name="handle"]')?.setAttribute('aria-invalid', 'true');
-    form.querySelector('[name="handle"]')?.focus();
-    return;
-  }
-  form.querySelector('[name="handle"]')?.setAttribute('aria-invalid', 'false');
-  if (state.community.connectionDrafts.some((draft) => draft.handle.toLowerCase() === handle.toLowerCase())) {
-    if (error) {
-      error.textContent = 'A local request draft for that Eclipse handle already exists.';
-      error.hidden = false;
-    }
-    return;
-  }
-  state.community.connectionDrafts = [{ id: createCommunityDraftId('connection'), handle, note, createdAt: new Date().toISOString() }, ...state.community.connectionDrafts].slice(0, 24);
-  saveCommunity();
-  closeCommunityRequestDialog();
-  if (state.page === 'community') renderCommunity();
-  showToast('Connection request saved locally. It has not been sent.');
 }
 
 function escapeHtml(value = '') {
@@ -664,98 +613,286 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
   }
 }
 
-function communityDraftCard(draft) {
-  const details = [draft.recipient ? `To @${escapeHtml(draft.recipient)}` : '', draft.text ? escapeHtml(draft.text) : '', draft.invitePlaceId ? `Official Roblox place ${escapeHtml(draft.invitePlaceId)}` : '', draft.attachmentName ? `Attachment reference: ${escapeHtml(draft.attachmentName)}` : ''].filter(Boolean);
-  return `<article class="community-draft-card"><div><span class="community-draft-dot" aria-hidden="true"></span><strong>${draft.invitePlaceId && !draft.text ? 'Roblox invite draft' : 'Direct-message draft'}</strong><small>${escapeHtml(formatDate(draft.createdAt))} · Local only</small></div><p>${details.join(' · ')}</p><button class="community-remove" type="button" data-action="remove-community-draft" data-draft-id="${escapeHtml(draft.id)}" aria-label="Remove local draft">×</button></article>`;
+function communityCardInitials(username) {
+  return String(username || 'E').replace(/^@/, '').slice(0, 2).toUpperCase();
 }
 
-function renderCommunity() {
-  const { connectionDrafts, messageDrafts, composerText, composerRecipient, invitePlaceId } = state.community;
-  const attachment = communityAttachment;
-  const connectionList = connectionDrafts.length
-    ? connectionDrafts.map((draft) => `<article class="community-contact-draft"><span class="community-contact-avatar">${escapeHtml(draft.handle.slice(0, 2).toUpperCase())}</span><div><strong>@${escapeHtml(draft.handle)}</strong><small>Local connection draft · ${escapeHtml(formatDate(draft.createdAt))}</small>${draft.note ? `<p>${escapeHtml(draft.note)}</p>` : ''}</div><button class="community-remove" type="button" data-action="remove-community-connection" data-draft-id="${escapeHtml(draft.id)}" aria-label="Remove local connection request for ${escapeHtml(draft.handle)}">×</button></article>`).join('')
-    : '<div class="community-empty-contacts"><span aria-hidden="true">◌</span><strong>No connections yet</strong><p>Create a local request draft for an Eclipse handle. It will not send until Community services are online.</p></div>';
-  const draftList = messageDrafts.length
-    ? messageDrafts.slice(0, 5).map(communityDraftCard).join('')
-    : '<p class="community-draft-empty">No local message or invite drafts yet.</p>';
-  const attachmentPreview = attachment
-    ? `<div class="community-attachment-preview"><img src="${escapeHtml(attachment.url)}" alt="Selected local draft attachment ${escapeHtml(attachment.name)}" /><div><strong>${escapeHtml(attachment.name)}</strong><small>${escapeHtml(attachment.type === 'image/gif' ? 'GIF' : 'Image')} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB · current session only</small></div><button type="button" data-action="clear-community-attachment" aria-label="Remove ${escapeHtml(attachment.name)}">×</button></div>`
+function communityMessageMarkup(message) {
+  const own = message.senderId === state.community.user?.id;
+  return `<article class="community-message ${own ? 'own' : ''}"><div><strong>${escapeHtml(own ? 'You' : `@${message.senderUsername}`)}</strong><time>${escapeHtml(formatDate(message.createdAt))}</time></div><p>${escapeHtml(message.body)}</p></article>`;
+}
+
+function communityPlaceInviteMarkup(invite) {
+  const own = invite.senderId === state.community.user?.id;
+  return `<article class="community-place-invite ${own ? 'own' : ''}"><div><span class="community-system-mark" aria-hidden="true">↗</span><span><strong>${escapeHtml(own ? 'You shared an official Roblox place' : `@${invite.senderUsername} shared an official Roblox place`)}</strong><small>${escapeHtml(formatDate(invite.createdAt))} · Place ${escapeHtml(invite.placeId)}</small></span></div><button class="quiet-button compact-button" type="button" data-action="launch-game" data-place-id="${escapeHtml(invite.placeId)}">Play in Roblox</button></article>`;
+}
+
+function renderCommunityAuth() {
+  const community = state.community;
+  const registering = community.authMode === 'register';
+  return `<section class="community-auth-layout">
+    <article class="community-identity-panel panel">
+      <p class="section-kicker"><i></i> Eclipse Community account</p>
+      <h2>${registering ? 'Create a separate Eclipse identity.' : 'Sign in to Community.'}</h2>
+      <p>Your Community email and password belong only to Eclipse Community. Eclipse never asks for, sends, stores, or links Roblox credentials.</p>
+      <ul class="community-trust-list"><li><i></i> Unique Eclipse username</li><li><i></i> Email verification before friend requests and chat</li><li><i></i> Mutual acceptance before private messages</li></ul>
+    </article>
+    <form class="community-auth-form panel" data-community-auth-form novalidate>
+      <div class="community-auth-switch" role="tablist" aria-label="Community account action"><button type="button" class="${registering ? '' : 'active'}" data-action="community-auth-mode" data-community-auth-mode="login" aria-selected="${!registering}">Sign in</button><button type="button" class="${registering ? 'active' : ''}" data-action="community-auth-mode" data-community-auth-mode="register" aria-selected="${registering}">Create account</button></div>
+      <h2>${registering ? 'Start your Eclipse account' : 'Welcome back'}</h2>
+      ${registering ? '<label>Eclipse username<input name="username" maxlength="32" autocomplete="username" placeholder="orbit.eclipse" required /></label>' : ''}
+      <label>Email<input name="email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com" required /></label>
+      <label>Password<input name="password" type="password" minlength="12" maxlength="256" autocomplete="${registering ? 'new-password' : 'current-password'}" placeholder="At least 12 characters" required /></label>
+      ${community.authError ? `<p class="community-form-error" role="alert">${escapeHtml(community.authError)}</p>` : ''}
+      <button class="primary-button" type="submit" ${community.authBusy ? 'disabled' : ''}>${community.authBusy ? 'Please wait…' : registering ? 'Create Eclipse account' : 'Sign in securely'}</button>
+      <small>${registering ? 'We will send a verification link to this email. Your username is used for Community only.' : 'A secure Community session is created after your password is verified.'}</small>
+    </form>
+  </section>`;
+}
+
+function renderCommunityVerification() {
+  const { user } = state.community;
+  return `<section class="community-verification panel"><span class="community-verification-mark" aria-hidden="true">✦</span><div><p class="section-kicker">Email verification required</p><h2>Check the inbox for @${escapeHtml(user?.username)}.</h2><p>Verify this Eclipse account email before sending friend requests, accepting connections, or opening a private chat. This keeps Community separate from Roblox accounts and reduces abuse.</p></div><button class="primary-button" type="button" data-action="community-resend-verification">Resend verification email</button></section>`;
+}
+
+function renderCommunityFriend(friend, selected) {
+  return `<button class="community-online-contact ${selected ? 'active' : ''}" type="button" data-action="select-community-friend" data-community-friend="${escapeHtml(friend.username)}" aria-pressed="${selected}"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(friend.username))}</span><span><strong>@${escapeHtml(friend.username)}</strong><small>Mutual Eclipse friend</small></span></button>`;
+}
+
+function renderCommunityVerified() {
+  const community = state.community;
+  const friends = community.friends.friends || [];
+  const incoming = community.friends.incoming || [];
+  const outgoing = community.friends.outgoing || [];
+  const selected = friends.find((friend) => friend.username === community.selectedFriend) || null;
+  const searchResult = community.lookup?.user;
+  const contacts = friends.length
+    ? friends.map((friend) => renderCommunityFriend(friend, friend.username === selected?.username)).join('')
+    : '<div class="community-empty-contacts"><span aria-hidden="true">◌</span><strong>No mutual friends yet</strong><p>Find an Eclipse username and send a request. Chat opens only after they accept.</p></div>';
+  const incomingMarkup = incoming.length ? `<section class="community-request-group"><h3>Incoming requests</h3>${incoming.map((request) => `<article class="community-request-card"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(request.username))}</span><div><strong>@${escapeHtml(request.username)}</strong><small>Wants to connect on Eclipse</small></div><div><button type="button" class="quiet-button compact-button" data-action="community-respond-request" data-request-id="${escapeHtml(request.id)}" data-request-action="decline">Decline</button><button type="button" class="primary-button compact-button" data-action="community-respond-request" data-request-id="${escapeHtml(request.id)}" data-request-action="accept">Accept</button></div></article>`).join('')}</section>` : '';
+  const outgoingMarkup = outgoing.length ? `<section class="community-request-group community-outgoing"><h3>Sent requests</h3>${outgoing.map((request) => `<p><span class="community-draft-dot"></span>@${escapeHtml(request.username)} <small>Awaiting acceptance</small></p>`).join('')}</section>` : '';
+  const lookupMarkup = searchResult
+    ? `<div class="community-lookup-result"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(searchResult.username))}</span><div><strong>@${escapeHtml(searchResult.username)}</strong><small>Verified Eclipse account</small></div><button class="primary-button compact-button" type="button" data-action="community-send-friend-request" data-community-username="${escapeHtml(searchResult.username)}">Send request</button></div>`
     : '';
-  pageContent.innerHTML = `<div class="page-shell community-page">
-    ${pageHeader('Eclipse community', 'Community.', 'Prepare local connection, message, media, and Roblox-invite drafts while Eclipse Community services are offline. Nothing on this page reaches another person.', '<button class="primary-button" type="button" data-action="open-community-request"><span class="community-add-icon" aria-hidden="true"></span> New connection</button>')}
-    <section class="community-offline-notice panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Local shell</p><h2>Online Community is not connected yet.</h2><p>Eclipse accounts, mutual friendships, direct messages, image/GIF uploads, reporting, and official Roblox experience invites need the future Community backend. This local preview stores drafts only on this device. Eclipse accounts will be Eclipse-native identities, never Roblox sign-in or credentials.</p></div><span class="community-offline-status"><i></i> Offline-local</span></section>
-    <div class="community-layout">
-      <aside class="community-rail panel"><div class="community-rail-heading"><div><p class="section-kicker">Connections</p><h2>People</h2></div><button type="button" data-action="open-community-request" aria-label="Create local connection request">+</button></div><div class="community-contact-list">${connectionList}</div><div class="community-rail-footer"><i></i><span>Requests stay on this device</span></div></aside>
-      <section class="community-workbench panel"><header class="community-workbench-heading"><div><p class="section-kicker"><i></i> Direct messages</p><h2>Write a local direct-message draft.</h2><p>Messages cannot be delivered from this preview, but you can prepare a recipient, text, and session-only media attachment.</p></div><span>Draft mode</span></header><div class="community-thread"><div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Eclipse Community</strong><p>Choose an online identity and Community service when you are ready to send real friend requests, chats, media, reports, and Roblox experience invites.</p></div></div>${draftList}</div><form class="community-composer" data-community-message-form><label class="community-composer-recipient" for="community-message-recipient"><span>To Eclipse handle</span><input id="community-message-recipient" name="recipient" data-community-recipient maxlength="32" autocomplete="off" value="${escapeHtml(composerRecipient)}" placeholder="example.eclipse" required /></label><textarea name="message" data-community-composer maxlength="1500" placeholder="Write a local message draft…">${escapeHtml(composerText)}</textarea>${attachmentPreview}<div class="community-composer-actions"><label class="community-attach"><input type="file" data-community-attachment accept="image/png,image/jpeg,image/webp,image/gif" /><span class="community-attach-icon" aria-hidden="true"></span> Attach image or GIF</label><span>JPEG, PNG, WebP, or GIF · 4 MB max · session only</span><button class="primary-button" type="submit">Save local draft</button></div></form></section>
-    </div>
-    <section class="community-bottom-grid"><article class="community-invite-builder panel"><div><p class="section-kicker"><i></i> Roblox experience invite</p><h2>Prepare an official place invite.</h2><p>Use a trusted official Roblox place ID. Eclipse will save an invite draft locally; it does not create a server or contact a recipient.</p></div><form data-community-invite-form><label for="community-place-id">Roblox place ID</label><div><input id="community-place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" value="${escapeHtml(invitePlaceId)}" placeholder="Example: 1818" required /><button class="quiet-button" type="submit">Save invite draft</button></div></form></article><article class="community-safety panel"><p class="section-kicker"><i></i> Safety baseline</p><h2>Block and report ready.</h2><p>When Community is connected, mutual-friend controls, blocking, reporting, upload limits, and moderation records will be required before messages or media can reach anyone.</p><span><i></i> No account, message, image, GIF, or invite is currently transmitted</span></article></section>
+  const threadEvents = [
+    ...community.messages.map((message) => ({ ...message, type: 'message' })),
+    ...community.placeInvites.map((invite) => ({ ...invite, type: 'place-invite' }))
+  ].sort((first, second) => new Date(first.createdAt) - new Date(second.createdAt));
+  const thread = selected
+    ? `<section class="community-workbench panel"><header class="community-workbench-heading"><div><p class="section-kicker"><i></i> Private chat</p><h2>@${escapeHtml(selected.username)}</h2><p>Visible only to mutual Eclipse friends. Chat is text-only, with safe official Roblox place invites.</p></div><button class="quiet-button compact-button" type="button" data-action="community-block" data-community-username="${escapeHtml(selected.username)}">Block</button></header><div class="community-thread community-online-thread">${community.messagesBusy ? '<p class="community-draft-empty">Loading your private chat…</p>' : threadEvents.length ? threadEvents.map((event) => event.type === 'message' ? communityMessageMarkup(event) : communityPlaceInviteMarkup(event)).join('') : '<div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Your private chat is ready</strong><p>Only you and this accepted Eclipse friend can post here. Eclipse Community does not use Roblox identity or credentials.</p></div></div>'}</div><div class="community-chat-composers"><form class="community-composer community-online-composer" data-community-send-message-form><label class="sr-only" for="community-message">Message @${escapeHtml(selected.username)}</label><textarea id="community-message" name="message" maxlength="1500" placeholder="Message @${escapeHtml(selected.username)}" required></textarea><div class="community-composer-actions"><span>Text only · 1,500 characters maximum</span><button class="primary-button" type="submit">Send message</button></div></form><form class="community-place-invite-form" data-community-send-invite-form><label for="community-place-invite">Official Roblox place ID</label><input id="community-place-invite" name="placeId" inputmode="numeric" pattern="[0-9]+" maxlength="15" placeholder="Share a trusted place ID" required /><button class="quiet-button" type="submit">Share place</button></form></div><form class="community-report-form" data-community-report-form><strong>Safety tools</strong><input type="hidden" name="username" value="${escapeHtml(selected.username)}" /><select name="reason" aria-label="Report reason"><option value="">Report reason…</option><option value="harassment">Harassment or hate</option><option value="spam">Spam or scam</option><option value="safety">Safety concern</option><option value="other">Other</option></select><input name="details" maxlength="1000" placeholder="Optional details for moderators" /><button class="text-button" type="submit">Report @${escapeHtml(selected.username)}</button></form></section>`
+    : `<section class="community-workbench panel community-chat-empty"><div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Private chat waits for mutual friendship.</strong><p>Search an Eclipse username, send a request, and select the friend once they accept. Neither Roblox accounts nor Roblox credentials are involved.</p></div></div><div class="community-media-status"><i></i><span>Image, GIF, and file uploads are disabled until a moderated media delivery service is deployed. Mutual friends can still share official Roblox place IDs safely.</span></div></section>`;
+  return `<div class="community-online-page">
+    <section class="community-account-strip panel"><div><span class="community-contact-avatar">${escapeHtml(communityCardInitials(community.user?.username))}</span><span><small>Signed in as</small><strong>@${escapeHtml(community.user?.username)}</strong></span></div><span><i></i> Verified Eclipse account</span></section>
+    <section class="community-find-user panel"><div><p class="section-kicker"><i></i> Add by Eclipse username</p><h2>Find someone on Community.</h2><p>Look up a unique Eclipse username first. Requests require acceptance before private chat can begin.</p></div><form data-community-lookup-form><label class="sr-only" for="community-username-search">Eclipse username</label><input id="community-username-search" name="username" maxlength="32" autocomplete="off" placeholder="username.eclipse" required /><button class="quiet-button" type="submit" ${community.lookupBusy ? 'disabled' : ''}>${community.lookupBusy ? 'Searching…' : 'Search'}</button></form>${lookupMarkup}</section>
+    <div class="community-layout community-online-layout"><aside class="community-rail panel"><div class="community-rail-heading"><div><p class="section-kicker">Mutual friends</p><h2>People</h2></div><span>${friends.length}</span></div><div class="community-contact-list">${contacts}</div>${incomingMarkup}${outgoingMarkup}<div class="community-rail-footer"><i></i><span>Messages unlock after acceptance</span></div></aside>${thread}</div>
   </div>`;
 }
 
-function saveCommunityMessageDraft(form) {
-  const text = String(new FormData(form).get('message') || '').trim().slice(0, 1500);
-  const recipientInput = form.querySelector('[name="recipient"]');
-  const recipient = normalizeCommunityHandle(new FormData(form).get('recipient'));
-  if (!recipient) {
-    recipientInput?.setAttribute('aria-invalid', 'true');
-    recipientInput?.focus();
-    showToast('Enter a valid Eclipse handle for this local direct-message draft.');
-    return;
-  }
-  recipientInput?.setAttribute('aria-invalid', 'false');
-  if (!text && !communityAttachment) {
-    showToast('Write a message or attach an image/GIF before saving a local draft.');
-    return;
-  }
-  state.community.messageDrafts = [{
-    id: createCommunityDraftId('message'),
-    text,
-    recipient,
-    invitePlaceId: '',
-    attachmentName: communityAttachment?.name || '',
-    createdAt: new Date().toISOString()
-  }, ...state.community.messageDrafts].slice(0, 24);
-  state.community.composerText = '';
-  state.community.composerRecipient = '';
-  communityAttachment = null;
-  saveCommunity();
-  renderCommunity();
-  showToast('Message draft saved on this device. It was not sent.');
+function renderCommunity() {
+  const community = state.community;
+  if (!community.status && !community.loading) Promise.resolve().then(() => loadCommunity());
+  const status = community.status;
+  const content = !status
+    ? '<section class="community-loading panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Secure service</p><h2>Checking Eclipse Community…</h2><p>Account, friend-request, and chat availability are being checked.</p></div></section>'
+    : !status.enabled
+      ? `<section class="community-offline-notice panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Service unavailable</p><h2>Online Community has not been configured here.</h2><p>${escapeHtml(status.reason || 'The Eclipse Community service is unavailable.')} Community needs its own HTTPS service, PostgreSQL database, transactional email, and session secret. Your local Eclipse profile remains separate and no Roblox credential is ever requested.</p></div><span class="community-offline-status"><i></i> Offline</span></section>`
+      : !community.user
+        ? renderCommunityAuth()
+        : !community.emailVerified
+          ? renderCommunityVerification()
+          : renderCommunityVerified();
+  pageContent.innerHTML = `<div class="page-shell community-page">${pageHeader('Eclipse Community', 'Community.', 'Eclipse-native accounts, mutual friend requests, and private chat. Never a Roblox sign-in.', community.user ? '<button class="quiet-button" type="button" data-action="community-logout">Sign out</button>' : '')}${community.error ? `<p class="community-service-error" role="alert">${escapeHtml(community.error)}</p>` : ''}${content}<section class="community-safety panel"><p class="section-kicker"><i></i> Safety baseline</p><h2>Moderation-aware by design.</h2><p>Verified email, mutual friendship, blocking, reporting, rate limits, and moderation audit records protect this text-only release. Media uploads are explicitly disabled rather than accepted without safe processing.</p><span><i></i> Eclipse Community never handles Roblox credentials</span></section></div>`;
 }
 
-function saveCommunityInviteDraft(form) {
-  const placeId = normalizeCommunityPlaceId(new FormData(form).get('placeId'));
-  if (!placeId) {
-    showToast('Enter a valid official Roblox place ID to save an invite draft.');
-    return;
-  }
-  state.community.messageDrafts = [{
-    id: createCommunityDraftId('invite'),
-    text: '',
-    invitePlaceId: placeId,
-    attachmentName: '',
-    createdAt: new Date().toISOString()
-  }, ...state.community.messageDrafts].slice(0, 24);
-  state.community.invitePlaceId = '';
-  saveCommunity();
-  renderCommunity();
-  showToast('Roblox experience invite draft saved locally.');
-}
-
-function setCommunityAttachment(file) {
-  const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
-  if (!file || !allowedTypes.has(file.type) || file.size > 4 * 1024 * 1024) {
-    showToast('Choose a PNG, JPEG, WebP, or GIF no larger than 4 MB.');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    communityAttachment = { name: String(file.name || 'attachment').slice(0, 160), type: file.type, size: file.size, url: String(reader.result || '') };
+async function loadCommunity({ refresh = false } = {}) {
+  const community = state.community;
+  if (community.loading) return;
+  community.loading = true;
+  community.error = '';
+  try {
+    community.status = await communityApi.status();
+    if (!community.status.enabled) return;
+    try {
+      const account = await communityApi.me();
+      community.user = account.user;
+      community.emailVerified = Boolean(account.emailVerified);
+    } catch (error) {
+      community.user = null;
+      community.emailVerified = false;
+      if (!/Sign in|session has expired|AUTH_REQUIRED/i.test(error instanceof Error ? error.message : '')) throw error;
+      return;
+    }
+    if (community.emailVerified) await refreshCommunityData();
+  } catch (error) {
+    community.status = { enabled: false, reason: error instanceof Error ? error.message : 'Eclipse Community could not be reached.' };
+  } finally {
+    community.loading = false;
     if (state.page === 'community') renderCommunity();
-    showToast('Attachment added to this session’s local draft.');
+  }
+}
+
+async function refreshCommunityData() {
+  const community = state.community;
+  const relationships = await communityApi.friends();
+  community.friends = {
+    friends: Array.isArray(relationships.friends) ? relationships.friends : [],
+    incoming: Array.isArray(relationships.incoming) ? relationships.incoming : [],
+    outgoing: Array.isArray(relationships.outgoing) ? relationships.outgoing : []
   };
-  reader.onerror = () => showToast('The selected attachment could not be read.');
-  reader.readAsDataURL(file);
+  if (!community.friends.friends.some((friend) => friend.username === community.selectedFriend)) {
+    community.selectedFriend = '';
+    community.messages = [];
+    community.placeInvites = [];
+  }
+  if (community.selectedFriend) await loadCommunityMessages(community.selectedFriend, false);
+}
+
+async function loadCommunityMessages(username, updateView = true) {
+  const community = state.community;
+  if (!username) return;
+  community.messagesBusy = true;
+  if (updateView && state.page === 'community') renderCommunity();
+  try {
+    const result = await communityApi.messages(username);
+    community.messages = Array.isArray(result.messages) ? result.messages : [];
+    community.placeInvites = Array.isArray(result.placeInvites) ? result.placeInvites : [];
+  } catch (error) {
+    community.messages = [];
+    community.placeInvites = [];
+    showToast(error instanceof Error ? error.message : 'The private chat could not be loaded.');
+  } finally {
+    community.messagesBusy = false;
+    if (state.page === 'community') renderCommunity();
+  }
+}
+
+async function submitCommunityAuth(form) {
+  const community = state.community;
+  const values = new FormData(form);
+  const details = { email: String(values.get('email') || ''), password: String(values.get('password') || '') };
+  if (community.authMode === 'register') details.username = String(values.get('username') || '');
+  community.authBusy = true;
+  community.authError = '';
+  renderCommunity();
+  try {
+    if (community.authMode === 'register') {
+      const result = await communityApi.register(details);
+      community.authMode = 'login';
+      showToast(result.message || 'Check your email to verify your Eclipse account, then sign in.');
+    } else {
+      await communityApi.login(details);
+      await loadCommunity();
+      showToast('Signed in to Eclipse Community.');
+    }
+  } catch (error) {
+    community.authError = error instanceof Error ? error.message : 'Eclipse Community could not complete that request.';
+  } finally {
+    community.authBusy = false;
+    if (state.page === 'community') renderCommunity();
+  }
+}
+
+async function lookupCommunityUser(form) {
+  const community = state.community;
+  const username = normalizeCommunityHandle(new FormData(form).get('username'));
+  if (!username) return showToast('Enter a valid 3–32 character Eclipse username.');
+  community.lookupBusy = true;
+  community.lookup = null;
+  renderCommunity();
+  try {
+    community.lookup = await communityApi.lookup(username);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'That Eclipse username could not be found.');
+  } finally {
+    community.lookupBusy = false;
+    if (state.page === 'community') renderCommunity();
+  }
+}
+
+async function sendCommunityFriendRequest(username) {
+  try {
+    const result = await communityApi.requestFriend(username);
+    state.community.lookup = null;
+    await refreshCommunityData();
+    renderCommunity();
+    showToast(`Friend request sent to @${result.username}.`);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The friend request could not be sent.');
+  }
+}
+
+async function respondToCommunityRequest(requestId, action) {
+  try {
+    await communityApi.respondFriendRequest(requestId, action);
+    await refreshCommunityData();
+    renderCommunity();
+    showToast(action === 'accept' ? 'Eclipse friendship accepted. Private chat is now available.' : 'Friend request declined.');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'That friend request could not be updated.');
+  }
+}
+
+async function sendCommunityMessage(form) {
+  const message = String(new FormData(form).get('message') || '').trim();
+  const username = state.community.selectedFriend;
+  if (!message || !username) return;
+  try {
+    await communityApi.sendMessage(username, message);
+    await loadCommunityMessages(username, false);
+    renderCommunity();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The private message could not be sent.');
+  }
+}
+
+async function sendCommunityPlaceInvite(form) {
+  const placeId = String(new FormData(form).get('placeId') || '').trim();
+  const username = state.community.selectedFriend;
+  if (!/^\d{1,15}$/.test(placeId) || !username) {
+    showToast('Enter a valid official Roblox place ID.');
+    return;
+  }
+  try {
+    await communityApi.sendPlaceInvite(username, placeId);
+    await loadCommunityMessages(username, false);
+    renderCommunity();
+    showToast(`Official Roblox place invite sent to @${username}.`);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The official Roblox place invite could not be sent.');
+  }
+}
+
+async function blockCommunityUser(username) {
+  if (!username || !window.confirm(`Block @${username}? This ends the friendship and prevents further private messages.`)) return;
+  try {
+    await communityApi.block(username);
+    await refreshCommunityData();
+    renderCommunity();
+    showToast(`@${username} has been blocked.`);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The account could not be blocked.');
+  }
+}
+
+async function reportCommunityUser(form) {
+  const details = Object.fromEntries(new FormData(form));
+  if (!details.reason) return showToast('Choose a report reason first.');
+  try {
+    await communityApi.report(details);
+    form.reset();
+    showToast('Your report has been recorded for Eclipse moderation review.');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The report could not be sent.');
+  }
+}
+
+async function logoutCommunity() {
+  try { await communityApi.logout(); } catch { /* clear the client state even if the network has gone away */ }
+  const status = state.community.status;
+  state.community = createCommunityState();
+  state.community.status = status;
+  if (state.page === 'community') renderCommunity();
+  showToast('Signed out of Eclipse Community.');
 }
 
 function renderLibrary() {
@@ -1035,24 +1172,32 @@ document.addEventListener('click', async (event) => {
     if (imageInput) imageInput.value = '';
     updateProfileDialogAvatar();
   }
-  if (action === 'open-community-request') openCommunityRequestDialog();
-  if (action === 'close-community-request') closeCommunityRequestDialog();
-  if (action === 'clear-community-attachment') {
-    communityAttachment = null;
-    if (state.page === 'community') renderCommunity();
+  if (action === 'community-auth-mode') {
+    state.community.authMode = button.dataset.communityAuthMode === 'register' ? 'register' : 'login';
+    state.community.authError = '';
+    renderCommunity();
   }
-  if (action === 'remove-community-connection') {
-    state.community.connectionDrafts = state.community.connectionDrafts.filter((draft) => draft.id !== button.dataset.draftId);
-    saveCommunity();
-    if (state.page === 'community') renderCommunity();
-    showToast('Local connection request removed.');
+  if (action === 'community-logout') await logoutCommunity();
+  if (action === 'community-resend-verification') {
+    try {
+      await communityApi.resendVerification();
+      showToast('A new Eclipse account verification email was sent.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'The verification email could not be sent.');
+    }
   }
-  if (action === 'remove-community-draft') {
-    state.community.messageDrafts = state.community.messageDrafts.filter((draft) => draft.id !== button.dataset.draftId);
-    saveCommunity();
-    if (state.page === 'community') renderCommunity();
-    showToast('Local Community draft removed.');
+  if (action === 'community-send-friend-request') await sendCommunityFriendRequest(button.dataset.communityUsername);
+  if (action === 'community-respond-request') await respondToCommunityRequest(button.dataset.requestId, button.dataset.requestAction);
+  if (action === 'select-community-friend') {
+    const username = button.dataset.communityFriend;
+    if (state.community.friends.friends.some((friend) => friend.username === username)) {
+      state.community.selectedFriend = username;
+      state.community.messages = [];
+      state.community.placeInvites = [];
+      await loadCommunityMessages(username);
+    }
   }
+  if (action === 'community-block') await blockCommunityUser(button.dataset.communityUsername);
   if (action === 'launch-game') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'save-game') {
@@ -1095,19 +1240,29 @@ document.addEventListener('submit', async (event) => {
     saveEclipseProfile(event.target);
     return;
   }
-  if (event.target.matches('[data-community-request-form]')) {
+  if (event.target.matches('[data-community-auth-form]')) {
     event.preventDefault();
-    saveCommunityConnectionDraft(event.target);
+    await submitCommunityAuth(event.target);
     return;
   }
-  if (event.target.matches('[data-community-message-form]')) {
+  if (event.target.matches('[data-community-lookup-form]')) {
     event.preventDefault();
-    saveCommunityMessageDraft(event.target);
+    await lookupCommunityUser(event.target);
     return;
   }
-  if (event.target.matches('[data-community-invite-form]')) {
+  if (event.target.matches('[data-community-send-message-form]')) {
     event.preventDefault();
-    saveCommunityInviteDraft(event.target);
+    await sendCommunityMessage(event.target);
+    return;
+  }
+  if (event.target.matches('[data-community-send-invite-form]')) {
+    event.preventDefault();
+    await sendCommunityPlaceInvite(event.target);
+    return;
+  }
+  if (event.target.matches('[data-community-report-form]')) {
+    event.preventDefault();
+    await reportCommunityUser(event.target);
     return;
   }
   if (event.target.matches('[data-discovery-form]')) {
@@ -1148,36 +1303,12 @@ document.addEventListener('input', (event) => {
     if (error) error.hidden = true;
     return;
   }
-  const communityComposer = event.target.closest('[data-community-composer]');
-  if (communityComposer) {
-    state.community.composerText = String(communityComposer.value || '').slice(0, 1500);
-    saveCommunity();
-    return;
-  }
-  const communityRecipient = event.target.closest('[data-community-recipient]');
-  if (communityRecipient) {
-    state.community.composerRecipient = String(communityRecipient.value || '').trim().replace(/^@+/, '').slice(0, 32);
-    communityRecipient.setAttribute('aria-invalid', 'false');
-    saveCommunity();
-    return;
-  }
-  const communityHandle = event.target.closest('[name="handle"]');
-  if (communityHandle) {
-    communityHandle.setAttribute('aria-invalid', 'false');
-    const error = communityHandle.closest('[data-community-request-form]')?.querySelector('[data-community-request-error]');
-    if (error) error.hidden = true;
-  }
 });
 
 document.addEventListener('change', (event) => {
   const profileImageInput = event.target.closest('[data-profile-image-input]');
   if (profileImageInput) {
     setPendingProfileImage(profileImageInput.files?.[0]);
-    return;
-  }
-  const communityAttachmentInput = event.target.closest('[data-community-attachment]');
-  if (communityAttachmentInput) {
-    setCommunityAttachment(communityAttachmentInput.files?.[0]);
     return;
   }
   const fastFlagInput = event.target.closest('[data-fastflag-field]');
