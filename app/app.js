@@ -13,7 +13,8 @@ const state = {
   library: readStored(storageKeys.library, []),
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
-  discover: { games: [], query: '', cursor: '', loading: false, error: '' }
+  discover: { games: [], query: '', cursor: '', loading: false, error: '' },
+  fastFlags: { status: null, profile: 'balanced', fpsCap: 0, disableDpiScaling: false, busy: false, message: '' }
 };
 
 const browserRoblox = {
@@ -44,6 +45,14 @@ const browserRoblox = {
 };
 
 const roblox = window.eclipseRoblox || browserRoblox;
+
+const browserFastFlags = {
+  async getStatus() { return { supported: false, reason: 'Fast Flags can be applied from the Windows Eclipse desktop app.' }; },
+  async apply() { throw new Error('Fast Flags can be applied from the Windows Eclipse desktop app.'); },
+  async reset() { throw new Error('Fast Flags can be reset from the Windows Eclipse desktop app.'); }
+};
+
+const fastFlags = window.eclipseFastFlags || browserFastFlags;
 let toastTimer;
 
 function readStored(key, fallback) {
@@ -323,15 +332,108 @@ function renderLibrary() {
   </div>`;
 }
 
+const fastFlagProfiles = {
+  default: { label: 'Default', detail: 'Remove Eclipse-managed overrides.', flags: {} },
+  performance: { label: 'Performance', detail: 'Lower texture quality and 1× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '0', FIntDebugForceMSAASamples: '1' } },
+  balanced: { label: 'Balanced', detail: 'Moderate texture quality and 2× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '2', FIntDebugForceMSAASamples: '2' } },
+  quality: { label: 'Quality', detail: 'Higher texture quality and 4× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '3', FIntDebugForceMSAASamples: '4' } }
+};
+
+function fastFlagPreview() {
+  const selection = state.fastFlags;
+  const flags = { ...fastFlagProfiles[selection.profile].flags };
+  if ([60, 120, 144, 165, 240].includes(Number(selection.fpsCap))) flags.DFIntTaskSchedulerTargetFps = String(selection.fpsCap);
+  if (selection.disableDpiScaling) flags.DFFlagDisableDPIScale = 'True';
+  return flags;
+}
+
+function fastFlagsPanel() {
+  const { status, profile, fpsCap, disableDpiScaling, busy, message } = state.fastFlags;
+  const supported = status?.supported === true;
+  const flags = fastFlagPreview();
+  const profileButtons = Object.entries(fastFlagProfiles).map(([key, item]) => `<button class="ff-profile ${profile === key ? 'selected' : ''}" type="button" data-action="fastflag-profile" data-fastflag-profile="${key}" ${busy || !supported ? 'disabled' : ''}><strong>${item.label}</strong><span>${item.detail}</span></button>`).join('');
+  const flagsJson = Object.keys(flags).length ? JSON.stringify(flags, null, 2) : '{}';
+  const statusText = status
+    ? supported
+      ? `${Object.keys(status.managedFlags || {}).length ? 'Existing Eclipse-managed flags found.' : 'No Eclipse-managed flags are currently applied.'}`
+      : status.reason
+    : 'Checking Fast Flag support…';
+  const pathText = supported ? `Target: ${status.settingsPath}` : 'Eclipse writes only to the active Roblox Player ClientSettings file.';
+
+  return `<section class="fastflags-panel panel">
+    <div class="ff-heading"><div><p class="section-kicker"><i></i> Fast Flags</p><h2>Rendering profiles</h2><p>Choose a managed preset for the installed Roblox Player. Roblox decides which local flags it accepts.</p></div><span class="ff-status ${supported ? 'available' : ''}"><i></i>${supported ? 'Windows player detected' : 'Desktop app required'}</span></div>
+    <div class="ff-profile-grid">${profileButtons}</div>
+    <form class="ff-controls" data-fastflags-form>
+      <label><span>Frame-rate target</span><select data-fastflag-field="fpsCap" ${busy || !supported ? 'disabled' : ''}><option value="0" ${Number(fpsCap) === 0 ? 'selected' : ''}>Roblox default</option><option value="60" ${Number(fpsCap) === 60 ? 'selected' : ''}>60 FPS</option><option value="120" ${Number(fpsCap) === 120 ? 'selected' : ''}>120 FPS</option><option value="144" ${Number(fpsCap) === 144 ? 'selected' : ''}>144 FPS</option><option value="165" ${Number(fpsCap) === 165 ? 'selected' : ''}>165 FPS</option><option value="240" ${Number(fpsCap) === 240 ? 'selected' : ''}>240 FPS</option></select></label>
+      <label class="ff-toggle"><input type="checkbox" data-fastflag-field="disableDpiScaling" ${disableDpiScaling ? 'checked' : ''} ${busy || !supported ? 'disabled' : ''}/><span></span><b>Disable display scaling</b><small>May improve sharpness on high-DPI displays.</small></label>
+      <div class="ff-actions"><button class="primary-button" type="submit" ${busy || !supported ? 'disabled' : ''}>${busy ? 'Applying…' : 'Apply Fast Flags'}</button><button class="quiet-button" type="button" data-action="fastflag-reset" ${busy || !supported ? 'disabled' : ''}>Reset managed flags</button></div>
+    </form>
+    <div class="ff-preview"><div><p class="section-kicker">Eclipse-managed preview</p><p>${escapeHtml(statusText)}</p><small>${escapeHtml(pathText)}</small></div><pre>${escapeHtml(flagsJson)}</pre></div>
+    ${message ? `<p class="ff-message">${escapeHtml(message)}</p>` : ''}
+    <p class="ff-safety">Eclipse never writes arbitrary Fast Flags. Applying preserves settings it does not manage; close Roblox Player before applying changes, then relaunch it.</p>
+  </section>`;
+}
+
+function updateFastFlagsPanel() {
+  const panel = pageContent.querySelector('[data-fastflags-panel]');
+  if (panel) panel.innerHTML = fastFlagsPanel();
+}
+
+async function refreshFastFlagsStatus() {
+  try {
+    state.fastFlags.status = await fastFlags.getStatus();
+    state.fastFlags.message = '';
+  } catch (error) {
+    state.fastFlags.status = { supported: false, reason: error instanceof Error ? error.message : 'Fast Flag support could not be checked.' };
+  }
+  updateFastFlagsPanel();
+}
+
+async function applyFastFlags() {
+  state.fastFlags.busy = true;
+  updateFastFlagsPanel();
+  try {
+    const result = await fastFlags.apply({ profile: state.fastFlags.profile, fpsCap: state.fastFlags.fpsCap, disableDpiScaling: state.fastFlags.disableDpiScaling });
+    state.fastFlags.status = result;
+    state.fastFlags.message = 'Fast Flags were written. Restart Roblox Player to use them.';
+    showToast('Fast Flags applied to Roblox Player.');
+  } catch (error) {
+    state.fastFlags.message = error instanceof Error ? error.message : 'Fast Flags could not be applied.';
+    showToast(state.fastFlags.message);
+  } finally {
+    state.fastFlags.busy = false;
+    updateFastFlagsPanel();
+  }
+}
+
+async function resetFastFlags() {
+  state.fastFlags.busy = true;
+  updateFastFlagsPanel();
+  try {
+    const result = await fastFlags.reset();
+    state.fastFlags.status = result;
+    state.fastFlags.message = 'Eclipse-managed Fast Flags were removed.';
+    showToast('Eclipse-managed Fast Flags were reset.');
+  } catch (error) {
+    state.fastFlags.message = error instanceof Error ? error.message : 'Fast Flags could not be reset.';
+    showToast(state.fastFlags.message);
+  } finally {
+    state.fastFlags.busy = false;
+    updateFastFlagsPanel();
+  }
+}
+
 function renderTools() {
   pageContent.innerHTML = `<div class="page-shell tools-page">
     ${pageHeader('Player tools', 'Launch Roblox Player.', 'Eclipse asks the installed Roblox Player to open an official experience. Roblox manages the account session and gameplay.', '')}
     <div class="tools-grid">
       <article class="tool-panel panel"><p class="section-kicker"><i></i> Direct launch</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse validates it, then opens Roblox Player using the official Roblox protocol.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored.</p></article>
       <article class="tool-panel panel"><p class="section-kicker">Account</p><h2>Use an existing Roblox account</h2><p>Eclipse does not create Roblox accounts. Sign in through Roblox’s official website, then the installed Roblox Player uses that account when it launches.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-account-action="login">Sign in at Roblox</button><button class="text-button" type="button" data-account-action="download">Get Roblox Player <span>→</span></button></div></article>
+      <div class="tool-wide" data-fastflags-panel>${fastFlagsPanel()}</div>
       <article class="tool-panel panel tool-wide"><p class="section-kicker">How it works</p><ol class="protocol-list"><li><span>1</span><p>Sign in to your Roblox account through Roblox’s official site or installed Player.</p></li><li><span>2</span><p>Choose a live game from Discover or paste a trusted place ID.</p></li><li><span>3</span><p>Eclipse opens <code>roblox://experiences/start?placeId=…</code> and Roblox Player handles the launch.</p></li></ol></article>
     </div>
   </div>`;
+  refreshFastFlagsStatus();
 }
 
 function renderSettings() {
@@ -471,6 +573,11 @@ document.addEventListener('click', async (event) => {
   if (action === 'refresh-discover') await loadDiscover({ resetToPopular: !state.discover.query });
   if (action === 'load-more') await loadDiscover({ append: true });
   if (action === 'open-status') showToast('Eclipse uses official Roblox discovery data and Player deep links.');
+  if (action === 'fastflag-profile') {
+    state.fastFlags.profile = button.dataset.fastflagProfile;
+    updateFastFlagsPanel();
+  }
+  if (action === 'fastflag-reset') await resetFastFlags();
 });
 
 document.addEventListener('submit', async (event) => {
@@ -489,9 +596,19 @@ document.addEventListener('submit', async (event) => {
     const placeId = String(new FormData(event.target).get('placeId') || '');
     await launchGame(placeId);
   }
+  if (event.target.matches('[data-fastflags-form]')) {
+    event.preventDefault();
+    await applyFastFlags();
+  }
 });
 
 document.addEventListener('change', (event) => {
+  const fastFlagInput = event.target.closest('[data-fastflag-field]');
+  if (fastFlagInput) {
+    state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : Number(fastFlagInput.value);
+    updateFastFlagsPanel();
+    return;
+  }
   const input = event.target.closest('[data-setting]');
   if (!input) return;
   state.settings[input.dataset.setting] = input.checked;

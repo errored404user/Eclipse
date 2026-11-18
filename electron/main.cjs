@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
+const fastFlags = require('./fast-flags.cjs');
 
 let mainWindow;
 
@@ -57,6 +58,10 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('window:close', () => mainWindow?.close());
   ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false);
+
+  ipcMain.handle('fastflags:status', () => fastFlags.getStatus());
+  ipcMain.handle('fastflags:apply', (_event, options) => fastFlags.apply(options));
+  ipcMain.handle('fastflags:reset', () => fastFlags.reset());
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
   ipcMain.handle('roblox:launch-place', async (_event, placeId) => {

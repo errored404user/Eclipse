@@ -21,3 +21,9 @@ contextBridge.exposeInMainWorld('eclipseRoblox', {
   launchPlace: (placeId) => ipcRenderer.invoke('roblox:launch-place', placeId),
   openOfficial: (action, placeId) => ipcRenderer.invoke('roblox:open-official', action, placeId)
 });
+
+contextBridge.exposeInMainWorld('eclipseFastFlags', {
+  getStatus: () => ipcRenderer.invoke('fastflags:status'),
+  apply: (options = {}) => ipcRenderer.invoke('fastflags:apply', options),
+  reset: () => ipcRenderer.invoke('fastflags:reset')
+});

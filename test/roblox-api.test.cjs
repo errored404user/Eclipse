@@ -81,3 +81,20 @@ test('accepts only safe numeric Roblox place IDs', () => {
     assert.equal(normalizePlaceId(value), null);
   }
 });
+
+test('builds and resets only the safe managed Fast Flag keys', () => {
+  const { buildManagedFlags, mergeManagedFlags } = require('../electron/fast-flags.cjs');
+  const flags = buildManagedFlags({ profile: 'balanced', fpsCap: 144, disableDpiScaling: true });
+  assert.deepEqual(flags, {
+    DFFlagTextureQualityOverrideEnabled: 'True',
+    DFIntTextureQualityOverride: '2',
+    FIntDebugForceMSAASamples: '2',
+    DFIntTaskSchedulerTargetFps: '144',
+    DFFlagDisableDPIScale: 'True'
+  });
+  const merged = mergeManagedFlags({ FFlagUnrelatedSetting: 'Keep', DFIntTextureQualityOverride: '99' }, flags);
+  assert.equal(merged.FFlagUnrelatedSetting, 'Keep');
+  assert.equal(merged.DFIntTextureQualityOverride, '2');
+  const reset = mergeManagedFlags(merged, {});
+  assert.deepEqual(reset, { FFlagUnrelatedSetting: 'Keep' });
+});
