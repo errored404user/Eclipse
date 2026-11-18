@@ -10,7 +10,7 @@ Eclipse is an early desktop launcher for official Roblox experiences.
 - **Community** connects to a separately deployed Eclipse Community service when it is configured. It uses a unique Eclipse username plus email/password account, email verification, mutual friend requests, friend-only private text chat, and friend-only official Roblox place invites. It never asks for, links, stores, or uses Roblox credentials or Roblox identity. Blocking, reporting, rate limits, and moderation-ready audit records are included; media uploads are deliberately disabled until a separately hardened media pipeline exists.
 - **Tools** can validate a Roblox place ID and start the installed Roblox Player through the official `roblox://experiences/start?placeId=…` protocol. The Windows desktop app shows an Eclipse Player Handoff window while the protocol is requested, then dismisses it after the handoff completes.
 - **Fast Flags** has a dedicated sidebar destination for Windows-only Default, Performance, Balanced, and Quality rendering profiles; 1×, 2×, and 4× MSAA; mesh-detail and FRM-quality overrides; an Automatic, Direct3D 11, or Vulkan renderer preference; optional frame-rate targets; and a display-scaling option. Eclipse accepts only these bounded managed settings, merges only its managed keys into `ClientAppSettings.json`, and can remove only those keys again.
-- **Integrations** keeps an optional local history of launch requests Eclipse starts. It also stores Discord Rich Presence display preferences, while clearly showing that publishing Rich Presence still needs an Eclipse Discord application ID and a local Discord desktop connection.
+- **Integrations** keeps an optional local history of launch requests Eclipse starts. On the desktop app, Discord Rich Presence uses Discord’s local IPC connection to show **Open Eclipse** while Eclipse is running. It requires a public Discord Application ID, never asks for Discord credentials, and does not pretend to know Roblox server/gameplay state.
 - **Eclipse profile** is a single-click local editor in the sidebar for an optional display name and profile image. JPEG, PNG, and WebP images are center-cropped to a bounded local avatar; no image is uploaded. The profile creates no online account, never requests Roblox credentials, and is not connected to a Roblox account.
 - **Settings** persist only Eclipse interface preferences locally, including a Reduce interface motion option that also suppresses Eclipse animations.
 
@@ -52,6 +52,16 @@ npm install
 npm run desktop:dev
 ```
 
+### Enable Discord Rich Presence
+
+Discord Rich Presence is functional in the desktop app through Discord Desktop’s local IPC socket. Create/configure an application named **Eclipse** in the Discord Developer Portal, then use its public **Application ID** either in **Integrations** or as a launch environment value:
+
+```bash
+ECLIPSE_DISCORD_CLIENT_ID=123456789012345678 npm run desktop:dev
+```
+
+Enable **Show Open Eclipse in Discord** in Integrations while Discord Desktop is running. The presence reads **Open Eclipse** / **Roblox launcher** and clears when Eclipse exits. An Application ID is public—not a client secret; never place a Discord client secret, bot token, or user token in Eclipse.
+
 ## Build a Windows EXE
 
 Build on a 64-bit Windows machine with Node.js 22 or newer installed:
@@ -64,7 +74,7 @@ npm run dist:win
 This creates a portable executable in `release/`, named similarly to:
 
 ```text
-Eclipse-0.1.0-preview.23-x64.exe
+Eclipse-0.1.0-preview.24-x64.exe
 ```
 
 To create a conventional Windows installer with Start menu and desktop shortcut options instead:

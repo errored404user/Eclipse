@@ -280,23 +280,31 @@ test('routes the complete managed Fast Flags panel through its dedicated sidebar
   assert.match(fastFlagsSlice, /refreshFastFlagsStatus\(\)/);
 });
 
-test('adds local activity tracking and transparent Discord Rich Presence preferences to Integrations', () => {
+test('connects Discord Rich Presence through the desktop bridge and shows Open Eclipse', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
   const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
   const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  const discord = fs.readFileSync(path.join(root, 'electron', 'discord-presence.cjs'), 'utf8');
+  const preload = fs.readFileSync(path.join(root, 'electron', 'preload.cjs'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'electron', 'main.cjs'), 'utf8');
   assert.match(shell, /data-page="integrations"/);
   assert.match(shell, /icon-integrations/);
   assert.match(renderer, /integrations: 'eclipse\.integrations\.v1'/);
   assert.match(renderer, /function normalizeIntegrations\(value\)/);
-  assert.match(renderer, /function renderIntegrations\(\)/);
+  assert.match(renderer, /discordClientId/);
+  assert.match(renderer, /function syncDiscordPresence/);
   assert.match(renderer, /data-integration="activityTracking"/);
   assert.match(renderer, /data-integration="discordRichPresence"/);
-  assert.match(renderer, /if \(!state\.integrations\.activityTracking\) return;/);
-  assert.match(renderer, /Discord bridge not connected\./);
-  assert.match(styles, /\.integration-section/);
+  assert.match(renderer, /data-discord-client-id/);
+  assert.match(renderer, /Show Open Eclipse in Discord/);
+  assert.match(preload, /contextBridge\.exposeInMainWorld\('eclipseDiscord'/);
+  assert.match(main, /ipcMain\.handle\('discord:configure'/);
+  assert.match(discord, /details: 'Open Eclipse'/);
+  assert.match(discord, /cmd: 'SET_ACTIVITY'/);
+  assert.match(styles, /\.integration-client-id/);
 });
 
 test('keeps Fast Flags visible and lets the single profile card open a local editor with a bounded image upload', () => {

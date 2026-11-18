@@ -28,6 +28,20 @@ contextBridge.exposeInMainWorld('eclipseFastFlags', {
   reset: () => ipcRenderer.invoke('fastflags:reset')
 });
 
+contextBridge.exposeInMainWorld('eclipseDiscord', {
+  status: () => ipcRenderer.invoke('discord:status'),
+  configure: (options = {}) => ipcRenderer.invoke('discord:configure', {
+    applicationId: typeof options.applicationId === 'string' ? options.applicationId : '',
+    enabled: options.enabled === true
+  }),
+  onStatus: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on('discord:status', listener);
+    return () => ipcRenderer.removeListener('discord:status', listener);
+  }
+});
+
 contextBridge.exposeInMainWorld('eclipseCommunity', {
   status: () => ipcRenderer.invoke('community:status'),
   register: (details = {}) => ipcRenderer.invoke('community:register', details),

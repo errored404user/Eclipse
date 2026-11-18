@@ -59,6 +59,31 @@ const browserFastFlags = {
 const fastFlags = window.eclipseFastFlags || browserFastFlags;
 
 
+const browserDiscord = {
+  async status() {
+    return {
+      supported: false,
+      configured: false,
+      enabled: false,
+      connected: false,
+      connecting: false,
+      reason: 'Discord Rich Presence is available from the Eclipse desktop app.'
+    };
+  },
+  async configure() { return this.status(); },
+  onStatus() { return () => {}; }
+};
+
+const discord = window.eclipseDiscord || browserDiscord;
+let discordStatus = null;
+if (window.eclipseDiscord) {
+  window.eclipseDiscord.onStatus((status) => {
+    discordStatus = status;
+    if (state.page === 'integrations') renderIntegrations();
+  });
+}
+
+
 async function communityJson(path, options = {}) {
   const response = await fetch(`/api/community${path}`, {
     method: options.method || 'GET',
@@ -123,18 +148,59 @@ function normalizeProfile(value) {
 }
 
 function normalizeIntegrations(value) {
-  const discordDisplay = ['experience', 'roblox'].includes(value?.discordDisplay) ? value.discordDisplay : 'experience';
   const activityTracking = value?.activityTracking !== false;
+  const discordClientId = String(value?.discordClientId || '').trim();
   return {
     activityTracking,
-    discordRichPresence: activityTracking && value?.discordRichPresence === true,
-    discordDisplay
+    discordRichPresence: value?.discordRichPresence === true,
+    discordClientId: /^\d{17,20}$/.test(discordClientId) ? discordClientId : ''
   };
 }
 
 function saveIntegrations() {
   state.integrations = normalizeIntegrations(state.integrations);
   writeStored(storageKeys.integrations, state.integrations);
+}
+
+function discordPresenceOptions() {
+  return {
+    applicationId: state.integrations.discordClientId,
+    enabled: state.integrations.discordRichPresence === true
+  };
+}
+
+async function syncDiscordPresence({ render = false } = {}) {
+  try {
+    discordStatus = await discord.configure(discordPresenceOptions());
+  } catch (error) {
+    discordStatus = {
+      supported: true,
+      configured: Boolean(state.integrations.discordClientId),
+      enabled: false,
+      connected: false,
+      connecting: false,
+      reason: error instanceof Error ? error.message : 'Discord Rich Presence could not be configured.'
+    };
+  }
+  if (render && state.page === 'integrations') renderIntegrations();
+  return discordStatus;
+}
+
+async function refreshDiscordStatus() {
+  try {
+    discordStatus = await discord.status();
+  } catch (error) {
+    discordStatus = {
+      supported: true,
+      configured: false,
+      enabled: false,
+      connected: false,
+      connecting: false,
+      reason: error instanceof Error ? error.message : 'Discord Rich Presence status is unavailable.'
+    };
+  }
+  if (state.page === 'integrations') renderIntegrations();
+  return discordStatus;
 }
 
 function normalizeCommunityHandle(value) {
@@ -1035,10 +1101,27 @@ function renderFastFlags() {
 }
 
 function renderIntegrations() {
-  const { activityTracking, discordRichPresence, discordDisplay } = state.integrations;
-  const discordUnavailable = !activityTracking;
+  const { activityTracking, discordRichPresence, discordClientId } = state.integrations;
+  const status = discordStatus || {
+    supported: Boolean(window.eclipseDiscord),
+    configured: Boolean(discordClientId),
+    enabled: discordRichPresence,
+    connected: false,
+    connecting: Boolean(window.eclipseDiscord),
+    reason: window.eclipseDiscord ? 'Checking Discord Desktop…' : 'Discord Rich Presence is available from the Eclipse desktop app.'
+  };
+  const statusClass = status.connected ? 'ready' : status.enabled || status.connecting ? 'configured' : '';
+  const statusLabel = status.connected
+    ? 'Connected to Discord'
+    : status.connecting
+      ? 'Connecting to Discord'
+      : status.enabled
+        ? 'Waiting for Discord'
+        : status.supported
+          ? 'Rich Presence off'
+          : 'Desktop app required';
   pageContent.innerHTML = `<div class="page-shell integrations-page">
-    ${pageHeader('Connections', 'Integrations.', 'Control the local activity Eclipse keeps for launches it starts, and prepare how that activity is presented to Discord.', '')}
+    ${pageHeader('Connections', 'Integrations.', 'Control the local activity Eclipse keeps and the optional desktop integrations it publishes.', '')}
     <section class="integration-section">
       <div class="integration-heading"><div><p class="section-kicker"><i></i> Activity tracking</p><h2>Keep your Eclipse launch history local.</h2><p>Eclipse records only Roblox launch requests it successfully starts. It cannot inspect Roblox sessions opened outside Eclipse or read your Roblox account.</p></div><span class="integration-status ${activityTracking ? 'ready' : ''}"><i></i>${activityTracking ? 'Local tracking on' : 'Local tracking off'}</span></div>
       <div class="settings-list panel integration-list">
@@ -1046,12 +1129,12 @@ function renderIntegrations() {
       </div>
     </section>
     <section class="integration-section">
-      <div class="integration-heading"><div><p class="section-kicker"><i></i> Discord Rich Presence</p><h2>Choose the presence Eclipse can prepare.</h2><p>Discord Rich Presence depends on local activity tracking plus a running Discord desktop app. Eclipse never uses Discord or Roblox credentials.</p></div><span class="integration-status ${discordRichPresence ? 'configured' : ''}"><i></i>${discordRichPresence ? 'Preference enabled' : 'Setup required'}</span></div>
+      <div class="integration-heading"><div><p class="section-kicker"><i></i> Discord Rich Presence</p><h2>Show that Eclipse is open.</h2><p>When enabled, the Discord Desktop app displays <strong>Open Eclipse</strong> with the Eclipse application. It never claims that Roblox joined a game or reads Discord or Roblox credentials.</p></div><span class="integration-status ${statusClass}"><i></i>${escapeHtml(statusLabel)}</span></div>
       <div class="settings-list panel integration-list">
-        <div class="setting-row"><div><h2>Show Eclipse launch activity</h2><p>Save the Rich Presence preference for Roblox launches started by Eclipse. This does not claim to know whether Roblox joined a server.</p></div><label class="toggle ${discordUnavailable ? 'is-disabled' : ''}"><input type="checkbox" data-integration="discordRichPresence" ${discordRichPresence ? 'checked' : ''} ${discordUnavailable ? 'disabled' : ''}/><span></span></label></div>
-        <div class="setting-row integration-select-row"><div><h2>Discord status display</h2><p>Select the label Eclipse will use for a future Discord desktop update.</p></div><label class="integration-select"><span class="sr-only">Discord status display</span><select data-integration="discordDisplay" ${discordUnavailable ? 'disabled' : ''}><option value="experience" ${discordDisplay === 'experience' ? 'selected' : ''}>Experience name · Playing Roblox</option><option value="roblox" ${discordDisplay === 'roblox' ? 'selected' : ''}>Eclipse · Playing Roblox</option></select></label></div>
+        <div class="setting-row integration-client-id-row"><div><h2>Discord Application ID</h2><p>Use the public ID from an Eclipse Discord Developer Portal application. It is not a secret and is stored only in this local Eclipse workspace.</p></div><label class="integration-select integration-client-id"><span class="sr-only">Discord Application ID</span><input data-discord-client-id inputmode="numeric" pattern="[0-9]{17,20}" maxlength="20" value="${escapeHtml(discordClientId)}" placeholder="17–20 digit application ID" autocomplete="off" /></label></div>
+        <div class="setting-row"><div><h2>Show Open Eclipse in Discord</h2><p>Publish a minimal Rich Presence while Eclipse is running. Eclipse clears it when the desktop app exits.</p></div><label class="toggle ${!status.supported ? 'is-disabled' : ''}"><input type="checkbox" data-integration="discordRichPresence" ${discordRichPresence ? 'checked' : ''} ${!status.supported ? 'disabled' : ''}/><span></span></label></div>
       </div>
-      <p class="integration-note"><i></i><span><strong>Discord bridge not connected.</strong> These preferences are stored locally. Publishing Rich Presence needs an Eclipse Discord application ID and a Discord desktop IPC connection; Eclipse does not collect Discord credentials.</span></p>
+      <div class="integration-note"><i></i><span><strong>${escapeHtml(status.reason || 'Discord Rich Presence is ready to configure.')}</strong> ${status.supported ? 'Start Discord Desktop, save a valid Application ID, then enable the switch. Eclipse sends only the Open Eclipse activity through Discord’s local IPC connection.' : 'The browser preview never attempts a Discord connection.'}</span><button class="text-button" type="button" data-action="refresh-discord">Refresh status <span>→</span></button></div>
     </section>
   </div>`;
 }
@@ -1198,6 +1281,7 @@ document.addEventListener('click', async (event) => {
     }
   }
   if (action === 'community-block') await blockCommunityUser(button.dataset.communityUsername);
+  if (action === 'refresh-discord') await refreshDiscordStatus();
   if (action === 'launch-game') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'save-game') {
@@ -1305,7 +1389,7 @@ document.addEventListener('input', (event) => {
   }
 });
 
-document.addEventListener('change', (event) => {
+document.addEventListener('change', async (event) => {
   const profileImageInput = event.target.closest('[data-profile-image-input]');
   if (profileImageInput) {
     setPendingProfileImage(profileImageInput.files?.[0]);
@@ -1317,17 +1401,31 @@ document.addEventListener('change', (event) => {
     updateFastFlagsPanel();
     return;
   }
+  const discordClientInput = event.target.closest('[data-discord-client-id]');
+  if (discordClientInput) {
+    const applicationId = String(discordClientInput.value || '').trim();
+    if (applicationId && !/^\d{17,20}$/.test(applicationId)) {
+      discordClientInput.setAttribute('aria-invalid', 'true');
+      showToast('Discord Application IDs are 17–20 digits.');
+      return;
+    }
+    discordClientInput.setAttribute('aria-invalid', 'false');
+    state.integrations.discordClientId = applicationId;
+    saveIntegrations();
+    await syncDiscordPresence({ render: true });
+    showToast(applicationId ? 'Discord Application ID saved locally.' : 'The local Discord Application ID was cleared.');
+    return;
+  }
   const integrationInput = event.target.closest('[data-integration]');
   if (integrationInput) {
     const field = integrationInput.dataset.integration;
-    if (!['activityTracking', 'discordRichPresence', 'discordDisplay'].includes(field)) return;
+    if (!['activityTracking', 'discordRichPresence'].includes(field)) return;
     state.integrations[field] = integrationInput.type === 'checkbox' ? integrationInput.checked : integrationInput.value;
     saveIntegrations();
-    if (state.page === 'integrations') renderIntegrations();
+    await syncDiscordPresence({ render: true });
     const messages = {
       activityTracking: state.integrations.activityTracking ? 'Local activity tracking enabled.' : 'Local activity tracking paused.',
-      discordRichPresence: 'Discord Rich Presence preference saved. The Discord bridge is not connected yet.',
-      discordDisplay: 'Discord display preference saved on this device.'
+      discordRichPresence: state.integrations.discordRichPresence ? 'Discord Rich Presence enabled. Eclipse will show Open Eclipse when Discord Desktop connects.' : 'Discord Rich Presence disabled and cleared.'
     };
     showToast(messages[field]);
     return;
@@ -1343,3 +1441,4 @@ wireWindowControls();
 wireShell();
 setSettings();
 renderCurrentPage();
+void syncDiscordPresence();

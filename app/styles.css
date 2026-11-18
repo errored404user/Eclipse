@@ -236,3 +236,11 @@ html { scroll-behavior: smooth; }.content { scroll-behavior: smooth; }.page-shel
 .community-place-invite small { margin-top: 3px; color: #a79cac; font-size: 8px; }
 .community-place-invite .community-system-mark { width: 23px; height: 23px; flex-basis: 23px; color: #e7dcff; font-size: 11px; }
 @media (max-width: 600px) { .community-place-invite-form { grid-template-columns: 1fr; }.community-place-invite-form .quiet-button { justify-content: center; }.community-place-invite { align-items: flex-start; flex-direction: column; max-width: 95%; }.community-place-invite .quiet-button { align-self: stretch; justify-content: center; } }
+
+/* Discord Desktop Rich Presence configuration. */
+.integration-client-id { display: block; flex: 0 0 min(300px, 44%); }
+.integration-client-id input { width: 100%; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 8px; outline: 0; color: #e7e0f6; background: #211c2a; font: inherit; font-size: 11px; }
+.integration-client-id input:focus { border-color: rgba(188,162,255,.65); box-shadow: 0 0 0 3px rgba(128,91,221,.13); }
+.integration-client-id input[aria-invalid="true"] { border-color: rgba(239,116,139,.8); }
+.integration-note .text-button { flex: 0 0 auto; align-self: center; margin-left: auto; font-size: 9px; white-space: nowrap; }
+@media (max-width: 700px) { .integration-client-id { width: 100%; flex-basis: auto; }.integration-note { align-items: flex-start; flex-wrap: wrap; }.integration-note .text-button { width: 100%; margin-left: 15px; } }

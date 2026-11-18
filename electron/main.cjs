@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
+const { createDiscordPresence } = require('./discord-presence.cjs');
 const { createCommunityApi } = require('./community-api.cjs');
 const { createPlayerLaunchWindow, sendLaunchState } = require('./launch-window.cjs');
 
@@ -11,6 +12,10 @@ let mainWindow;
 let activeLaunchWindow;
 let activeLaunchTimer;
 const communityApi = createCommunityApi(process.env);
+const discordPresence = createDiscordPresence({ applicationId: process.env.ECLIPSE_DISCORD_CLIENT_ID });
+discordPresence.on('status', (status) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('discord:status', status);
+});
 
 const officialRobloxUrls = {
   download: 'https://www.roblox.com/download'
@@ -121,6 +126,12 @@ app.whenReady().then(() => {
   ipcMain.handle('fastflags:apply', (_event, options) => fastFlags.apply(options));
   ipcMain.handle('fastflags:reset', () => fastFlags.reset());
 
+  ipcMain.handle('discord:status', () => discordPresence.status());
+  ipcMain.handle('discord:configure', (_event, options = {}) => discordPresence.configure({
+    applicationId: String(options.applicationId || ''),
+    enabled: options.enabled === true
+  }));
+
   ipcMain.handle('community:status', () => communityApi.status());
   ipcMain.handle('community:register', (_event, details) => communityApi.register(details));
   ipcMain.handle('community:login', (_event, details) => communityApi.login(details));
@@ -158,6 +169,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 });
+
+app.on('before-quit', () => discordPresence.close());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
