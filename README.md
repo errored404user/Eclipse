@@ -32,15 +32,15 @@ The browser preview fetches live Roblox discovery data through its local Node se
 
 ## Deploy Eclipse Community
 
-Community is a separate Eclipse-native service backed by PostgreSQL and transactional SMTP. This repository includes a Vercel serverless entry point (`api/index.js`) that routes the browser UI and `/api/community` through the same HTTPS origin. The service **intentionally remains unavailable** until its database, mail transport, session secret, and public URL are all configured.
+Community is a separate Eclipse-native service that runs from this same Node server with PostgreSQL and a transactional SMTP provider. It is **not deployed by this repository or preview**. A public release needs a real HTTPS hostname, database, mail provider, session secret, reverse proxy/hosting, operations monitoring, and moderation process.
 
-1. Create a Vercel project for this repository. The included `vercel.json` rewrites all requests to the serverless Community entry point.
-2. Provision a real PostgreSQL database and a transactional SMTP provider. Do not use invented connection strings or a personal mailbox as a production mail relay.
-3. Set the encrypted Production environment variables in Vercel: `DATABASE_URL`, `COMMUNITY_SESSION_SECRET`, `COMMUNITY_SMTP_URL`, `COMMUNITY_EMAIL_FROM`, and `COMMUNITY_PUBLIC_URL`. Generate and retain a random session secret of at least 32 characters; never commit any of these values.
-4. Set `COMMUNITY_PUBLIC_URL` to the exact deployed `https://` origin, then redeploy. It is used for verification links and same-origin protection. On Vercel, set `COMMUNITY_TRUST_PROXY=true` so the service can use Vercel's trusted forwarded client address for its baseline throttles. Keep `COMMUNITY_DATABASE_POOL_MAX` low (the default is `2`) to protect your PostgreSQL connection limit.
-5. Confirm SMTP delivery and the Community health/status endpoint only after deployment. Startup verifies SMTP and initializes the PostgreSQL schema before it exposes Community as enabled.
+1. Copy `.env.example` to a private environment file or configure the variables in your host. Never commit the real values.
+2. Point `DATABASE_URL` at a PostgreSQL database. The service creates its tables and indexes at startup and removes expired sessions/verification links.
+3. Set `COMMUNITY_PUBLIC_URL` to the exact public HTTPS origin that serves Eclipse. It is used for email-verification links and same-origin protection.
+4. Configure SMTP and a sender address that your provider authorizes. Startup verifies the SMTP connection before it exposes Community as enabled.
+5. Put the app behind HTTPS. If a trusted reverse proxy supplies `X-Forwarded-For`, set `COMMUNITY_TRUST_PROXY=true` and make sure the proxy strips any client-provided version of that header.
 
-For a containerized server, build and run the supplied `Dockerfile` with secrets injected by the hosting platform. The app listens on `PORT` (default `4173`); TLS should terminate at the platform or reverse proxy. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the environment contract, Vercel steps, security boundaries, backups, and launch checklist.
+For a containerized server, build and run the supplied `Dockerfile` with secrets injected by the hosting platform. The app listens on `PORT` (default `4173`); TLS should terminate at the platform or reverse proxy. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the environment contract, security boundaries, backups, and launch checklist.
 
 The browser UI uses the Community API at the same public origin. The Electron app instead needs `ECLIPSE_COMMUNITY_API_URL=https://community.example` in its launch environment; the desktop bridge accepts HTTPS Community URLs only and keeps its opaque session token out of renderer storage.
 
