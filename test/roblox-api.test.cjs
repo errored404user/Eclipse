@@ -209,3 +209,22 @@ test('uses drawn title-bar controls instead of text glyphs', () => {
   assert.match(styles, /\.maximize-control\[data-maximized="true"\]/);
   assert.match(styles, /\.close-control \.window-control-glyph::before/);
 });
+
+test('routes the complete managed Fast Flags panel through its dedicated sidebar page', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const toolsSlice = renderer.slice(renderer.indexOf('function renderTools()'), renderer.indexOf('function renderFastFlags()'));
+  const fastFlagsSlice = renderer.slice(renderer.indexOf('function renderFastFlags()'), renderer.indexOf('function renderSettings()'));
+  assert.match(shell, /data-page="fastflags"/);
+  assert.match(shell, /icon-fastflags/);
+  assert.match(renderer, /fastflags: 'Fast Flags'/);
+  assert.match(renderer, /state\.page === 'fastflags'/);
+  assert.match(renderer, /'fastflags'/);
+  assert.doesNotMatch(toolsSlice, /data-fastflags-panel|fastFlagsPanel\(\)/);
+  assert.match(fastFlagsSlice, /data-fastflags-panel/);
+  assert.match(fastFlagsSlice, /fastFlagsPanel\(\)/);
+  assert.match(fastFlagsSlice, /refreshFastFlagsStatus\(\)/);
+});

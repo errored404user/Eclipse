@@ -532,9 +532,15 @@ function renderTools() {
     <div class="tools-grid">
       <article class="tool-panel panel"><p class="section-kicker"><i></i> Direct launch</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse validates it, then opens Roblox Player using the official Roblox protocol.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored.</p></article>
       <article class="tool-panel panel"><p class="section-kicker">Eclipse profile</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'Create your local workspace')}</h2><p>Eclipse profiles personalize this device only. They are not Roblox accounts, do not sign you in to Roblox, and never collect Roblox credentials.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit Eclipse profile' : 'Create Eclipse profile'}</button><button class="text-button" type="button" data-player-action="download">Install Roblox Player <span>→</span></button></div></article>
-      <div class="tool-wide" data-fastflags-panel>${fastFlagsPanel()}</div>
       <article class="tool-panel panel tool-wide"><p class="section-kicker">How it works</p><ol class="protocol-list"><li><span>1</span><p>Create an optional local Eclipse profile to personalize this workspace.</p></li><li><span>2</span><p>Choose a live game from Discover or paste a trusted place ID.</p></li><li><span>3</span><p>Eclipse opens <code>roblox://experiences/start?placeId=…</code> and Roblox Player handles the launch.</p></li></ol></article>
     </div>
+  </div>`;
+}
+
+function renderFastFlags() {
+  pageContent.innerHTML = `<div class="page-shell fastflags-page">
+    ${pageHeader('Roblox Player configuration', 'Fast Flags.', 'Manage Eclipse-supported Roblox Player graphics settings in one place. Eclipse writes only the settings shown here and preserves unrelated ClientAppSettings values.', '')}
+    <div data-fastflags-panel>${fastFlagsPanel()}</div>
   </div>`;
   refreshFastFlagsStatus();
 }
@@ -547,7 +553,7 @@ function renderSettings() {
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', fastflags: 'Fast Flags', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -561,13 +567,14 @@ function renderCurrentPage() {
   if (state.page === 'discover') renderDiscover();
   else if (state.page === 'library') renderLibrary();
   else if (state.page === 'tools') renderTools();
+  else if (state.page === 'fastflags') renderFastFlags();
   else if (state.page === 'settings') renderSettings();
   else renderHome();
   pageContent.focus({ preventScroll: true });
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'tools', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
