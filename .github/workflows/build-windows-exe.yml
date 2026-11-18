@@ -1,6 +1,9 @@
 name: Build Windows EXE
 
 on:
+  push:
+    branches:
+      - arena/792ec1a8-eclipse
   workflow_dispatch:
 
 permissions:
