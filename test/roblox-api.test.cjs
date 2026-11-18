@@ -10,6 +10,7 @@ test('maps official Roblox explore and search payloads into launchable games', a
       body = {
         sorts: [{
           sortId: 'top-playing',
+          sortDisplayName: 'Top Playing',
           games: [{
             universeId: 42,
             rootPlaceId: 1818,
@@ -18,6 +19,18 @@ test('maps official Roblox explore and search payloads into launchable games', a
             playerCount: 12345,
             totalUpVotes: 90,
             totalDownVotes: 10
+          }]
+        }, {
+          sortId: 'up-and-coming',
+          sortDisplayName: 'Up and Coming',
+          games: [{
+            universeId: 77,
+            rootPlaceId: 7070,
+            name: 'Official Newcomer',
+            creatorName: 'Roblox',
+            playerCount: 678,
+            totalUpVotes: 18,
+            totalDownVotes: 2
           }]
         }]
       };
@@ -40,6 +53,7 @@ test('maps official Roblox explore and search payloads into launchable games', a
       body = {
         data: [
           { targetId: 42, imageUrl: 'https://tr.rbxcdn.com/official-example.png' },
+          { targetId: 77, imageUrl: 'https://tr.rbxcdn.com/official-newcomer.png' },
           { targetId: 99, imageUrl: 'https://tr.rbxcdn.com/search-result.png' }
         ]
       };
@@ -65,12 +79,37 @@ test('maps official Roblox explore and search payloads into launchable games', a
       rating: 90,
       imageUrl: 'https://tr.rbxcdn.com/official-example.png'
     });
+    assert.deepEqual(explore.collections.map((collection) => ({
+      id: collection.id,
+      title: collection.title,
+      places: collection.games.map((game) => game.placeId)
+    })), [
+      { id: 'top-playing', title: 'Top Playing', places: [1818] },
+      { id: 'up-and-coming', title: 'Up and Coming', places: [7070] }
+    ]);
+    assert.equal(explore.collections[1].games[0].imageUrl, 'https://tr.rbxcdn.com/official-newcomer.png');
     assert.equal(search.games[0].placeId, 99);
     assert.equal(search.games[0].imageUrl, 'https://tr.rbxcdn.com/search-result.png');
     assert.equal(search.nextCursor, 'next');
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('surfaces multiple official Roblox collections in Discover instead of only a trending feed', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const api = fs.readFileSync(path.join(root, 'shared', 'roblox-api.cjs'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  assert.match(api, /const MAX_EXPLORE_COLLECTIONS = 6;/);
+  assert.match(api, /const MAX_GAMES_PER_COLLECTION = 12;/);
+  assert.match(api, /collections = collectExploreCollections\(payload\);/);
+  assert.match(renderer, /data-discovery-collections/);
+  assert.match(renderer, /data-action="select-discover-collection"/);
+  assert.match(renderer, /Choose another Roblox collection above to see more official experiences\./);
+  assert.match(styles, /\.discovery-collection-chip\.active/);
 });
 
 test('accepts only safe numeric Roblox place IDs', () => {

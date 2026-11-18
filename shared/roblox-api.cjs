@@ -3,6 +3,9 @@ const { randomUUID } = require('node:crypto');
 const CACHE_TTL_MS = 45_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_GAMES = 24;
+const MAX_EXPLORE_COLLECTIONS = 6;
+const MAX_GAMES_PER_COLLECTION = 12;
+const MAX_ICON_IDS = 100;
 const cache = new Map();
 
 function readNumber(value) {
@@ -67,7 +70,7 @@ async function fetchJson(url) {
 }
 
 async function attachIcons(games) {
-  const ids = [...new Set(games.map((game) => game.universeId))].slice(0, MAX_GAMES);
+  const ids = [...new Set(games.map((game) => game.universeId))].slice(0, MAX_ICON_IDS);
   if (!ids.length) return games;
 
   const url = new URL('https://thumbnails.roblox.com/v1/games/icons');
@@ -88,21 +91,38 @@ async function attachIcons(games) {
   }
 }
 
-function collectExploreGames(payload) {
+function exploreCollectionTitle(sort, index) {
+  const title = String(sort.sortDisplayName ?? sort.displayName ?? sort.name ?? '').trim();
+  return (title || `Explore Roblox ${index + 1}`).slice(0, 60);
+}
+
+function collectExploreCollections(payload) {
   const sorts = Array.isArray(payload.sorts) ? payload.sorts : [];
   const preferred = sorts.find((sort) => /top[- ]?playing|popular/i.test(String(sort.sortId ?? sort.sortDisplayName ?? '')));
   const groups = preferred ? [preferred, ...sorts.filter((sort) => sort !== preferred)] : sorts;
-  const unique = new Map();
+  const collectionIds = new Set();
+  const collections = [];
 
-  for (const sort of groups) {
+  for (const [index, sort] of groups.entries()) {
+    const sortId = String(sort.sortId ?? sort.id ?? '').trim().slice(0, 120);
+    const id = sortId || `explore-${index + 1}`;
+    if (collectionIds.has(id)) continue;
+    const games = [];
+    const gameIds = new Set();
     for (const item of Array.isArray(sort.games) ? sort.games : []) {
       const game = normalizeGame(item);
-      if (game && !unique.has(game.universeId)) unique.set(game.universeId, game);
-      if (unique.size >= MAX_GAMES) return [...unique.values()];
+      if (!game || gameIds.has(game.universeId)) continue;
+      gameIds.add(game.universeId);
+      games.push(game);
+      if (games.length >= MAX_GAMES_PER_COLLECTION) break;
     }
+    if (!games.length) continue;
+    collectionIds.add(id);
+    collections.push({ id, title: exploreCollectionTitle(sort, index), games });
+    if (collections.length >= MAX_EXPLORE_COLLECTIONS) break;
   }
 
-  return [...unique.values()];
+  return collections;
 }
 
 function collectSearchGames(payload) {
@@ -127,6 +147,7 @@ async function listGames(request = {}) {
 
   const sessionId = randomUUID();
   let games;
+  let collections = [];
   let nextCursor = '';
   let source;
 
@@ -146,12 +167,20 @@ async function listGames(request = {}) {
     const url = new URL('https://apis.roblox.com/explore-api/v1/get-sorts');
     url.searchParams.set('sessionId', sessionId);
     const payload = await fetchJson(url);
-    games = collectExploreGames(payload);
+    collections = collectExploreCollections(payload);
+    const iconReadyGames = await attachIcons(collections.flatMap((collection) => collection.games));
+    const icons = new Map(iconReadyGames.map((game) => [game.universeId, game.imageUrl]));
+    collections = collections.map((collection) => ({
+      ...collection,
+      games: collection.games.map((game) => ({ ...game, imageUrl: icons.get(game.universeId) || '' }))
+    }));
+    games = collections[0]?.games ?? [];
     source = 'explore';
   }
 
   const value = {
-    games: await attachIcons(games),
+    games: query ? await attachIcons(games) : games,
+    collections,
     nextCursor,
     source
   };

@@ -15,7 +15,7 @@ const state = {
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
-  discover: { games: [], query: '', cursor: '', loading: false, error: '' },
+  discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '' },
   fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
 };
 
@@ -211,8 +211,28 @@ function normalizeGame(game) {
   };
 }
 
+function normalizeDiscoverCollections(value) {
+  if (!Array.isArray(value)) return [];
+  const usedIds = new Set();
+  return value.flatMap((collection, index) => {
+    const id = String(collection?.id || '').trim().slice(0, 120);
+    const title = String(collection?.title || '').trim().slice(0, 60);
+    const games = Array.isArray(collection?.games) ? collection.games.map(normalizeGame).filter(Boolean) : [];
+    if (!id || !title || !games.length || usedIds.has(id)) return [];
+    usedIds.add(id);
+    return [{ id, title, games }];
+  }).slice(0, 6);
+}
+
+function activeDiscoverCollection() {
+  const collections = state.discover.collections;
+  if (!collections.length) return null;
+  return collections.find((collection) => collection.id === state.discover.collectionId) || collections[0];
+}
+
 function allKnownGames() {
-  const games = [...state.discover.games, ...state.library, ...state.recent];
+  const collectionGames = state.discover.collections.flatMap((collection) => collection.games);
+  const games = [...state.discover.games, ...collectionGames, ...state.library, ...state.recent];
   return [...new Map(games.map((game) => [Number(game.placeId), game])).values()];
 }
 
@@ -345,25 +365,44 @@ function renderDiscover() {
         <input id="game-search" name="query" maxlength="100" value="${escapeHtml(state.discover.query)}" placeholder="Search official Roblox experiences" autocomplete="off" />
         <button class="primary-button" type="submit">Search</button>
       </form>
-      <div class="discovery-toolbar"><span><i></i>${state.discover.query ? `Search results for “${escapeHtml(state.discover.query)}”` : 'Popular experiences from Roblox'}</span><button class="quiet-button compact-button" type="button" data-action="refresh-discover">Refresh</button></div>
+      <div class="discovery-toolbar"><span><i></i><span data-discovery-context>${state.discover.query ? `Search results for “${escapeHtml(state.discover.query)}”` : 'Official Roblox collections'}</span></span><button class="quiet-button compact-button" type="button" data-action="refresh-discover">Refresh</button></div>
+      <div class="discovery-collections" data-discovery-collections aria-label="Official Roblox collections"></div>
     </section>
     <div class="discovery-feature" data-discovery-feature></div>
-    <section class="content-section"><div class="section-heading"><div><p class="section-kicker">${state.discover.query ? 'Search results' : 'Trending now'}</p><h2>${state.discover.query ? 'Official matches' : 'Popular on Roblox'}</h2></div></div><div class="game-grid" data-game-grid></div><div class="discover-footer" data-discover-footer></div></section>
+    <section class="content-section"><div class="section-heading"><div><p class="section-kicker" data-discovery-kicker>${state.discover.query ? 'Search results' : 'Explore Roblox'}</p><h2 data-discovery-title>${state.discover.query ? 'Official matches' : 'More ways to play'}</h2></div></div><div class="game-grid" data-game-grid></div><div class="discover-footer" data-discover-footer></div></section>
   </div>`;
   updateDiscoverView();
   if (!state.discover.games.length) loadDiscover();
+}
+
+function discoveryCollectionChips() {
+  const active = activeDiscoverCollection();
+  if (state.discover.query || state.discover.collections.length < 2) return '';
+  return state.discover.collections.map((collection) => `<button class="discovery-collection-chip ${collection.id === active?.id ? 'active' : ''}" type="button" data-action="select-discover-collection" data-discovery-collection="${escapeHtml(collection.id)}" aria-pressed="${collection.id === active?.id ? 'true' : 'false'}">${escapeHtml(collection.title)}</button>`).join('');
 }
 
 function updateDiscoverView() {
   const feature = pageContent.querySelector('[data-discovery-feature]');
   const grid = pageContent.querySelector('[data-game-grid]');
   const footer = pageContent.querySelector('[data-discover-footer]');
-  if (!feature || !grid || !footer) return;
+  const context = pageContent.querySelector('[data-discovery-context]');
+  const collections = pageContent.querySelector('[data-discovery-collections]');
+  const kicker = pageContent.querySelector('[data-discovery-kicker]');
+  const title = pageContent.querySelector('[data-discovery-title]');
+  if (!feature || !grid || !footer || !context || !collections || !kicker || !title) return;
 
-  if (state.discover.loading && !state.discover.games.length) {
+  const activeCollection = activeDiscoverCollection();
+  const visibleGames = state.discover.query ? state.discover.games : activeCollection?.games || state.discover.games;
+  const collectionTitle = activeCollection?.title || 'Popular on Roblox';
+  context.textContent = state.discover.query ? `Search results for “${state.discover.query}”` : `${collectionTitle} from Roblox`;
+  collections.innerHTML = discoveryCollectionChips();
+  kicker.textContent = state.discover.query ? 'Search results' : 'Official Roblox collection';
+  title.textContent = state.discover.query ? 'Official matches' : collectionTitle;
+
+  if (state.discover.loading && !visibleGames.length) {
     feature.innerHTML = '';
     grid.innerHTML = Array.from({ length: 8 }, () => '<article class="game-card skeleton-card panel"><div></div><span></span><span></span></article>').join('');
-    footer.innerHTML = '<p class="section-note">Loading live Roblox discovery…</p>';
+    footer.innerHTML = '<p class="section-note">Loading live Roblox collections…</p>';
     return;
   }
   if (state.discover.error) {
@@ -372,19 +411,21 @@ function updateDiscoverView() {
     footer.innerHTML = emptyState('!', 'Roblox discovery is unavailable.', state.discover.error, '<button class="primary-button" type="button" data-action="refresh-discover">Try again</button>');
     return;
   }
-  if (!state.discover.games.length) {
+  if (!visibleGames.length) {
     feature.innerHTML = '';
     grid.innerHTML = '';
-    footer.innerHTML = emptyState('○', 'No official Roblox experiences found.', 'Try another search term or refresh the popular experience list.', '<button class="primary-button" type="button" data-action="refresh-discover">Show popular games</button>');
+    footer.innerHTML = emptyState('○', 'No official Roblox experiences found.', 'Try another search term or refresh the official Roblox collections.', '<button class="primary-button" type="button" data-action="refresh-discover">Show Roblox collections</button>');
     return;
   }
 
-  feature.innerHTML = state.discover.query ? '' : featuredGame(state.discover.games[0]);
-  const listedGames = state.discover.query ? state.discover.games : state.discover.games.slice(1);
+  feature.innerHTML = state.discover.query ? '' : featuredGame(visibleGames[0]);
+  const listedGames = state.discover.query ? visibleGames : visibleGames.slice(1);
   grid.innerHTML = listedGames.map((game) => gameCard(game)).join('');
   footer.innerHTML = state.discover.nextCursor
     ? `<button class="quiet-button" type="button" data-action="load-more" ${state.discover.loading ? 'disabled' : ''}>${state.discover.loading ? 'Loading…' : 'Load more results'}</button>`
-    : '<p class="section-note">Discovery data is supplied by Roblox. Availability and rankings can change at any time.</p>';
+    : state.discover.query
+      ? '<p class="section-note">Discovery data is supplied by Roblox. Availability and rankings can change at any time.</p>'
+      : `<p class="section-note">Choose another Roblox collection above to see more official experiences.</p>`;
 }
 
 async function loadDiscover({ append = false, resetToPopular = false } = {}) {
@@ -393,6 +434,8 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
     state.discover.query = '';
     state.discover.cursor = '';
     state.discover.games = [];
+    state.discover.collections = [];
+    state.discover.collectionId = '';
   }
   state.discover.loading = true;
   state.discover.error = '';
@@ -400,9 +443,14 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
   try {
     const result = await roblox.listGames({ query: state.discover.query, cursor: append ? state.discover.cursor : '' });
     const games = Array.isArray(result.games) ? result.games.map(normalizeGame).filter(Boolean) : [];
+    const loadedCollections = state.discover.query ? [] : normalizeDiscoverCollections(result.collections);
     state.discover.games = append
       ? [...new Map([...state.discover.games, ...games].map((game) => [game.universeId, game])).values()]
       : games;
+    state.discover.collections = loadedCollections;
+    if (!loadedCollections.some((collection) => collection.id === state.discover.collectionId)) {
+      state.discover.collectionId = loadedCollections[0]?.id || '';
+    }
     state.discover.cursor = typeof result.nextCursor === 'string' ? result.nextCursor : '';
   } catch (error) {
     state.discover.error = error instanceof Error ? error.message : 'Roblox discovery could not be loaded. Please try again.';
@@ -687,6 +735,13 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'refresh-discover') await loadDiscover({ resetToPopular: !state.discover.query });
   if (action === 'load-more') await loadDiscover({ append: true });
+  if (action === 'select-discover-collection' && !state.discover.query) {
+    const collectionId = String(button.dataset.discoveryCollection || '');
+    if (state.discover.collections.some((collection) => collection.id === collectionId)) {
+      state.discover.collectionId = collectionId;
+      updateDiscoverView();
+    }
+  }
   if (action === 'open-status') showToast('Eclipse uses official Roblox discovery data and Player deep links.');
   if (action === 'fastflag-profile') {
     const profile = button.dataset.fastflagProfile;
@@ -709,6 +764,8 @@ document.addEventListener('submit', async (event) => {
     state.discover.query = String(query || '').trim();
     state.discover.cursor = '';
     state.discover.games = [];
+    state.discover.collections = [];
+    state.discover.collectionId = '';
     state.discover.error = '';
     updateDiscoverView();
     await loadDiscover();
