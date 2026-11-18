@@ -192,3 +192,20 @@ test('uses the Eclipse corona asset in the shell and Windows desktop package', (
   assert.match(main, /icon: appIconPath/);
   assert.match(handoff, /eclipse-icon\.png/);
 });
+
+test('uses drawn title-bar controls instead of text glyphs', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  assert.match(shell, /class="window-control minimize-control"/);
+  assert.match(shell, /class="window-control maximize-control"/);
+  assert.match(shell, /class="window-control close-control"/);
+  assert.match(shell, /class="window-control-glyph"/);
+  assert.doesNotMatch(shell, /data-window-control="minimize">−|data-window-control="maximize">□|data-window-control="close">×/);
+  assert.match(renderer, /button\.dataset\.maximized = String\(isMaximized\)/);
+  assert.match(styles, /\.maximize-control\[data-maximized="true"\]/);
+  assert.match(styles, /\.close-control \.window-control-glyph::before/);
+});

@@ -609,7 +609,7 @@ function setMaximizeControl(isMaximized) {
   const button = document.querySelector('[data-window-control="maximize"]');
   if (!button) return;
   button.setAttribute('aria-label', isMaximized ? 'Restore window' : 'Maximize');
-  button.textContent = isMaximized ? '❐' : '□';
+  button.dataset.maximized = String(isMaximized);
 }
 
 function wireWindowControls() {
