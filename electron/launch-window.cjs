@@ -44,6 +44,7 @@ function createPlayerLaunchWindow(BrowserWindow, parent) {
     fullscreenable: false,
     show: false,
     skipTaskbar: true,
+    icon: path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png'),
     backgroundColor: '#101011',
     autoHideMenuBar: true,
     webPreferences: {

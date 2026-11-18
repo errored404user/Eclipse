@@ -172,3 +172,23 @@ test('uses a local Eclipse profile surface and exposes no Roblox login handoff',
   assert.doesNotMatch(shell, /Sign in at Roblox|data-account-action/);
   assert.doesNotMatch(main, /roblox\.com\/login/);
 });
+
+test('uses the Eclipse corona asset in the shell and Windows desktop package', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'electron', 'main.cjs'), 'utf8');
+  const handoff = fs.readFileSync(path.join(root, 'electron', 'launch-window.cjs'), 'utf8');
+  const png = fs.readFileSync(path.join(root, 'app', 'assets', 'eclipse-icon.png'));
+  const ico = fs.readFileSync(path.join(root, 'build', 'icon.ico'));
+  assert.match(fs.readFileSync(path.join(root, 'app', 'assets', 'eclipse-icon.svg'), 'utf8'), /A violet solar eclipse/);
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.deepEqual([...ico.subarray(0, 4)], [0, 0, 1, 0]);
+  assert.equal(packageJson.build.win.icon, 'build/icon.ico');
+  assert.match(shell, /class="eclipse-icon title-mark"/);
+  assert.match(shell, /class="eclipse-icon brand-mark"/);
+  assert.match(main, /icon: appIconPath/);
+  assert.match(handoff, /eclipse-icon\.png/);
+});

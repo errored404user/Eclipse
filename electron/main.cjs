@@ -4,6 +4,8 @@ const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
 const { createPlayerLaunchWindow, sendLaunchState } = require('./launch-window.cjs');
 
+const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
+
 let mainWindow;
 let activeLaunchWindow;
 let activeLaunchTimer;
@@ -77,6 +79,7 @@ function createMainWindow() {
     show: false,
     frame: false,
     backgroundColor: '#08070c',
+    icon: appIconPath,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

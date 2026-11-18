@@ -1,6 +1,6 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0-preview.10",
+  "version": "0.1.0-preview.11",
   "private": true,
   "description": "Eclipse client home-shell visual prototype",
   "author": "Eclipse contributors",
@@ -27,7 +27,8 @@
       "package.json"
     ],
     "win": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,

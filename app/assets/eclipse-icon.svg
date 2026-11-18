@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Eclipse</title>
+  <desc id="desc">A violet solar eclipse with an orbital signal star.</desc>
+  <defs>
+    <linearGradient id="plate" x1="56" y1="40" x2="465" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#302256"/>
+      <stop offset=".42" stop-color="#171228"/>
+      <stop offset="1" stop-color="#0b0a12"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="353" cy="156" r="262" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e8ddff" stop-opacity=".95"/>
+      <stop offset=".24" stop-color="#b991ff" stop-opacity=".82"/>
+      <stop offset=".62" stop-color="#704bdd" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#704bdd" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="corona" x1="153" y1="128" x2="378" y2="383" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f6f1ff"/>
+      <stop offset=".28" stop-color="#ceb6ff"/>
+      <stop offset=".63" stop-color="#9368f4"/>
+      <stop offset="1" stop-color="#5d3ab7"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="192" cy="165" r="221" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#302344"/>
+      <stop offset=".42" stop-color="#16101f"/>
+      <stop offset="1" stop-color="#08070d"/>
+    </radialGradient>
+    <filter id="glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="11" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="34" y="34" width="444" height="444" rx="132" fill="url(#plate)" stroke="#8d6ee5" stroke-opacity=".55" stroke-width="8"/>
+  <circle cx="256" cy="256" r="194" fill="url(#halo)" opacity=".54"/>
+  <circle cx="270" cy="261" r="145" fill="#090811" stroke="url(#corona)" stroke-width="17" filter="url(#glow)"/>
+  <circle cx="222" cy="233" r="122" fill="url(#moon)" stroke="#4b356d" stroke-opacity=".8" stroke-width="4"/>
+  <path d="M340 143A145 145 0 0 1 412 286" fill="none" stroke="#f5efff" stroke-linecap="round" stroke-width="12" opacity=".88"/>
+  <path d="M123 329C161 404 258 435 333 397" fill="none" stroke="#9f7aff" stroke-linecap="round" stroke-width="5" opacity=".5"/>
+  <circle cx="363" cy="136" r="10" fill="#f4edff" filter="url(#glow)"/>
+  <circle cx="363" cy="136" r="4" fill="#ffffff"/>
+</svg>
