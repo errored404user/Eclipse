@@ -249,6 +249,18 @@ test('uses drawn title-bar controls instead of text glyphs', () => {
   assert.match(styles, /\.close-control \.window-control-glyph::before/);
 });
 
+test('uses smooth, reduced-motion-aware Eclipse interface animation', () => {
+  const styles = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'styles.css'), 'utf8');
+  assert.match(styles, /\.page-shell \{ animation: eclipse-page-in 360ms/);
+  assert.match(styles, /\.game-grid \.game-card \{ animation: eclipse-card-in/);
+  assert.match(styles, /\.stars \{ animation: eclipse-star-drift/);
+  assert.match(styles, /@keyframes eclipse-page-in/);
+  assert.match(styles, /@keyframes eclipse-glow-drift/);
+  assert.match(styles, /@keyframes eclipse-toast-in/);
+  assert.match(styles, /\.reduce-motion \*, \.reduce-motion \*::before, \.reduce-motion \*::after/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
 test('routes the complete managed Fast Flags panel through its dedicated sidebar page', () => {
   const fs = require('node:fs');
   const path = require('node:path');
