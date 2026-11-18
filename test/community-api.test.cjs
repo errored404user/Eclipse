@@ -25,8 +25,28 @@ async function withApiServer(run) {
       calls.push(['lookup', token, username]);
       return { user: { id: 'user-2', username: 'nova.eclipse' } };
     },
-    sendPlaceInvite: async (token, friend, placeId) => {
-      calls.push(['place-invite', token, friend, placeId]);
+    listChats: async (token) => {
+      calls.push(['chats', token]);
+      return { chats: [{ id: 'user-2', username: 'nova.eclipse' }], incoming: [], outgoing: [] };
+    },
+    sendMessageRequest: async (token, username) => {
+      calls.push(['message-request', token, username]);
+      return { requestId: 'request-1', username, pending: true };
+    },
+    respondToMessageRequest: async (token, id, action) => {
+      calls.push(['respond-message-request', token, id, action]);
+      return { requestId: id, action, contactUsername: 'nova.eclipse' };
+    },
+    conversations: async (token, contact) => {
+      calls.push(['conversation', token, contact]);
+      return { contact: { id: 'user-2', username: contact }, messages: [], placeInvites: [] };
+    },
+    sendMessage: async (token, contact, body) => {
+      calls.push(['send-message', token, contact, body]);
+      return { id: 'message-1', body };
+    },
+    sendPlaceInvite: async (token, contact, placeId) => {
+      calls.push(['place-invite', token, contact, placeId]);
       return { id: 'invite-1', placeId: String(placeId) };
     },
     logout: async () => ({ loggedOut: true })
@@ -70,7 +90,7 @@ test('Community configuration requires production identity, database, mail, and 
   assert.equal(configuredCommunityUrl({ ECLIPSE_COMMUNITY_API_URL: 'not a URL' }), '');
 });
 
-test('Community API keeps a browser session in an HttpOnly cookie and routes verified username lookup', async () => {
+test('Community API keeps a browser session in an HttpOnly cookie and routes accepted username-chat operations', async () => {
   await withApiServer(async (base, calls) => {
     const login = await fetch(`${base}/api/community/auth/login`, {
       method: 'POST',
@@ -93,14 +113,58 @@ test('Community API keeps a browser session in an HttpOnly cookie and routes ver
     assert.equal(lookup.status, 200);
     assert.equal((await lookup.json()).user.username, 'nova.eclipse');
 
+    const request = await fetch(`${base}/api/community/message-requests`, {
+      method: 'POST',
+      headers: { cookie: cookie.split(';')[0], 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'nova.eclipse' })
+    });
+    assert.equal(request.status, 201);
+    assert.equal((await request.json()).pending, true);
+
+    const response = await fetch(`${base}/api/community/message-requests/request-1/accept`, {
+      method: 'POST',
+      headers: { cookie: cookie.split(';')[0], 'content-type': 'application/json' },
+      body: '{}'
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).contactUsername, 'nova.eclipse');
+
+    const chats = await fetch(`${base}/api/community/chats`, { headers: { cookie: cookie.split(';')[0] } });
+    assert.equal(chats.status, 200);
+    assert.equal((await chats.json()).chats[0].username, 'nova.eclipse');
+
+    const conversation = await fetch(`${base}/api/community/conversations?contact=nova.eclipse`, { headers: { cookie: cookie.split(';')[0] } });
+    assert.equal(conversation.status, 200);
+    assert.equal((await conversation.json()).contact.username, 'nova.eclipse');
+
+    const message = await fetch(`${base}/api/community/conversations`, {
+      method: 'POST',
+      headers: { cookie: cookie.split(';')[0], 'content-type': 'application/json' },
+      body: JSON.stringify({ contact: 'nova.eclipse', body: 'Eclipse hello' })
+    });
+    assert.equal(message.status, 201);
+    assert.equal((await message.json()).body, 'Eclipse hello');
+
     const invite = await fetch(`${base}/api/community/place-invites`, {
       method: 'POST',
       headers: { cookie: cookie.split(';')[0], 'content-type': 'application/json' },
-      body: JSON.stringify({ friend: 'nova.eclipse', placeId: '1818' })
+      body: JSON.stringify({ contact: 'nova.eclipse', placeId: '1818' })
     });
     assert.equal(invite.status, 201);
     assert.equal((await invite.json()).placeId, '1818');
-    assert.deepEqual(calls, [['me', 'opaque-session'], ['lookup', 'opaque-session', 'nova.eclipse'], ['place-invite', 'opaque-session', 'nova.eclipse', '1818']]);
+
+    const legacyFriends = await fetch(`${base}/api/community/friends`, { headers: { cookie: cookie.split(';')[0] } });
+    assert.equal(legacyFriends.status, 404);
+    assert.deepEqual(calls, [
+      ['me', 'opaque-session'],
+      ['lookup', 'opaque-session', 'nova.eclipse'],
+      ['message-request', 'opaque-session', 'nova.eclipse'],
+      ['respond-message-request', 'opaque-session', 'request-1', 'accept'],
+      ['chats', 'opaque-session'],
+      ['conversation', 'opaque-session', 'nova.eclipse'],
+      ['send-message', 'opaque-session', 'nova.eclipse', 'Eclipse hello'],
+      ['place-invite', 'opaque-session', 'nova.eclipse', '1818']
+    ]);
   });
 });
 

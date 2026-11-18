@@ -6,9 +6,9 @@ This repository contains the Eclipse Community server, but it does **not** deplo
 
 - Separate Eclipse email/password accounts with a unique case-insensitive Eclipse username.
 - Password hashing with Node `scrypt`; passwords are never sent to Roblox or stored in plaintext.
-- Email verification before a user can search for people, send/accept a friend request, or use chat.
+- Email verification before a user can search for a username, send or accept a message request, or use chat.
 - Random opaque 30-day sessions. Only HMAC hashes are stored in PostgreSQL. Browser sessions are sent in `HttpOnly`, `SameSite=Lax`, `Secure` (HTTPS) cookies; Electron uses its main-process bridge and does not place its session token in renderer storage.
-- Username lookup, outgoing/incoming friend requests, private text messages, and official Roblox place invites only after the recipient accepts.
+- Username lookup, outgoing/incoming message requests, private text messages, and official Roblox place invites only after the recipient accepts.
 - Block and report endpoints plus persistent moderation-event/audit records.
 - Per-process registration, verification, login, lookup, and message throttles as a baseline. Use edge/rate-limit controls as well in a multi-instance deployment.
 - A strict 1,500-character message limit and a 16 KiB JSON-body limit.
@@ -16,6 +16,18 @@ This repository contains the Eclipse Community server, but it does **not** deplo
 The service intentionally has **no media upload endpoint**. `mediaUploads` reports `false` and the UI presents text chat only. Do not add image, GIF, or file uploads until there is object storage, content-type/signature validation, malware scanning, abuse handling, retention policy, signed-download controls, and a moderation workflow.
 
 Community is never a Roblox login system. Do not collect, proxy, transform, infer, or associate Roblox credentials with Eclipse Community accounts.
+
+## Message-request chat flow
+
+The browser deployment exposes the following same-origin Community routes under `/api/community`; Electron uses the same contract through its main-process bridge:
+
+1. `GET /chats` lists accepted private chats plus incoming and outgoing message requests.
+2. `POST /message-requests` with `{ "username" }` sends a request to a verified Eclipse username.
+3. `POST /message-requests/:id/accept` or `/decline` records the recipient's choice. Acceptance opens the private chat for both accounts.
+4. `GET /conversations?contact=<username>` and `POST /conversations` with `{ "contact", "body" }` read and send text-only chat messages after acceptance.
+5. `POST /place-invites` with `{ "contact", "placeId" }` sends an official Roblox place invite only in an accepted private chat.
+
+Legacy `/friends`, `/friend-requests`, and `/messages` Community routes are not provided. The persistent storage table currently retains a compatibility name, documented below, but it stores message-request records.
 
 ## Required environment
 
@@ -54,7 +66,7 @@ Use your platform's encrypted secret store rather than distributing `.env` to op
 
 ## Database operations
 
-Schema creation and indexes are idempotent at startup. Before a version upgrade, take a tested PostgreSQL backup. The Community tables are prefixed `eclipse_community_` and include users, sessions, verification tokens, friend requests, blocks, messages, and moderation events.
+Schema creation and indexes are idempotent at startup. Before a version upgrade, take a tested PostgreSQL backup. The Community tables are prefixed `eclipse_community_` and include users, sessions, verification tokens, message-request records, blocks, messages, and moderation events. The current compatibility table name retains `friend_requests`; it stores message-request records and should not drive product terminology.
 
 Use a dedicated database role with rights limited to this database/schema. Enable encrypted backups, define a retention period for account and moderation records, and document a lawful/valid process for user deletion and data export requests before public launch. Test restoring a backup—not merely creating one.
 

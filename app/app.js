@@ -106,13 +106,13 @@ const browserCommunity = {
   logout: () => communityJson('/auth/logout', { method: 'POST' }),
   me: () => communityJson('/auth/me'),
   resendVerification: () => communityJson('/auth/resend-verification', { method: 'POST' }),
-  friends: () => communityJson('/friends'),
+  chats: () => communityJson('/chats'),
   lookup: (username) => communityJson(`/users/lookup?username=${encodeURIComponent(username)}`),
-  requestFriend: (username) => communityJson('/friend-requests', { method: 'POST', body: { username } }),
-  respondFriendRequest: (id, action) => communityJson(`/friend-requests/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' }),
-  messages: (friend) => communityJson(`/messages?friend=${encodeURIComponent(friend)}`),
-  sendMessage: (friend, body) => communityJson('/messages', { method: 'POST', body: { friend, body } }),
-  sendPlaceInvite: (friend, placeId) => communityJson('/place-invites', { method: 'POST', body: { friend, placeId } }),
+  requestChat: (username) => communityJson('/message-requests', { method: 'POST', body: { username } }),
+  respondToMessageRequest: (id, action) => communityJson(`/message-requests/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' }),
+  conversation: (contact) => communityJson(`/conversations?contact=${encodeURIComponent(contact)}`),
+  sendMessage: (contact, body) => communityJson('/conversations', { method: 'POST', body: { contact, body } }),
+  sendPlaceInvite: (contact, placeId) => communityJson('/place-invites', { method: 'POST', body: { contact, placeId } }),
   block: (username) => communityJson('/blocks', { method: 'POST', body: { username } }),
   report: (details) => communityJson('/reports', { method: 'POST', body: details })
 };
@@ -218,10 +218,10 @@ function createCommunityState() {
     authMode: 'login',
     authBusy: false,
     authError: '',
-    friends: { friends: [], incoming: [], outgoing: [] },
+    chats: { chats: [], incoming: [], outgoing: [] },
     lookup: null,
     lookupBusy: false,
-    selectedFriend: '',
+    selectedChat: '',
     messages: [],
     placeInvites: [],
     messagesBusy: false
@@ -701,7 +701,7 @@ function renderCommunityAuth() {
       <p class="section-kicker"><i></i> Eclipse Community account</p>
       <h2>${registering ? 'Create a separate Eclipse identity.' : 'Sign in to Community.'}</h2>
       <p>Your Community email and password belong only to Eclipse Community. Eclipse never asks for, sends, stores, or links Roblox credentials.</p>
-      <ul class="community-trust-list"><li><i></i> Unique Eclipse username</li><li><i></i> Email verification before friend requests and chat</li><li><i></i> Mutual acceptance before private messages</li></ul>
+      <ul class="community-trust-list"><li><i></i> Unique Eclipse username</li><li><i></i> Email verification before message requests</li><li><i></i> Recipient acceptance before private chat</li></ul>
     </article>
     <form class="community-auth-form panel" data-community-auth-form novalidate>
       <div class="community-auth-switch" role="tablist" aria-label="Community account action"><button type="button" class="${registering ? '' : 'active'}" data-action="community-auth-mode" data-community-auth-mode="login" aria-selected="${!registering}">Sign in</button><button type="button" class="${registering ? 'active' : ''}" data-action="community-auth-mode" data-community-auth-mode="register" aria-selected="${registering}">Create account</button></div>
@@ -718,39 +718,39 @@ function renderCommunityAuth() {
 
 function renderCommunityVerification() {
   const { user } = state.community;
-  return `<section class="community-verification panel"><span class="community-verification-mark" aria-hidden="true">✦</span><div><p class="section-kicker">Email verification required</p><h2>Check the inbox for @${escapeHtml(user?.username)}.</h2><p>Verify this Eclipse account email before sending friend requests, accepting connections, or opening a private chat. This keeps Community separate from Roblox accounts and reduces abuse.</p></div><button class="primary-button" type="button" data-action="community-resend-verification">Resend verification email</button></section>`;
+  return `<section class="community-verification panel"><span class="community-verification-mark" aria-hidden="true">✦</span><div><p class="section-kicker">Email verification required</p><h2>Check the inbox for @${escapeHtml(user?.username)}.</h2><p>Verify this Eclipse account email before sending or accepting message requests and opening a private chat. This keeps Community separate from Roblox accounts and reduces abuse.</p></div><button class="primary-button" type="button" data-action="community-resend-verification">Resend verification email</button></section>`;
 }
 
-function renderCommunityFriend(friend, selected) {
-  return `<button class="community-online-contact ${selected ? 'active' : ''}" type="button" data-action="select-community-friend" data-community-friend="${escapeHtml(friend.username)}" aria-pressed="${selected}"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(friend.username))}</span><span><strong>@${escapeHtml(friend.username)}</strong><small>Mutual Eclipse friend</small></span></button>`;
+function renderCommunityChat(contact, selected) {
+  return `<button class="community-online-contact ${selected ? 'active' : ''}" type="button" data-action="select-community-chat" data-community-chat="${escapeHtml(contact.username)}" aria-pressed="${selected}"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(contact.username))}</span><span><strong>@${escapeHtml(contact.username)}</strong><small>Accepted private chat</small></span></button>`;
 }
 
 function renderCommunityVerified() {
   const community = state.community;
-  const friends = community.friends.friends || [];
-  const incoming = community.friends.incoming || [];
-  const outgoing = community.friends.outgoing || [];
-  const selected = friends.find((friend) => friend.username === community.selectedFriend) || null;
+  const chats = community.chats.chats || [];
+  const incoming = community.chats.incoming || [];
+  const outgoing = community.chats.outgoing || [];
+  const selected = chats.find((contact) => contact.username === community.selectedChat) || null;
   const searchResult = community.lookup?.user;
-  const contacts = friends.length
-    ? friends.map((friend) => renderCommunityFriend(friend, friend.username === selected?.username)).join('')
-    : '<div class="community-empty-contacts"><span aria-hidden="true">◌</span><strong>No mutual friends yet</strong><p>Find an Eclipse username and send a request. Chat opens only after they accept.</p></div>';
-  const incomingMarkup = incoming.length ? `<section class="community-request-group"><h3>Incoming requests</h3>${incoming.map((request) => `<article class="community-request-card"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(request.username))}</span><div><strong>@${escapeHtml(request.username)}</strong><small>Wants to connect on Eclipse</small></div><div><button type="button" class="quiet-button compact-button" data-action="community-respond-request" data-request-id="${escapeHtml(request.id)}" data-request-action="decline">Decline</button><button type="button" class="primary-button compact-button" data-action="community-respond-request" data-request-id="${escapeHtml(request.id)}" data-request-action="accept">Accept</button></div></article>`).join('')}</section>` : '';
-  const outgoingMarkup = outgoing.length ? `<section class="community-request-group community-outgoing"><h3>Sent requests</h3>${outgoing.map((request) => `<p><span class="community-draft-dot"></span>@${escapeHtml(request.username)} <small>Awaiting acceptance</small></p>`).join('')}</section>` : '';
+  const contacts = chats.length
+    ? chats.map((contact) => renderCommunityChat(contact, contact.username === selected?.username)).join('')
+    : '<div class="community-empty-contacts"><span aria-hidden="true">◌</span><strong>No private chats yet</strong><p>Search an Eclipse username and send a message request. Private chat opens after they accept.</p></div>';
+  const incomingMarkup = incoming.length ? `<section class="community-request-group"><h3>Message requests</h3>${incoming.map((request) => `<article class="community-request-card"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(request.username))}</span><div><strong>@${escapeHtml(request.username)}</strong><small>Requested a private chat</small></div><div><button type="button" class="quiet-button compact-button" data-action="community-respond-request" data-request-id="${escapeHtml(request.id)}" data-request-action="decline">Decline</button><button type="button" class="primary-button compact-button" data-action="community-respond-request" data-request-id="${escapeHtml(request.id)}" data-request-action="accept">Accept</button></div></article>`).join('')}</section>` : '';
+  const outgoingMarkup = outgoing.length ? `<section class="community-request-group community-outgoing"><h3>Sent message requests</h3>${outgoing.map((request) => `<p><span class="community-draft-dot"></span>@${escapeHtml(request.username)} <small>Awaiting acceptance</small></p>`).join('')}</section>` : '';
   const lookupMarkup = searchResult
-    ? `<div class="community-lookup-result"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(searchResult.username))}</span><div><strong>@${escapeHtml(searchResult.username)}</strong><small>Verified Eclipse account</small></div><button class="primary-button compact-button" type="button" data-action="community-send-friend-request" data-community-username="${escapeHtml(searchResult.username)}">Send request</button></div>`
+    ? `<div class="community-lookup-result"><span class="community-contact-avatar">${escapeHtml(communityCardInitials(searchResult.username))}</span><div><strong>@${escapeHtml(searchResult.username)}</strong><small>Verified Eclipse account</small></div><button class="primary-button compact-button" type="button" data-action="community-send-message-request" data-community-username="${escapeHtml(searchResult.username)}">Request chat</button></div>`
     : '';
   const threadEvents = [
     ...community.messages.map((message) => ({ ...message, type: 'message' })),
     ...community.placeInvites.map((invite) => ({ ...invite, type: 'place-invite' }))
   ].sort((first, second) => new Date(first.createdAt) - new Date(second.createdAt));
   const thread = selected
-    ? `<section class="community-workbench panel"><header class="community-workbench-heading"><div><p class="section-kicker"><i></i> Private chat</p><h2>@${escapeHtml(selected.username)}</h2><p>Visible only to mutual Eclipse friends. Chat is text-only, with safe official Roblox place invites.</p></div><button class="quiet-button compact-button" type="button" data-action="community-block" data-community-username="${escapeHtml(selected.username)}">Block</button></header><div class="community-thread community-online-thread">${community.messagesBusy ? '<p class="community-draft-empty">Loading your private chat…</p>' : threadEvents.length ? threadEvents.map((event) => event.type === 'message' ? communityMessageMarkup(event) : communityPlaceInviteMarkup(event)).join('') : '<div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Your private chat is ready</strong><p>Only you and this accepted Eclipse friend can post here. Eclipse Community does not use Roblox identity or credentials.</p></div></div>'}</div><div class="community-chat-composers"><form class="community-composer community-online-composer" data-community-send-message-form><label class="sr-only" for="community-message">Message @${escapeHtml(selected.username)}</label><textarea id="community-message" name="message" maxlength="1500" placeholder="Message @${escapeHtml(selected.username)}" required></textarea><div class="community-composer-actions"><span>Text only · 1,500 characters maximum</span><button class="primary-button" type="submit">Send message</button></div></form><form class="community-place-invite-form" data-community-send-invite-form><label for="community-place-invite">Official Roblox place ID</label><input id="community-place-invite" name="placeId" inputmode="numeric" pattern="[0-9]+" maxlength="15" placeholder="Share a trusted place ID" required /><button class="quiet-button" type="submit">Share place</button></form></div><form class="community-report-form" data-community-report-form><strong>Safety tools</strong><input type="hidden" name="username" value="${escapeHtml(selected.username)}" /><select name="reason" aria-label="Report reason"><option value="">Report reason…</option><option value="harassment">Harassment or hate</option><option value="spam">Spam or scam</option><option value="safety">Safety concern</option><option value="other">Other</option></select><input name="details" maxlength="1000" placeholder="Optional details for moderators" /><button class="text-button" type="submit">Report @${escapeHtml(selected.username)}</button></form></section>`
-    : `<section class="community-workbench panel community-chat-empty"><div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Private chat waits for mutual friendship.</strong><p>Search an Eclipse username, send a request, and select the friend once they accept. Neither Roblox accounts nor Roblox credentials are involved.</p></div></div><div class="community-media-status"><i></i><span>Image, GIF, and file uploads are disabled until a moderated media delivery service is deployed. Mutual friends can still share official Roblox place IDs safely.</span></div></section>`;
+    ? `<section class="community-workbench panel"><header class="community-workbench-heading"><div><p class="section-kicker"><i></i> Private chat</p><h2>@${escapeHtml(selected.username)}</h2><p>This private chat opened because its recipient accepted the message request. Chat is text-only, with safe official Roblox place invites.</p></div><button class="quiet-button compact-button" type="button" data-action="community-block" data-community-username="${escapeHtml(selected.username)}">Block</button></header><div class="community-thread community-online-thread">${community.messagesBusy ? '<p class="community-draft-empty">Loading your private chat…</p>' : threadEvents.length ? threadEvents.map((event) => event.type === 'message' ? communityMessageMarkup(event) : communityPlaceInviteMarkup(event)).join('') : '<div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Your private chat is ready</strong><p>Only you and this accepted Eclipse chat contact can post here. Eclipse Community does not use Roblox identity or credentials.</p></div></div>'}</div><div class="community-chat-composers"><form class="community-composer community-online-composer" data-community-send-message-form><label class="sr-only" for="community-message">Message @${escapeHtml(selected.username)}</label><textarea id="community-message" name="message" maxlength="1500" placeholder="Message @${escapeHtml(selected.username)}" required></textarea><div class="community-composer-actions"><span>Text only · 1,500 characters maximum</span><button class="primary-button" type="submit">Send message</button></div></form><form class="community-place-invite-form" data-community-send-invite-form><label for="community-place-invite">Official Roblox place ID</label><input id="community-place-invite" name="placeId" inputmode="numeric" pattern="[0-9]+" maxlength="15" placeholder="Share a trusted place ID" required /><button class="quiet-button" type="submit">Share place</button></form></div><form class="community-report-form" data-community-report-form><strong>Safety tools</strong><input type="hidden" name="username" value="${escapeHtml(selected.username)}" /><select name="reason" aria-label="Report reason"><option value="">Report reason…</option><option value="harassment">Harassment or hate</option><option value="spam">Spam or scam</option><option value="safety">Safety concern</option><option value="other">Other</option></select><input name="details" maxlength="1000" placeholder="Optional details for moderators" /><button class="text-button" type="submit">Report @${escapeHtml(selected.username)}</button></form></section>`
+    : `<section class="community-workbench panel community-chat-empty"><div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Private chat waits for acceptance.</strong><p>Search an Eclipse username, send a message request, and select the chat once they accept. Neither Roblox accounts nor Roblox credentials are involved.</p></div></div><div class="community-media-status"><i></i><span>Image, GIF, and file uploads are disabled until a moderated media delivery service is deployed. Accepted private chats can still share official Roblox place IDs safely.</span></div></section>`;
   return `<div class="community-online-page">
     <section class="community-account-strip panel"><div><span class="community-contact-avatar">${escapeHtml(communityCardInitials(community.user?.username))}</span><span><small>Signed in as</small><strong>@${escapeHtml(community.user?.username)}</strong></span></div><span><i></i> Verified Eclipse account</span></section>
-    <section class="community-find-user panel"><div><p class="section-kicker"><i></i> Add by Eclipse username</p><h2>Find someone on Community.</h2><p>Look up a unique Eclipse username first. Requests require acceptance before private chat can begin.</p></div><form data-community-lookup-form><label class="sr-only" for="community-username-search">Eclipse username</label><input id="community-username-search" name="username" maxlength="32" autocomplete="off" placeholder="username.eclipse" required /><button class="quiet-button" type="submit" ${community.lookupBusy ? 'disabled' : ''}>${community.lookupBusy ? 'Searching…' : 'Search'}</button></form>${lookupMarkup}</section>
-    <div class="community-layout community-online-layout"><aside class="community-rail panel"><div class="community-rail-heading"><div><p class="section-kicker">Mutual friends</p><h2>People</h2></div><span>${friends.length}</span></div><div class="community-contact-list">${contacts}</div>${incomingMarkup}${outgoingMarkup}<div class="community-rail-footer"><i></i><span>Messages unlock after acceptance</span></div></aside>${thread}</div>
+    <section class="community-find-user panel"><div><p class="section-kicker"><i></i> Search Eclipse username</p><h2>Start a private chat by username.</h2><p>Search a unique Eclipse username, then send a message request. The recipient must accept before chat opens.</p></div><form data-community-lookup-form><label class="sr-only" for="community-username-search">Eclipse username</label><input id="community-username-search" name="username" maxlength="32" autocomplete="off" placeholder="username.eclipse" required /><button class="quiet-button" type="submit" ${community.lookupBusy ? 'disabled' : ''}>${community.lookupBusy ? 'Searching…' : 'Search'}</button></form>${lookupMarkup}</section>
+    <div class="community-layout community-online-layout"><aside class="community-rail panel"><div class="community-rail-heading"><div><p class="section-kicker">Private chats</p><h2>Messages</h2></div><span>${chats.length}</span></div><div class="community-contact-list">${contacts}</div>${incomingMarkup}${outgoingMarkup}<div class="community-rail-footer"><i></i><span>Chat opens after acceptance</span></div></aside>${thread}</div>
   </div>`;
 }
 
@@ -759,7 +759,7 @@ function renderCommunity() {
   if (!community.status && !community.loading) Promise.resolve().then(() => loadCommunity());
   const status = community.status;
   const content = !status
-    ? '<section class="community-loading panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Secure service</p><h2>Checking Eclipse Community…</h2><p>Account, friend-request, and chat availability are being checked.</p></div></section>'
+    ? '<section class="community-loading panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Secure service</p><h2>Checking Eclipse Community…</h2><p>Account, username search, message-request, and chat availability are being checked.</p></div></section>'
     : !status.enabled
       ? `<section class="community-offline-notice panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Service unavailable</p><h2>Online Community has not been configured here.</h2><p>${escapeHtml(status.reason || 'The Eclipse Community service is unavailable.')} Community needs its own HTTPS service, PostgreSQL database, transactional email, and session secret. Your local Eclipse profile remains separate and no Roblox credential is ever requested.</p></div><span class="community-offline-status"><i></i> Offline</span></section>`
       : !community.user
@@ -767,7 +767,7 @@ function renderCommunity() {
         : !community.emailVerified
           ? renderCommunityVerification()
           : renderCommunityVerified();
-  pageContent.innerHTML = `<div class="page-shell community-page">${pageHeader('Eclipse Community', 'Community.', 'Eclipse-native accounts, mutual friend requests, and private chat. Never a Roblox sign-in.', community.user ? '<button class="quiet-button" type="button" data-action="community-logout">Sign out</button>' : '')}${community.error ? `<p class="community-service-error" role="alert">${escapeHtml(community.error)}</p>` : ''}${content}<section class="community-safety panel"><p class="section-kicker"><i></i> Safety baseline</p><h2>Moderation-aware by design.</h2><p>Verified email, mutual friendship, blocking, reporting, rate limits, and moderation audit records protect this text-only release. Media uploads are explicitly disabled rather than accepted without safe processing.</p><span><i></i> Eclipse Community never handles Roblox credentials</span></section></div>`;
+  pageContent.innerHTML = `<div class="page-shell community-page">${pageHeader('Eclipse Community', 'Community.', 'Search an Eclipse username, send a message request, and chat privately after acceptance. Never a Roblox sign-in.', community.user ? '<button class="quiet-button" type="button" data-action="community-logout">Sign out</button>' : '')}${community.error ? `<p class="community-service-error" role="alert">${escapeHtml(community.error)}</p>` : ''}${content}<section class="community-safety panel"><p class="section-kicker"><i></i> Safety baseline</p><h2>Moderation-aware by design.</h2><p>Verified email, recipient acceptance, blocking, reporting, rate limits, and moderation audit records protect this text-only release. Media uploads are explicitly disabled rather than accepted without safe processing.</p><span><i></i> Eclipse Community never handles Roblox credentials</span></section></div>`;
 }
 
 async function loadCommunity({ refresh = false } = {}) {
@@ -799,18 +799,18 @@ async function loadCommunity({ refresh = false } = {}) {
 
 async function refreshCommunityData() {
   const community = state.community;
-  const relationships = await communityApi.friends();
-  community.friends = {
-    friends: Array.isArray(relationships.friends) ? relationships.friends : [],
-    incoming: Array.isArray(relationships.incoming) ? relationships.incoming : [],
-    outgoing: Array.isArray(relationships.outgoing) ? relationships.outgoing : []
+  const chatListing = await communityApi.chats();
+  community.chats = {
+    chats: Array.isArray(chatListing.chats) ? chatListing.chats : [],
+    incoming: Array.isArray(chatListing.incoming) ? chatListing.incoming : [],
+    outgoing: Array.isArray(chatListing.outgoing) ? chatListing.outgoing : []
   };
-  if (!community.friends.friends.some((friend) => friend.username === community.selectedFriend)) {
-    community.selectedFriend = '';
+  if (!community.chats.chats.some((contact) => contact.username === community.selectedChat)) {
+    community.selectedChat = '';
     community.messages = [];
     community.placeInvites = [];
   }
-  if (community.selectedFriend) await loadCommunityMessages(community.selectedFriend, false);
+  if (community.selectedChat) await loadCommunityMessages(community.selectedChat, false);
 }
 
 async function loadCommunityMessages(username, updateView = true) {
@@ -819,7 +819,7 @@ async function loadCommunityMessages(username, updateView = true) {
   community.messagesBusy = true;
   if (updateView && state.page === 'community') renderCommunity();
   try {
-    const result = await communityApi.messages(username);
+    const result = await communityApi.conversation(username);
     community.messages = Array.isArray(result.messages) ? result.messages : [];
     community.placeInvites = Array.isArray(result.placeInvites) ? result.placeInvites : [];
   } catch (error) {
@@ -875,32 +875,36 @@ async function lookupCommunityUser(form) {
   }
 }
 
-async function sendCommunityFriendRequest(username) {
+async function sendCommunityMessageRequest(username) {
   try {
-    const result = await communityApi.requestFriend(username);
+    const result = await communityApi.requestChat(username);
     state.community.lookup = null;
     await refreshCommunityData();
     renderCommunity();
-    showToast(`Friend request sent to @${result.username}.`);
+    showToast(`Message request sent to @${result.username}.`);
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'The friend request could not be sent.');
+    showToast(error instanceof Error ? error.message : 'The message request could not be sent.');
   }
 }
 
 async function respondToCommunityRequest(requestId, action) {
   try {
-    await communityApi.respondFriendRequest(requestId, action);
+    const result = await communityApi.respondToMessageRequest(requestId, action);
     await refreshCommunityData();
+    if (action === 'accept' && result.contactUsername) {
+      state.community.selectedChat = result.contactUsername;
+      await loadCommunityMessages(result.contactUsername, false);
+    }
     renderCommunity();
-    showToast(action === 'accept' ? 'Eclipse friendship accepted. Private chat is now available.' : 'Friend request declined.');
+    showToast(action === 'accept' ? 'Message request accepted. Your private chat is open.' : 'Message request declined.');
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'That friend request could not be updated.');
+    showToast(error instanceof Error ? error.message : 'That message request could not be updated.');
   }
 }
 
 async function sendCommunityMessage(form) {
   const message = String(new FormData(form).get('message') || '').trim();
-  const username = state.community.selectedFriend;
+  const username = state.community.selectedChat;
   if (!message || !username) return;
   try {
     await communityApi.sendMessage(username, message);
@@ -913,7 +917,7 @@ async function sendCommunityMessage(form) {
 
 async function sendCommunityPlaceInvite(form) {
   const placeId = String(new FormData(form).get('placeId') || '').trim();
-  const username = state.community.selectedFriend;
+  const username = state.community.selectedChat;
   if (!/^\d{1,15}$/.test(placeId) || !username) {
     showToast('Enter a valid official Roblox place ID.');
     return;
@@ -929,7 +933,7 @@ async function sendCommunityPlaceInvite(form) {
 }
 
 async function blockCommunityUser(username) {
-  if (!username || !window.confirm(`Block @${username}? This ends the friendship and prevents further private messages.`)) return;
+  if (!username || !window.confirm(`Block @${username}? This ends the private chat and prevents further messages.`)) return;
   try {
     await communityApi.block(username);
     await refreshCommunityData();
@@ -1269,12 +1273,12 @@ document.addEventListener('click', async (event) => {
       showToast(error instanceof Error ? error.message : 'The verification email could not be sent.');
     }
   }
-  if (action === 'community-send-friend-request') await sendCommunityFriendRequest(button.dataset.communityUsername);
+  if (action === 'community-send-message-request') await sendCommunityMessageRequest(button.dataset.communityUsername);
   if (action === 'community-respond-request') await respondToCommunityRequest(button.dataset.requestId, button.dataset.requestAction);
-  if (action === 'select-community-friend') {
-    const username = button.dataset.communityFriend;
-    if (state.community.friends.friends.some((friend) => friend.username === username)) {
-      state.community.selectedFriend = username;
+  if (action === 'select-community-chat') {
+    const username = button.dataset.communityChat;
+    if (state.community.chats.chats.some((contact) => contact.username === username)) {
+      state.community.selectedChat = username;
       state.community.messages = [];
       state.community.placeInvites = [];
       await loadCommunityMessages(username);

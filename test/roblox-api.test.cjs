@@ -336,7 +336,7 @@ test('keeps Fast Flags visible and lets the single profile card open a local edi
   assert.match(styles, /\.profile-image-upload/);
 });
 
-test('renders the online Eclipse Community flow without Roblox identity handoff', () => {
+test('uses username message requests before opening online Eclipse private chat', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
@@ -355,7 +355,9 @@ test('renders the online Eclipse Community flow without Roblox identity handoff'
   assert.match(renderer, /const browserCommunity/);
   assert.match(renderer, /function renderCommunityAuth\(\)/);
   assert.match(renderer, /function renderCommunityVerified\(\)/);
-  assert.match(renderer, /Mutual Eclipse friend/);
+  assert.match(renderer, /Search Eclipse username/);
+  assert.match(renderer, /Request chat/);
+  assert.match(renderer, /Message request accepted\. Your private chat is open\./);
   assert.match(renderer, /data-community-send-message-form/);
   assert.match(renderer, /data-community-send-invite-form/);
   assert.match(renderer, /Official Roblox place invite sent to/);
@@ -366,9 +368,9 @@ test('renders the online Eclipse Community flow without Roblox identity handoff'
   assert.doesNotMatch(communitySlice, /roblox\.com\/login|Roblox password|data-account-action/);
   assert.match(service, /email_verified BOOLEAN NOT NULL DEFAULT FALSE/);
   assert.match(service, /status IN \('pending', 'accepted', 'declined', 'blocked'\)/);
-  assert.match(service, /Private messages are available only between mutual Eclipse friends/);
+  assert.match(service, /Private chat opens only after the recipient accepts your message request/);
   assert.match(service, /eclipse_community_place_invites/);
-  assert.match(service, /Official Roblox place invites are available only between mutual Eclipse friends/);
+  assert.match(service, /Official Roblox place invites are available only in accepted private chats/);
   assert.match(service, /eclipse_community_moderation_events/);
   assert.match(service, /mediaUploads: false/);
   assert.match(api, /\/users\/lookup/);

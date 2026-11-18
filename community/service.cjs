@@ -238,7 +238,7 @@ class CommunityService {
       enabled: this.started,
       reason,
       identity: 'Eclipse email and password accounts',
-      friendship: 'Mutual friend requests',
+      messageRequests: 'Username message requests with recipient acceptance',
       privateMessages: this.started,
       officialPlaceInvites: this.started,
       mediaUploads: false,
@@ -287,7 +287,7 @@ class CommunityService {
       throw error;
     }
     await this.createAndSendVerification(id, safeEmail, ip);
-    return { pendingVerification: true, username: safeUsername, message: 'Check your email to verify this Eclipse account before adding friends or chatting.' };
+    return { pendingVerification: true, username: safeUsername, message: 'Check your email to verify this Eclipse account before sending a message request or chatting.' };
   }
 
   async createAndSendVerification(userId, email, ip = '') {
@@ -391,7 +391,7 @@ class CommunityService {
 
   async assertVerified(token) {
     const user = await this.userForToken(token);
-    if (!user.email_verified) throw new CommunityError('Verify your Eclipse account email before using friends or private messages.', 'EMAIL_UNVERIFIED', 403);
+    if (!user.email_verified) throw new CommunityError('Verify your Eclipse account email before sending message requests or using private chat.', 'EMAIL_UNVERIFIED', 403);
     return user;
   }
 
@@ -419,7 +419,7 @@ class CommunityService {
     return Boolean(result.rowCount);
   }
 
-  async areFriends(firstId, secondId) {
+  async hasAcceptedChat(firstId, secondId) {
     const result = await this.pool.query(
       `SELECT 1 FROM eclipse_community_friend_requests
        WHERE status = 'accepted' AND ((requester_id = $1 AND recipient_id = $2) OR (requester_id = $2 AND recipient_id = $1))
@@ -429,11 +429,11 @@ class CommunityService {
     return Boolean(result.rowCount);
   }
 
-  async listFriends(token) {
+  async listChats(token) {
     const user = await this.assertVerified(token);
-    const [friends, incoming, outgoing] = await Promise.all([
+    const [chats, incoming, outgoing] = await Promise.all([
       this.pool.query(
-        `SELECT u.id, u.username, u.created_at, r.id AS relationship_id, r.created_at AS connected_at
+        `SELECT u.id, u.username, u.created_at, r.id AS chat_id, COALESCE(r.responded_at, r.created_at) AS accepted_at
          FROM eclipse_community_friend_requests r
          JOIN eclipse_community_users u ON u.id = CASE WHEN r.requester_id = $1 THEN r.recipient_id ELSE r.requester_id END
          WHERE r.status = 'accepted' AND (r.requester_id = $1 OR r.recipient_id = $1)
@@ -454,17 +454,17 @@ class CommunityService {
       )
     ]);
     return {
-      friends: friends.rows.map((row) => ({ id: row.id, username: row.username, connectedAt: toIso(row.connected_at) })),
+      chats: chats.rows.map((row) => ({ id: row.id, username: row.username, acceptedAt: toIso(row.accepted_at) })),
       incoming: incoming.rows.map((row) => ({ id: row.id, username: row.username, createdAt: toIso(row.created_at) })),
       outgoing: outgoing.rows.map((row) => ({ id: row.id, username: row.username, createdAt: toIso(row.created_at) }))
     };
   }
 
-  async sendFriendRequest(token, username) {
+  async sendMessageRequest(token, username) {
     const sender = await this.assertVerified(token);
     const recipient = await this.findUserByUsername(username);
-    if (sender.id === recipient.id) throw new CommunityError('You cannot add your own Eclipse account.', 'SELF_FRIEND_REQUEST');
-    if (await this.isBlocked(sender.id, recipient.id)) throw new CommunityError('This friend request cannot be sent.', 'RELATIONSHIP_BLOCKED', 403);
+    if (sender.id === recipient.id) throw new CommunityError('You cannot send a message request to your own Eclipse account.', 'SELF_MESSAGE_REQUEST');
+    if (await this.isBlocked(sender.id, recipient.id)) throw new CommunityError('This message request cannot be sent.', 'MESSAGE_REQUEST_BLOCKED', 403);
     const existing = await this.pool.query(
       `SELECT id, status FROM eclipse_community_friend_requests
        WHERE (requester_id = $1 AND recipient_id = $2) OR (requester_id = $2 AND recipient_id = $1)
@@ -472,7 +472,7 @@ class CommunityService {
       [sender.id, recipient.id]
     );
     if (existing.rowCount && ['pending', 'accepted'].includes(existing.rows[0].status)) {
-      throw new CommunityError(existing.rows[0].status === 'accepted' ? 'You are already Eclipse friends.' : 'A friend request is already waiting for a response.', 'RELATIONSHIP_EXISTS', 409);
+      throw new CommunityError(existing.rows[0].status === 'accepted' ? 'A private chat with that Eclipse username is already open.' : 'A message request is already waiting for a response.', 'MESSAGE_REQUEST_EXISTS', 409);
     }
     const id = crypto.randomUUID();
     try {
@@ -482,16 +482,16 @@ class CommunityService {
         [id, sender.id, recipient.id]
       );
     } catch (error) {
-      if (error?.code === '23505') throw new CommunityError('A friend request is already waiting for a response.', 'RELATIONSHIP_EXISTS', 409);
+      if (error?.code === '23505') throw new CommunityError('A message request is already waiting for a response.', 'MESSAGE_REQUEST_EXISTS', 409);
       throw error;
     }
-    await this.audit(sender.id, recipient.id, 'friend_request_created', 'friend_request', id, '', {});
+    await this.audit(sender.id, recipient.id, 'message_request_created', 'message_request', id, '', {});
     return { requestId: id, username: recipient.username, pending: true };
   }
 
-  async respondToFriendRequest(token, requestId, action) {
+  async respondToMessageRequest(token, requestId, action) {
     const recipient = await this.assertVerified(token);
-    if (!['accept', 'decline'].includes(action)) throw new CommunityError('Unsupported friend-request action.', 'INVALID_ACTION');
+    if (!['accept', 'decline'].includes(action)) throw new CommunityError('Unsupported message-request action.', 'INVALID_ACTION');
     const result = await this.pool.query(
       `UPDATE eclipse_community_friend_requests
        SET status = $1, responded_at = NOW()
@@ -499,33 +499,37 @@ class CommunityService {
        RETURNING requester_id`,
       [action === 'accept' ? 'accepted' : 'declined', String(requestId || ''), recipient.id]
     );
-    if (!result.rowCount) throw new CommunityError('That pending friend request could not be found.', 'REQUEST_NOT_FOUND', 404);
-    await this.audit(recipient.id, result.rows[0].requester_id, `friend_request_${action}ed`, 'friend_request', String(requestId), '', {});
-    return { action, requestId: String(requestId) };
+    if (!result.rowCount) throw new CommunityError('That pending message request could not be found.', 'REQUEST_NOT_FOUND', 404);
+    const requesterId = result.rows[0].requester_id;
+    const requester = await this.pool.query('SELECT username FROM eclipse_community_users WHERE id = $1', [requesterId]);
+    await this.audit(recipient.id, requesterId, action === 'accept' ? 'message_request_accepted' : 'message_request_declined', 'message_request', String(requestId), '', {});
+    return { action, requestId: String(requestId), contactUsername: requester.rows[0]?.username || '' };
   }
 
-  async messages(token, username) {
+  async conversations(token, username) {
     const user = await this.assertVerified(token);
-    const friend = await this.findUserByUsername(username);
-    if (!(await this.areFriends(user.id, friend.id)) || await this.isBlocked(user.id, friend.id)) throw new CommunityError('Private messages are available only between mutual Eclipse friends.', 'NOT_FRIENDS', 403);
+    const contact = await this.findUserByUsername(username);
+    if (!(await this.hasAcceptedChat(user.id, contact.id)) || await this.isBlocked(user.id, contact.id)) {
+      throw new CommunityError('Private chat opens only after the recipient accepts your message request.', 'CHAT_NOT_ACCEPTED', 403);
+    }
     const [messages, placeInvites] = await Promise.all([
       this.pool.query(
         `SELECT m.id, m.body, m.created_at, m.sender_id, u.username AS sender_username
          FROM eclipse_community_messages m JOIN eclipse_community_users u ON u.id = m.sender_id
          WHERE (m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1)
          ORDER BY m.created_at DESC LIMIT 100`,
-        [user.id, friend.id]
+        [user.id, contact.id]
       ),
       this.pool.query(
         `SELECT i.id, i.place_id, i.created_at, i.sender_id, u.username AS sender_username
          FROM eclipse_community_place_invites i JOIN eclipse_community_users u ON u.id = i.sender_id
          WHERE (i.sender_id = $1 AND i.recipient_id = $2) OR (i.sender_id = $2 AND i.recipient_id = $1)
          ORDER BY i.created_at DESC LIMIT 100`,
-        [user.id, friend.id]
+        [user.id, contact.id]
       )
     ]);
     return {
-      friend: toPublicUser(friend),
+      contact: toPublicUser(contact),
       messages: messages.rows.reverse().map((row) => ({ id: row.id, body: row.body, createdAt: toIso(row.created_at), senderId: row.sender_id, senderUsername: row.sender_username })),
       placeInvites: placeInvites.rows.reverse().map((row) => ({ id: row.id, placeId: String(row.place_id), createdAt: toIso(row.created_at), senderId: row.sender_id, senderUsername: row.sender_username }))
     };
@@ -535,7 +539,9 @@ class CommunityService {
     const sender = await this.assertVerified(token);
     this.limit(`message:${sender.id}`, 40, 60 * 1000);
     const recipient = await this.findUserByUsername(username);
-    if (!(await this.areFriends(sender.id, recipient.id)) || await this.isBlocked(sender.id, recipient.id)) throw new CommunityError('Private messages are available only between mutual Eclipse friends.', 'NOT_FRIENDS', 403);
+    if (!(await this.hasAcceptedChat(sender.id, recipient.id)) || await this.isBlocked(sender.id, recipient.id)) {
+      throw new CommunityError('Private chat opens only after the recipient accepts your message request.', 'CHAT_NOT_ACCEPTED', 403);
+    }
     const id = crypto.randomUUID();
     const safeBody = cleanMessage(body);
     const result = await this.pool.query(
@@ -550,8 +556,8 @@ class CommunityService {
     const sender = await this.assertVerified(token);
     this.limit(`place-invite:${sender.id}`, 20, 60 * 1000);
     const recipient = await this.findUserByUsername(username);
-    if (!(await this.areFriends(sender.id, recipient.id)) || await this.isBlocked(sender.id, recipient.id)) {
-      throw new CommunityError('Official Roblox place invites are available only between mutual Eclipse friends.', 'NOT_FRIENDS', 403);
+    if (!(await this.hasAcceptedChat(sender.id, recipient.id)) || await this.isBlocked(sender.id, recipient.id)) {
+      throw new CommunityError('Official Roblox place invites are available only in accepted private chats.', 'CHAT_NOT_ACCEPTED', 403);
     }
     const safePlaceId = cleanPlaceId(placeId);
     const id = crypto.randomUUID();

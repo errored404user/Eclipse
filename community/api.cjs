@@ -99,7 +99,7 @@ async function handleCommunityApi({ request, response, url, service, sendJson })
       try {
         const result = await service.verifyEmail(url.searchParams.get('token'));
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff' });
-        response.end(verifyPage(result.verified ? 'Your email is verified. Mutual friend requests and private chat are now available.' : 'Verification could not be completed.'));
+        response.end(verifyPage(result.verified ? 'Your email is verified. You can now send and accept private-chat requests by Eclipse username.' : 'Verification could not be completed.'));
       } catch (error) {
         const message = error instanceof CommunityError ? error.message : 'Verification could not be completed.';
         response.writeHead(error instanceof CommunityError ? error.status : 500, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff' });
@@ -129,26 +129,26 @@ async function handleCommunityApi({ request, response, url, service, sendJson })
 
     if (route === '/auth/me' && method === 'GET') return sendJson(response, 200, await service.currentUser(sessionToken(request)));
     if (route === '/auth/resend-verification' && method === 'POST') return sendJson(response, 200, await service.resendVerification(sessionToken(request), clientIp(request, service)));
-    if (route === '/friends' && method === 'GET') return sendJson(response, 200, await service.listFriends(sessionToken(request)));
+    if (route === '/chats' && method === 'GET') return sendJson(response, 200, await service.listChats(sessionToken(request)));
     if (route === '/users/lookup' && method === 'GET') return sendJson(response, 200, await service.lookupUser(sessionToken(request), url.searchParams.get('username')));
 
-    if (route === '/friend-requests' && method === 'POST') {
+    if (route === '/message-requests' && method === 'POST') {
       const body = await readJson(request);
-      return sendJson(response, 201, await service.sendFriendRequest(sessionToken(request), body.username));
+      return sendJson(response, 201, await service.sendMessageRequest(sessionToken(request), body.username));
     }
 
-    const requestMatch = route.match(/^\/friend-requests\/([^/]+)\/(accept|decline)$/);
-    if (requestMatch && method === 'POST') return sendJson(response, 200, await service.respondToFriendRequest(sessionToken(request), requestMatch[1], requestMatch[2]));
+    const requestMatch = route.match(/^\/message-requests\/([^/]+)\/(accept|decline)$/);
+    if (requestMatch && method === 'POST') return sendJson(response, 200, await service.respondToMessageRequest(sessionToken(request), requestMatch[1], requestMatch[2]));
 
-    if (route === '/messages' && method === 'GET') return sendJson(response, 200, await service.messages(sessionToken(request), url.searchParams.get('friend')));
-    if (route === '/messages' && method === 'POST') {
+    if (route === '/conversations' && method === 'GET') return sendJson(response, 200, await service.conversations(sessionToken(request), url.searchParams.get('contact')));
+    if (route === '/conversations' && method === 'POST') {
       const body = await readJson(request);
-      return sendJson(response, 201, await service.sendMessage(sessionToken(request), body.friend, body.body));
+      return sendJson(response, 201, await service.sendMessage(sessionToken(request), body.contact, body.body));
     }
 
     if (route === '/place-invites' && method === 'POST') {
       const body = await readJson(request);
-      return sendJson(response, 201, await service.sendPlaceInvite(sessionToken(request), body.friend, body.placeId));
+      return sendJson(response, 201, await service.sendPlaceInvite(sessionToken(request), body.contact, body.placeId));
     }
 
     if (route === '/blocks' && method === 'POST') {
