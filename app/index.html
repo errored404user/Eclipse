@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0a10" />
+    <title>Eclipse — Home</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-window" aria-label="Eclipse client">
+      <div class="stars" aria-hidden="true"></div>
+      <header class="titlebar">
+        <button class="mobile-menu icon-button" type="button" aria-label="Toggle navigation" data-mobile-menu>
+          <span></span><span></span><span></span>
+        </button>
+        <div class="window-caption">Eclipse</div>
+        <div class="titlebar-right">
+          <button class="title-action" type="button" data-status-button>System ready</button>
+          <span class="titlebar-divider" aria-hidden="true"></span>
+          <div class="window-controls" aria-label="Window controls">
+            <button type="button" aria-label="Minimize">−</button>
+            <button type="button" aria-label="Maximize">□</button>
+            <button class="close-control" type="button" aria-label="Close">×</button>
+          </div>
+        </div>
+      </header>
+
+      <aside class="sidebar" data-sidebar>
+        <div class="brand">
+          <span class="eclipse-mark" aria-hidden="true"><i></i></span>
+          <span class="brand-name">Eclipse</span>
+          <span class="preview-badge">Preview</span>
+        </div>
+
+        <nav class="navigation" aria-label="Primary navigation">
+          <div class="nav-group">
+            <p class="nav-label">Explore</p>
+            <button class="nav-item active" type="button" data-page="Home" aria-current="page">
+              <span class="nav-icon icon-home" aria-hidden="true"></span><span>Home</span>
+            </button>
+            <button class="nav-item" type="button" data-page="Discover">
+              <span class="nav-icon icon-compass" aria-hidden="true"></span><span>Discover</span>
+            </button>
+            <button class="nav-item" type="button" data-page="Library">
+              <span class="nav-icon icon-library" aria-hidden="true"></span><span>Library</span>
+            </button>
+          </div>
+          <div class="nav-group nav-group-bottom">
+            <p class="nav-label">Workspace</p>
+            <button class="nav-item" type="button" data-page="Tools">
+              <span class="nav-icon icon-tools" aria-hidden="true"></span><span>Tools</span>
+            </button>
+            <button class="nav-item" type="button" data-page="Settings">
+              <span class="nav-icon icon-settings" aria-hidden="true"></span><span>Settings</span>
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <button class="account-card" type="button" aria-expanded="false" data-account-button>
+            <span class="avatar avatar-profile">AR</span>
+            <span class="account-copy">
+              <strong>aria.r</strong>
+              <small><i></i> Online</small>
+            </span>
+            <span class="more" aria-hidden="true">···</span>
+          </button>
+          <div class="account-menu" data-account-menu hidden>
+            <button type="button">View profile</button>
+            <button type="button">Switch account</button>
+            <button type="button">Sign out</button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="content" aria-live="polite">
+        <div class="content-glow glow-one" aria-hidden="true"></div>
+        <div class="content-glow glow-two" aria-hidden="true"></div>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Tuesday, 18 November</p>
+            <h1>Good evening, aria.</h1>
+            <p class="page-description">Everything is in orbit. Pick up where you left off or find a new world.</p>
+          </div>
+          <div class="head-actions">
+            <button class="quiet-button" type="button" data-refresh>Refresh</button>
+            <button class="primary-button" type="button" data-launch>
+              <span class="play-icon" aria-hidden="true"></span> Launch Roblox
+            </button>
+          </div>
+        </div>
+
+        <section class="overview-grid" aria-label="Your Eclipse overview">
+          <article class="featured-card panel">
+            <div class="featured-art" aria-hidden="true">
+              <div class="planet planet-a"></div>
+              <div class="planet planet-b"></div>
+              <div class="orbit orbit-a"></div>
+              <div class="orbit orbit-b"></div>
+              <div class="art-noise"></div>
+            </div>
+            <div class="featured-content">
+              <span class="section-kicker"><i></i> Continue playing</span>
+              <h2>Solstice Valley</h2>
+              <p>Explore with friends · Last played 2 hours ago</p>
+              <div class="featured-actions">
+                <button class="play-button" type="button" data-launch><span class="play-icon" aria-hidden="true"></span> Resume</button>
+                <button class="round-button" type="button" aria-label="More options">···</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="client-card panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker"><i></i> Client status</p>
+                <h2>Ready to launch</h2>
+              </div>
+              <span class="healthy-dot" title="All systems operational"></span>
+            </div>
+            <div class="version-row">
+              <div class="version-icon"><span class="eclipse-mark small"><i></i></span></div>
+              <div><strong>Eclipse Preview</strong><span>v0.1.0 · Up to date</span></div>
+              <span class="checkmark">✓</span>
+            </div>
+            <div class="metric-line"><span>Client integrity</span><strong>Healthy</strong></div>
+            <div class="progress-track"><span></span></div>
+            <button class="status-link" type="button" data-status-button>View client details <b>→</b></button>
+          </article>
+        </section>
+
+        <section class="section-block activity-section">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Your orbit</p>
+              <h2>Keep moving</h2>
+            </div>
+            <button class="text-button" type="button" data-action="activity">View activity <span>→</span></button>
+          </div>
+          <div class="activity-grid">
+            <article class="mini-card panel recent-card">
+              <div class="card-art aurora-art" aria-hidden="true"><span></span><span></span></div>
+              <div class="mini-card-copy">
+                <span class="card-meta">Recently played</span>
+                <h3>Skybound</h3>
+                <p>47 minutes this week</p>
+              </div>
+              <button class="mini-play" type="button" aria-label="Launch Skybound" data-launch><span class="play-icon"></span></button>
+            </article>
+            <article class="mini-card panel friends-card">
+              <div class="friends-avatars" aria-label="Friends online">
+                <span class="avatar avatar-one">K</span><span class="avatar avatar-two">M</span><span class="avatar avatar-three">L</span><span class="avatar avatar-count">+8</span>
+              </div>
+              <div class="mini-card-copy">
+                <span class="card-meta"><i class="online-dot"></i> Social orbit</span>
+                <h3>11 friends online</h3>
+                <p>3 are playing together now</p>
+              </div>
+              <button class="mini-arrow" type="button" aria-label="View friends" data-action="friends">→</button>
+            </article>
+            <article class="mini-card panel update-card">
+              <div class="update-symbol" aria-hidden="true">✦</div>
+              <div class="mini-card-copy">
+                <span class="card-meta">Eclipse update</span>
+                <h3>Welcome to Preview</h3>
+                <p>Explore what’s new in your orbit.</p>
+              </div>
+              <button class="mini-arrow" type="button" aria-label="Read release notes" data-action="release-notes">→</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="section-block quick-section">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Quick access</p>
+              <h2>Control center</h2>
+            </div>
+          </div>
+          <div class="quick-grid">
+            <button class="quick-card panel" type="button" data-action="profiles"><span class="quick-icon icon-sliders"></span><span><strong>Launch profiles</strong><small>Manage how Eclipse starts</small></span><b>→</b></button>
+            <button class="quick-card panel" type="button" data-action="diagnostics"><span class="quick-icon icon-pulse"></span><span><strong>Diagnostics</strong><small>Review client health</small></span><b>→</b></button>
+            <button class="quick-card panel" type="button" data-action="preferences"><span class="quick-icon icon-spark"></span><span><strong>Appearance</strong><small>Make Eclipse yours</small></span><b>→</b></button>
+          </div>
+        </section>
+      </section>
+
+      <div class="toast" data-toast role="status" aria-live="polite" hidden></div>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
