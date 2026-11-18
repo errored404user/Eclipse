@@ -268,6 +268,25 @@ test('routes the complete managed Fast Flags panel through its dedicated sidebar
   assert.match(fastFlagsSlice, /refreshFastFlagsStatus\(\)/);
 });
 
+test('adds local activity tracking and transparent Discord Rich Presence preferences to Integrations', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  assert.match(shell, /data-page="integrations"/);
+  assert.match(shell, /icon-integrations/);
+  assert.match(renderer, /integrations: 'eclipse\.integrations\.v1'/);
+  assert.match(renderer, /function normalizeIntegrations\(value\)/);
+  assert.match(renderer, /function renderIntegrations\(\)/);
+  assert.match(renderer, /data-integration="activityTracking"/);
+  assert.match(renderer, /data-integration="discordRichPresence"/);
+  assert.match(renderer, /if \(!state\.integrations\.activityTracking\) return;/);
+  assert.match(renderer, /Discord bridge not connected\./);
+  assert.match(styles, /\.integration-section/);
+});
+
 test('keeps Fast Flags in visible primary navigation and gives the profile overflow a true action-menu toggle', () => {
   const fs = require('node:fs');
   const path = require('node:path');

@@ -6,6 +6,7 @@ const storageKeys = {
   library: 'eclipse.roblox.library.v1',
   recent: 'eclipse.roblox.recent.v1',
   settings: 'eclipse.settings.v1',
+  integrations: 'eclipse.integrations.v1',
   profile: 'eclipse.profile.v1'
 };
 
@@ -14,6 +15,7 @@ const state = {
   library: readStored(storageKeys.library, []),
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
+  integrations: normalizeIntegrations(readStored(storageKeys.integrations, {})),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '' },
   fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
@@ -72,6 +74,21 @@ function writeStored(key, value) {
 function normalizeProfile(value) {
   const displayName = String(value?.displayName || '').trim().replace(/\s+/g, ' ').slice(0, 28);
   return displayName ? { displayName, created: true } : { displayName: 'Eclipse guest', created: false };
+}
+
+function normalizeIntegrations(value) {
+  const discordDisplay = ['experience', 'roblox'].includes(value?.discordDisplay) ? value.discordDisplay : 'experience';
+  const activityTracking = value?.activityTracking !== false;
+  return {
+    activityTracking,
+    discordRichPresence: activityTracking && value?.discordRichPresence === true,
+    discordDisplay
+  };
+}
+
+function saveIntegrations() {
+  state.integrations = normalizeIntegrations(state.integrations);
+  writeStored(storageKeys.integrations, state.integrations);
 }
 
 function profileInitials(profile = state.profile) {
@@ -257,6 +274,7 @@ function removeGame(universeId) {
 }
 
 function addRecent(game) {
+  if (!state.integrations.activityTracking) return;
   const safeGame = normalizeGame(game);
   if (!safeGame) return;
   safeGame.launchedAt = new Date().toISOString();
@@ -599,6 +617,28 @@ function renderFastFlags() {
   refreshFastFlagsStatus();
 }
 
+function renderIntegrations() {
+  const { activityTracking, discordRichPresence, discordDisplay } = state.integrations;
+  const discordUnavailable = !activityTracking;
+  pageContent.innerHTML = `<div class="page-shell integrations-page">
+    ${pageHeader('Connections', 'Integrations.', 'Control the local activity Eclipse keeps for launches it starts, and prepare how that activity is presented to Discord.', '')}
+    <section class="integration-section">
+      <div class="integration-heading"><div><p class="section-kicker"><i></i> Activity tracking</p><h2>Keep your Eclipse launch history local.</h2><p>Eclipse records only Roblox launch requests it successfully starts. It cannot inspect Roblox sessions opened outside Eclipse or read your Roblox account.</p></div><span class="integration-status ${activityTracking ? 'ready' : ''}"><i></i>${activityTracking ? 'Local tracking on' : 'Local tracking off'}</span></div>
+      <div class="settings-list panel integration-list">
+        <div class="setting-row"><div><h2>Enable activity tracking</h2><p>Add Roblox experiences launched through Eclipse to this device’s recent activity. Turning this off stops new local entries; it does not inspect or remove Roblox data.</p></div><label class="toggle"><input type="checkbox" data-integration="activityTracking" ${activityTracking ? 'checked' : ''}/><span></span></label></div>
+      </div>
+    </section>
+    <section class="integration-section">
+      <div class="integration-heading"><div><p class="section-kicker"><i></i> Discord Rich Presence</p><h2>Choose the presence Eclipse can prepare.</h2><p>Discord Rich Presence depends on local activity tracking plus a running Discord desktop app. Eclipse never uses Discord or Roblox credentials.</p></div><span class="integration-status ${discordRichPresence ? 'configured' : ''}"><i></i>${discordRichPresence ? 'Preference enabled' : 'Setup required'}</span></div>
+      <div class="settings-list panel integration-list">
+        <div class="setting-row"><div><h2>Show Eclipse launch activity</h2><p>Save the Rich Presence preference for Roblox launches started by Eclipse. This does not claim to know whether Roblox joined a server.</p></div><label class="toggle ${discordUnavailable ? 'is-disabled' : ''}"><input type="checkbox" data-integration="discordRichPresence" ${discordRichPresence ? 'checked' : ''} ${discordUnavailable ? 'disabled' : ''}/><span></span></label></div>
+        <div class="setting-row integration-select-row"><div><h2>Discord status display</h2><p>Select the label Eclipse will use for a future Discord desktop update.</p></div><label class="integration-select"><span class="sr-only">Discord status display</span><select data-integration="discordDisplay" ${discordUnavailable ? 'disabled' : ''}><option value="experience" ${discordDisplay === 'experience' ? 'selected' : ''}>Experience name · Playing Roblox</option><option value="roblox" ${discordDisplay === 'roblox' ? 'selected' : ''}>Eclipse · Playing Roblox</option></select></label></div>
+      </div>
+      <p class="integration-note"><i></i><span><strong>Discord bridge not connected.</strong> These preferences are stored locally. Publishing Rich Presence needs an Eclipse Discord application ID and a Discord desktop IPC connection; Eclipse does not collect Discord credentials.</span></p>
+    </section>
+  </div>`;
+}
+
 function renderSettings() {
   pageContent.innerHTML = `<div class="page-shell settings-page">
     ${pageHeader('Settings', 'Make Eclipse yours.', 'These interface preferences and your optional Eclipse profile stay on this device.', '')}
@@ -607,7 +647,7 @@ function renderSettings() {
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', fastflags: 'Fast Flags', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', fastflags: 'Fast Flags', integrations: 'Integrations', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -622,13 +662,14 @@ function renderCurrentPage() {
   else if (state.page === 'library') renderLibrary();
   else if (state.page === 'tools') renderTools();
   else if (state.page === 'fastflags') renderFastFlags();
+  else if (state.page === 'integrations') renderIntegrations();
   else if (state.page === 'settings') renderSettings();
   else renderHome();
   pageContent.focus({ preventScroll: true });
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'integrations', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
@@ -802,6 +843,21 @@ document.addEventListener('change', (event) => {
   if (fastFlagInput) {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : fastFlagInput.dataset.fastflagType === 'string' ? fastFlagInput.value : Number(fastFlagInput.value);
     updateFastFlagsPanel();
+    return;
+  }
+  const integrationInput = event.target.closest('[data-integration]');
+  if (integrationInput) {
+    const field = integrationInput.dataset.integration;
+    if (!['activityTracking', 'discordRichPresence', 'discordDisplay'].includes(field)) return;
+    state.integrations[field] = integrationInput.type === 'checkbox' ? integrationInput.checked : integrationInput.value;
+    saveIntegrations();
+    if (state.page === 'integrations') renderIntegrations();
+    const messages = {
+      activityTracking: state.integrations.activityTracking ? 'Local activity tracking enabled.' : 'Local activity tracking paused.',
+      discordRichPresence: 'Discord Rich Presence preference saved. The Discord bridge is not connected yet.',
+      discordDisplay: 'Discord display preference saved on this device.'
+    };
+    showToast(messages[field]);
     return;
   }
   const input = event.target.closest('[data-setting]');
