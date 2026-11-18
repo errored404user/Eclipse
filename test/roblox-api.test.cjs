@@ -262,6 +262,11 @@ test('uses smooth, reduced-motion-aware Eclipse interface animation', () => {
   assert.match(styles, /@keyframes eclipse-page-in/);
   assert.match(styles, /@keyframes eclipse-glow-drift/);
   assert.match(styles, /@keyframes eclipse-toast-in/);
+  assert.match(styles, /\.page-header::after/);
+  assert.match(styles, /@keyframes eclipse-header-signal/);
+  assert.match(styles, /@keyframes eclipse-orbit-turn/);
+  assert.match(styles, /@keyframes eclipse-button-sheen/);
+  assert.match(styles, /@keyframes eclipse-presence-pulse/);
   assert.match(styles, /\.reduce-motion \*, \.reduce-motion \*::before, \.reduce-motion \*::after/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
