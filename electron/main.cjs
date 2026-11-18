@@ -8,6 +8,7 @@ const { createPlayerLaunchWindow, launchStates, sendLaunchState } = require('./l
 const { navigationPageFromArguments, placeIdFromArguments, startupStatus, taskbarJumpList } = require('./system-integration.cjs');
 const { readRecentPlaceIds, writeRecentPlaceIds } = require('./taskbar-recents.cjs');
 const { createPlayerMods } = require('./player-mods.cjs');
+const { isUsableWindow, revealWindow } = require('./window-visibility.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
 
@@ -37,6 +38,10 @@ function gamePageUrl(placeId) {
 async function openOfficialUrl(url) {
   await shell.openExternal(url);
   return { opened: true };
+}
+
+function revealMainWindow(window = mainWindow) {
+  return revealWindow(window);
 }
 
 function clearLaunchWindowTimer() {
@@ -89,14 +94,17 @@ async function launchRobloxPlayer(placeId) {
   }
 }
 
+function recoverMainWindow() {
+  if (isUsableWindow(mainWindow)) return revealMainWindow();
+  if (!app.isReady()) return false;
+  return Boolean(createMainWindow());
+}
+
 function openNavigationPage(page) {
   if (!page) return;
   pendingNavigationPage = page;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.show();
-    mainWindow.focus();
-    mainWindow.webContents.send('system:navigate', page);
-  }
+  if (!recoverMainWindow()) return;
+  mainWindow.webContents.send('system:navigate', page);
 }
 
 function refreshJumpList() {
@@ -125,8 +133,21 @@ function currentStartupStatus() {
   });
 }
 
+function showStartupError(window) {
+  if (!isUsableWindow(window)) return;
+  const errorPage = `<!doctype html><meta charset="utf-8"><title>Eclipse could not start</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08070c;color:#f6f3ff;font:15px "Segoe UI",system-ui,sans-serif}.card{max-width:460px;padding:32px;border:1px solid #3d314f;border-radius:18px;background:#17131f;box-shadow:0 18px 60px #0008}h1{margin:0 0 10px;font-size:24px}p{color:#c0b6ce;line-height:1.6}code{padding:3px 5px;border-radius:5px;background:#0d0a13;color:#d8c5ff}</style><main class="card"><h1>Eclipse could not load</h1><p>The app window was recovered, but its interface did not finish loading. Close Eclipse from Task Manager, restart it, and try again. If this continues, launch <code>npm run desktop:dev</code> from the Eclipse folder and share the terminal error.</p></main>`;
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPage)}`).catch(() => {});
+  revealMainWindow(window);
+}
+
 function createMainWindow() {
-  mainWindow = new BrowserWindow({
+  if (isUsableWindow(mainWindow)) {
+    revealMainWindow();
+    return mainWindow;
+  }
+
+  let startupErrorShown = false;
+  const window = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -143,28 +164,59 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.cjs')
     }
   });
-
-  mainWindow.loadFile(path.join(__dirname, '..', 'app', 'index.html'));
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    if (pendingNavigationPage) mainWindow.webContents.send('system:navigate', pendingNavigationPage);
+  mainWindow = window;
+  let startupFallbackTimer;
+  const clearStartupFallback = () => {
+    if (startupFallbackTimer) clearTimeout(startupFallbackTimer);
+    startupFallbackTimer = undefined;
+  };
+  const showStartupFailure = () => {
+    if (startupErrorShown) return;
+    startupErrorShown = true;
+    showStartupError(window);
+  };
+  const sendPendingStartupRequest = () => {
+    if (!isUsableWindow(window)) return;
+    if (pendingNavigationPage) window.webContents.send('system:navigate', pendingNavigationPage);
     if (pendingLaunchPlaceId) {
       const placeId = pendingLaunchPlaceId;
       pendingLaunchPlaceId = 0;
       void launchRobloxPlayer(placeId);
     }
-  });
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true));
-  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false));
-}
+  };
 
+  window.once('ready-to-show', () => {
+    clearStartupFallback();
+    revealMainWindow(window);
+    sendPendingStartupRequest();
+  });
+  startupFallbackTimer = setTimeout(() => {
+    if (isUsableWindow(window) && !window.isVisible()) revealMainWindow(window);
+  }, 4_000);
+  startupFallbackTimer.unref?.();
+
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('did-fail-load', (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+    if (isMainFrame) showStartupFailure();
+  });
+  window.webContents.on('render-process-gone', () => showStartupFailure());
+  void window.loadFile(path.join(__dirname, '..', 'app', 'index.html')).catch(showStartupFailure);
+  window.on('maximize', () => window.webContents.send('window:maximized', true));
+  window.on('unmaximize', () => window.webContents.send('window:maximized', false));
+  window.on('closed', () => {
+    clearStartupFallback();
+    if (mainWindow === window) mainWindow = undefined;
+  });
+  return window;
+}
 app.setAppUserModelId('app.eclipse.client');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 if (hasSingleInstanceLock) {
 app.on('second-instance', (_event, commandLine) => {
-  openNavigationPage(navigationPageFromArguments(commandLine));
+  const page = navigationPageFromArguments(commandLine);
+  if (page) openNavigationPage(page);
+  else recoverMainWindow();
   const placeId = placeIdFromArguments(commandLine);
   if (placeId) {
     pendingLaunchPlaceId = placeId;
@@ -258,10 +310,7 @@ app.whenReady().then(async () => {
   recentLaunchPlaceIds = await readRecentPlaceIds(taskbarRecentsPath());
   refreshJumpList();
   createMainWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-    else mainWindow?.focus();
-  });
+  app.on('activate', () => recoverMainWindow());
 });
 }
 
