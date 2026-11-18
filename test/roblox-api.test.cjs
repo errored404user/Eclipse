@@ -229,7 +229,7 @@ test('routes the complete managed Fast Flags panel through its dedicated sidebar
   assert.match(fastFlagsSlice, /refreshFastFlagsStatus\(\)/);
 });
 
-test('keeps Fast Flags in visible primary navigation and closes setup actions after profile creation', () => {
+test('keeps Fast Flags in visible primary navigation and gives the profile overflow a true action-menu toggle', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
@@ -238,8 +238,12 @@ test('keeps Fast Flags in visible primary navigation and closes setup actions af
   const libraryIndex = shell.indexOf('data-page="library"');
   const fastFlagsIndex = shell.indexOf('data-page="fastflags"');
   const workspaceIndex = shell.indexOf('nav-group nav-group-bottom');
+  const wireShellSlice = renderer.slice(renderer.indexOf('function wireShell()'), renderer.indexOf("document.addEventListener('click', async"));
   assert.ok(libraryIndex >= 0 && fastFlagsIndex > libraryIndex && fastFlagsIndex < workspaceIndex);
-  assert.match(renderer, /if \(created\) \{\r?\n    const profileButton = document\.querySelector\('\[data-profile-button\]'\);/);
-  assert.match(renderer, /if \(profileMenu\) profileMenu\.hidden = true;/);
-  assert.match(renderer, /if \(state\.profile\.created\) \{\r?\n      openProfileDialog\(\);\r?\n      return;/);
+  assert.match(shell, /class="profile-menu-toggle"[^>]+aria-controls="profile-actions"[^>]+data-profile-button/);
+  assert.match(shell, /class="account-menu" id="profile-actions" data-profile-menu hidden/);
+  assert.match(renderer, /function setProfileMenuOpen\(isOpen\) \{\r?\n  const profileButton = document\.querySelector\('\[data-profile-button\]'\);/);
+  assert.match(renderer, /if \(created\) setProfileMenuOpen\(false\);/);
+  assert.match(wireShellSlice, /const isOpen = profileButton\.getAttribute\('aria-expanded'\) === 'true';\r?\n    setProfileMenuOpen\(!isOpen\);/);
+  assert.doesNotMatch(wireShellSlice, /state\.profile\.created[\s\S]*openProfileDialog\(\)/);
 });

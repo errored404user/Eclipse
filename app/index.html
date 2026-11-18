@@ -71,15 +71,19 @@
         </nav>
 
         <div class="sidebar-bottom">
-          <button class="account-card" type="button" aria-expanded="false" data-profile-button>
-            <span class="avatar avatar-profile" data-profile-avatar>E</span>
-            <span class="account-copy">
-              <strong data-profile-name>Eclipse guest</strong>
-              <small><i></i><span data-profile-status>Local profile</span></small>
-            </span>
-            <span class="more" aria-hidden="true">···</span>
-          </button>
-          <div class="account-menu" data-profile-menu hidden>
+          <div class="account-card">
+            <button class="account-profile-button" type="button" data-profile-action="open" aria-label="Edit Eclipse profile">
+              <span class="avatar avatar-profile" data-profile-avatar>E</span>
+              <span class="account-copy">
+                <strong data-profile-name>Eclipse guest</strong>
+                <small><i></i><span data-profile-status>Local profile</span></small>
+              </span>
+            </button>
+            <button class="profile-menu-toggle" type="button" aria-label="Toggle Eclipse profile actions" aria-controls="profile-actions" aria-expanded="false" data-profile-button>
+              <span class="more" aria-hidden="true">···</span>
+            </button>
+          </div>
+          <div class="account-menu" id="profile-actions" data-profile-menu hidden>
             <p data-profile-menu-note>Create an Eclipse profile stored only on this device.</p>
             <button class="profile-menu-primary" type="button" data-profile-action="open">Create Eclipse profile</button>
             <button type="button" data-player-action="download">Install Roblox Player</button>

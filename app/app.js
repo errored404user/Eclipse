@@ -79,6 +79,14 @@ function profileInitials(profile = state.profile) {
   return (initials || 'E').toUpperCase();
 }
 
+function setProfileMenuOpen(isOpen) {
+  const profileButton = document.querySelector('[data-profile-button]');
+  const profileMenu = document.querySelector('[data-profile-menu]');
+  if (!profileButton || !profileMenu) return;
+  profileButton.setAttribute('aria-expanded', String(isOpen));
+  profileMenu.hidden = !isOpen;
+}
+
 function updateProfileSurface() {
   const { created, displayName } = state.profile;
   const name = created ? displayName : 'Eclipse guest';
@@ -90,12 +98,7 @@ function updateProfileSurface() {
   document.querySelectorAll('[data-profile-menu-note]').forEach((element) => {
     element.textContent = created ? 'Your Eclipse profile is stored only on this device.' : 'Create an Eclipse profile stored only on this device.';
   });
-  if (created) {
-    const profileButton = document.querySelector('[data-profile-button]');
-    const profileMenu = document.querySelector('[data-profile-menu]');
-    if (profileButton) profileButton.setAttribute('aria-expanded', 'false');
-    if (profileMenu) profileMenu.hidden = true;
-  }
+  if (created) setProfileMenuOpen(false);
 }
 
 function profileDialog() {
@@ -112,10 +115,7 @@ function closeProfileDialog() {
 function openProfileDialog() {
   const dialog = profileDialog();
   if (!dialog) return;
-  const profileButton = document.querySelector('[data-profile-button]');
-  const profileMenu = document.querySelector('[data-profile-menu]');
-  if (profileButton) profileButton.setAttribute('aria-expanded', 'false');
-  if (profileMenu) profileMenu.hidden = true;
+  setProfileMenuOpen(false);
   const input = dialog.querySelector('[name="displayName"]');
   const title = dialog.querySelector('[data-profile-dialog-title]');
   const copy = dialog.querySelector('[data-profile-dialog-copy]');
@@ -651,19 +651,11 @@ function wireShell() {
   const profileButton = document.querySelector('[data-profile-button]');
   const profileMenu = document.querySelector('[data-profile-menu]');
   profileButton.addEventListener('click', () => {
-    if (state.profile.created) {
-      openProfileDialog();
-      return;
-    }
     const isOpen = profileButton.getAttribute('aria-expanded') === 'true';
-    profileButton.setAttribute('aria-expanded', String(!isOpen));
-    profileMenu.hidden = isOpen;
+    setProfileMenuOpen(!isOpen);
   });
   document.addEventListener('click', (event) => {
-    if (!profileButton.contains(event.target) && !profileMenu.contains(event.target)) {
-      profileButton.setAttribute('aria-expanded', 'false');
-      profileMenu.hidden = true;
-    }
+    if (!profileButton.contains(event.target) && !profileMenu.contains(event.target)) setProfileMenuOpen(false);
   });
   document.querySelector('[data-mobile-menu]').addEventListener('click', () => sidebar.classList.toggle('open'));
 }
