@@ -323,3 +323,41 @@ test('keeps Fast Flags visible and gives the reworked profile overflow an outboa
   assert.match(styles, /\.profile-actions-menu \{[^}]+left: calc\(100% \+ 11px\)/);
   assert.match(styles, /\.sidebar \{ overflow: visible; \}/);
 });
+
+test('adds a local-only Community shell with bounded drafts, official place invites, and no account handoff', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  const communitySlice = renderer.slice(renderer.indexOf('function normalizeCommunityPlaceId'), renderer.indexOf('function renderLibrary()'));
+
+  assert.match(shell, /data-page="community"/);
+  assert.match(shell, /icon-community/);
+  assert.match(shell, /data-community-request-dialog/);
+  assert.match(shell, /data-community-request-form/);
+  assert.match(renderer, /community: 'eclipse\.community\.v1'/);
+  assert.match(renderer, /function normalizeCommunity\(value\)/);
+  assert.match(renderer, /\.slice\(0, 24\)/);
+  assert.match(renderer, /function normalizeCommunityPlaceId\(value\)/);
+  assert.match(renderer, /if \(!\/\^\\d\{1,15\}\$\/\.test\(text\)\) return '';/);
+  assert.match(renderer, /function renderCommunity\(\)/);
+  assert.match(renderer, /data-community-message-form/);
+  assert.match(renderer, /data-community-recipient/);
+  assert.match(renderer, /Enter a valid Eclipse handle for this local direct-message draft\./);
+  assert.match(renderer, /data-community-invite-form/);
+  assert.match(renderer, /Official Roblox place/);
+  assert.match(renderer, /mutual friendships, direct messages, image\/GIF uploads, reporting/);
+  assert.match(renderer, /Eclipse-native identities, never Roblox sign-in or credentials/);
+  assert.match(renderer, /const allowedTypes = new Set\(\['image\/png', 'image\/jpeg', 'image\/webp', 'image\/gif'\]\)/);
+  assert.match(renderer, /file\.size > 4 \* 1024 \* 1024/);
+  assert.match(renderer, /let communityAttachment = null;/);
+  assert.doesNotMatch(renderer, /eclipse\.community\.v1[^\n]*url/);
+  assert.doesNotMatch(communitySlice, /fetch\(/);
+  assert.doesNotMatch(communitySlice, /roblox\.com\/login|password|data-account-action/);
+  assert.match(styles, /\.community-page/);
+  assert.match(styles, /\.community-offline-notice/);
+  assert.match(styles, /\.community-attachment-preview/);
+  assert.match(styles, /@media \(max-width: 860px\) \{ \.community-layout/);
+});

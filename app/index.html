@@ -55,6 +55,9 @@
             <button class="nav-item" type="button" data-page="library">
               <span class="nav-icon icon-library" aria-hidden="true"></span><span>Library</span>
             </button>
+            <button class="nav-item" type="button" data-page="community">
+              <span class="nav-icon icon-community" aria-hidden="true"></span><span>Community</span>
+            </button>
             <button class="nav-item" type="button" data-page="fastflags">
               <span class="nav-icon icon-fastflags" aria-hidden="true"></span><span>Fast Flags</span>
             </button>
@@ -120,6 +123,22 @@
           <p class="profile-input-error" data-profile-input-error hidden></p>
           <div class="profile-dialog-actions"><button class="quiet-button" type="button" data-action="close-profile-dialog">Cancel</button><button class="primary-button" type="submit" data-profile-submit>Create local profile</button></div>
           <small>Stored locally in Eclipse on this device. No email, password, Roblox session, or online account is created.</small>
+        </form>
+      </dialog>
+
+      <dialog class="community-dialog" data-community-request-dialog aria-labelledby="community-request-title">
+        <form class="community-dialog-card" data-community-request-form novalidate>
+          <button class="profile-dialog-close" type="button" data-action="close-community-request" aria-label="Close connection request">×</button>
+          <p class="section-kicker"><i></i> Community draft</p>
+          <h2 id="community-request-title">Create a connection request</h2>
+          <p>This creates a local request draft only. It cannot reach another person until Eclipse accounts and Community services are connected.</p>
+          <label for="community-handle">Eclipse handle</label>
+          <input id="community-handle" name="handle" maxlength="32" autocomplete="off" placeholder="example.eclipse" required />
+          <label for="community-note">Short note <span>optional</span></label>
+          <textarea id="community-note" name="note" maxlength="280" placeholder="Say hello…"></textarea>
+          <p class="community-input-error" data-community-request-error role="alert" hidden></p>
+          <div class="profile-dialog-actions"><button class="quiet-button" type="button" data-action="close-community-request">Cancel</button><button class="primary-button" type="submit">Save local request</button></div>
+          <small>No contact request is sent from this preview. You can remove the local draft at any time.</small>
         </form>
       </dialog>
     </main>

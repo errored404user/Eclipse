@@ -7,6 +7,7 @@ const storageKeys = {
   recent: 'eclipse.roblox.recent.v1',
   settings: 'eclipse.settings.v1',
   integrations: 'eclipse.integrations.v1',
+  community: 'eclipse.community.v1',
   profile: 'eclipse.profile.v1'
 };
 
@@ -16,6 +17,7 @@ const state = {
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
   integrations: normalizeIntegrations(readStored(storageKeys.integrations, {})),
+  community: normalizeCommunity(readStored(storageKeys.community, {})),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '' },
   fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
@@ -57,6 +59,7 @@ const browserFastFlags = {
 
 const fastFlags = window.eclipseFastFlags || browserFastFlags;
 let toastTimer;
+let communityAttachment = null;
 
 function readStored(key, fallback) {
   try {
@@ -89,6 +92,65 @@ function normalizeIntegrations(value) {
 function saveIntegrations() {
   state.integrations = normalizeIntegrations(state.integrations);
   writeStored(storageKeys.integrations, state.integrations);
+}
+
+function normalizeCommunityPlaceId(value) {
+  const text = String(value || '').trim();
+  if (!/^\d{1,15}$/.test(text)) return '';
+  const placeId = Number(text);
+  return Number.isSafeInteger(placeId) && placeId > 0 ? String(placeId) : '';
+}
+
+function normalizeCommunityHandle(value) {
+  const handle = String(value || '').trim().replace(/^@+/, '').slice(0, 32);
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/.test(handle) ? handle : '';
+}
+
+function normalizeCommunity(value) {
+  const connectionDrafts = Array.isArray(value?.connectionDrafts) ? value.connectionDrafts.flatMap((draft, index) => {
+    const handle = normalizeCommunityHandle(draft?.handle);
+    if (!handle) return [];
+    return [{
+      id: String(draft?.id || `connection-${index}`).slice(0, 80),
+      handle,
+      note: String(draft?.note || '').trim().slice(0, 280),
+      createdAt: String(draft?.createdAt || '')
+    }];
+  }).slice(0, 24) : [];
+  const messageDrafts = Array.isArray(value?.messageDrafts) ? value.messageDrafts.flatMap((draft, index) => {
+    const text = String(draft?.text || '').trim().slice(0, 1500);
+    const recipient = normalizeCommunityHandle(draft?.recipient);
+    const invitePlaceId = normalizeCommunityPlaceId(draft?.invitePlaceId);
+    const attachmentName = String(draft?.attachmentName || '').trim().slice(0, 160);
+    if (!text && !invitePlaceId && !attachmentName) return [];
+    return [{
+      id: String(draft?.id || `message-${index}`).slice(0, 80),
+      text,
+      recipient,
+      invitePlaceId,
+      attachmentName,
+      createdAt: String(draft?.createdAt || '')
+    }];
+  }).slice(0, 24) : [];
+  return {
+    connectionDrafts,
+    messageDrafts,
+    composerText: String(value?.composerText || '').slice(0, 1500),
+    composerRecipient: String(value?.composerRecipient || '').trim().replace(/^@+/, '').slice(0, 32),
+    invitePlaceId: normalizeCommunityPlaceId(value?.invitePlaceId)
+  };
+}
+
+function saveCommunity() {
+  state.community = normalizeCommunity(state.community);
+  writeStored(storageKeys.community, state.community);
+}
+
+function createCommunityDraftId(prefix) {
+  const suffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${suffix}`;
 }
 
 function profileInitials(profile = state.profile) {
@@ -175,6 +237,57 @@ function saveEclipseProfile(form) {
   closeProfileDialog();
   renderCurrentPage();
   showToast('Your local Eclipse profile was saved.');
+}
+
+function communityRequestDialog() {
+  return document.querySelector('[data-community-request-dialog]');
+}
+
+function closeCommunityRequestDialog() {
+  const dialog = communityRequestDialog();
+  if (!dialog) return;
+  if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+  else dialog.removeAttribute('open');
+}
+
+function openCommunityRequestDialog() {
+  const dialog = communityRequestDialog();
+  if (!dialog) return;
+  const form = dialog.querySelector('[data-community-request-form]');
+  const error = dialog.querySelector('[data-community-request-error]');
+  form?.reset();
+  if (error) error.hidden = true;
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+  window.setTimeout(() => dialog.querySelector('[name="handle"]')?.focus(), 0);
+}
+
+function saveCommunityConnectionDraft(form) {
+  const handle = normalizeCommunityHandle(new FormData(form).get('handle'));
+  const note = String(new FormData(form).get('note') || '').trim().slice(0, 280);
+  const error = form.querySelector('[data-community-request-error]');
+  if (!handle) {
+    if (error) {
+      error.textContent = 'Use a 3–32 character Eclipse handle with letters, numbers, dots, underscores, or dashes.';
+      error.hidden = false;
+    }
+    form.querySelector('[name="handle"]')?.setAttribute('aria-invalid', 'true');
+    form.querySelector('[name="handle"]')?.focus();
+    return;
+  }
+  form.querySelector('[name="handle"]')?.setAttribute('aria-invalid', 'false');
+  if (state.community.connectionDrafts.some((draft) => draft.handle.toLowerCase() === handle.toLowerCase())) {
+    if (error) {
+      error.textContent = 'A local request draft for that Eclipse handle already exists.';
+      error.hidden = false;
+    }
+    return;
+  }
+  state.community.connectionDrafts = [{ id: createCommunityDraftId('connection'), handle, note, createdAt: new Date().toISOString() }, ...state.community.connectionDrafts].slice(0, 24);
+  saveCommunity();
+  closeCommunityRequestDialog();
+  if (state.page === 'community') renderCommunity();
+  showToast('Connection request saved locally. It has not been sent.');
 }
 
 function escapeHtml(value = '') {
@@ -482,6 +595,100 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
   }
 }
 
+function communityDraftCard(draft) {
+  const details = [draft.recipient ? `To @${escapeHtml(draft.recipient)}` : '', draft.text ? escapeHtml(draft.text) : '', draft.invitePlaceId ? `Official Roblox place ${escapeHtml(draft.invitePlaceId)}` : '', draft.attachmentName ? `Attachment reference: ${escapeHtml(draft.attachmentName)}` : ''].filter(Boolean);
+  return `<article class="community-draft-card"><div><span class="community-draft-dot" aria-hidden="true"></span><strong>${draft.invitePlaceId && !draft.text ? 'Roblox invite draft' : 'Direct-message draft'}</strong><small>${escapeHtml(formatDate(draft.createdAt))} · Local only</small></div><p>${details.join(' · ')}</p><button class="community-remove" type="button" data-action="remove-community-draft" data-draft-id="${escapeHtml(draft.id)}" aria-label="Remove local draft">×</button></article>`;
+}
+
+function renderCommunity() {
+  const { connectionDrafts, messageDrafts, composerText, composerRecipient, invitePlaceId } = state.community;
+  const attachment = communityAttachment;
+  const connectionList = connectionDrafts.length
+    ? connectionDrafts.map((draft) => `<article class="community-contact-draft"><span class="community-contact-avatar">${escapeHtml(draft.handle.slice(0, 2).toUpperCase())}</span><div><strong>@${escapeHtml(draft.handle)}</strong><small>Local connection draft · ${escapeHtml(formatDate(draft.createdAt))}</small>${draft.note ? `<p>${escapeHtml(draft.note)}</p>` : ''}</div><button class="community-remove" type="button" data-action="remove-community-connection" data-draft-id="${escapeHtml(draft.id)}" aria-label="Remove local connection request for ${escapeHtml(draft.handle)}">×</button></article>`).join('')
+    : '<div class="community-empty-contacts"><span aria-hidden="true">◌</span><strong>No connections yet</strong><p>Create a local request draft for an Eclipse handle. It will not send until Community services are online.</p></div>';
+  const draftList = messageDrafts.length
+    ? messageDrafts.slice(0, 5).map(communityDraftCard).join('')
+    : '<p class="community-draft-empty">No local message or invite drafts yet.</p>';
+  const attachmentPreview = attachment
+    ? `<div class="community-attachment-preview"><img src="${escapeHtml(attachment.url)}" alt="Selected local draft attachment ${escapeHtml(attachment.name)}" /><div><strong>${escapeHtml(attachment.name)}</strong><small>${escapeHtml(attachment.type === 'image/gif' ? 'GIF' : 'Image')} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB · current session only</small></div><button type="button" data-action="clear-community-attachment" aria-label="Remove ${escapeHtml(attachment.name)}">×</button></div>`
+    : '';
+  pageContent.innerHTML = `<div class="page-shell community-page">
+    ${pageHeader('Eclipse community', 'Community.', 'Prepare local connection, message, media, and Roblox-invite drafts while Eclipse Community services are offline. Nothing on this page reaches another person.', '<button class="primary-button" type="button" data-action="open-community-request"><span class="community-add-icon" aria-hidden="true"></span> New connection</button>')}
+    <section class="community-offline-notice panel"><span class="community-offline-symbol" aria-hidden="true">◌</span><div><p class="section-kicker">Local shell</p><h2>Online Community is not connected yet.</h2><p>Eclipse accounts, mutual friendships, direct messages, image/GIF uploads, reporting, and official Roblox experience invites need the future Community backend. This local preview stores drafts only on this device. Eclipse accounts will be Eclipse-native identities, never Roblox sign-in or credentials.</p></div><span class="community-offline-status"><i></i> Offline-local</span></section>
+    <div class="community-layout">
+      <aside class="community-rail panel"><div class="community-rail-heading"><div><p class="section-kicker">Connections</p><h2>People</h2></div><button type="button" data-action="open-community-request" aria-label="Create local connection request">+</button></div><div class="community-contact-list">${connectionList}</div><div class="community-rail-footer"><i></i><span>Requests stay on this device</span></div></aside>
+      <section class="community-workbench panel"><header class="community-workbench-heading"><div><p class="section-kicker"><i></i> Direct messages</p><h2>Write a local direct-message draft.</h2><p>Messages cannot be delivered from this preview, but you can prepare a recipient, text, and session-only media attachment.</p></div><span>Draft mode</span></header><div class="community-thread"><div class="community-system-message"><span class="community-system-mark" aria-hidden="true">E</span><div><strong>Eclipse Community</strong><p>Choose an online identity and Community service when you are ready to send real friend requests, chats, media, reports, and Roblox experience invites.</p></div></div>${draftList}</div><form class="community-composer" data-community-message-form><label class="community-composer-recipient" for="community-message-recipient"><span>To Eclipse handle</span><input id="community-message-recipient" name="recipient" data-community-recipient maxlength="32" autocomplete="off" value="${escapeHtml(composerRecipient)}" placeholder="example.eclipse" required /></label><textarea name="message" data-community-composer maxlength="1500" placeholder="Write a local message draft…">${escapeHtml(composerText)}</textarea>${attachmentPreview}<div class="community-composer-actions"><label class="community-attach"><input type="file" data-community-attachment accept="image/png,image/jpeg,image/webp,image/gif" /><span class="community-attach-icon" aria-hidden="true"></span> Attach image or GIF</label><span>JPEG, PNG, WebP, or GIF · 4 MB max · session only</span><button class="primary-button" type="submit">Save local draft</button></div></form></section>
+    </div>
+    <section class="community-bottom-grid"><article class="community-invite-builder panel"><div><p class="section-kicker"><i></i> Roblox experience invite</p><h2>Prepare an official place invite.</h2><p>Use a trusted official Roblox place ID. Eclipse will save an invite draft locally; it does not create a server or contact a recipient.</p></div><form data-community-invite-form><label for="community-place-id">Roblox place ID</label><div><input id="community-place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" value="${escapeHtml(invitePlaceId)}" placeholder="Example: 1818" required /><button class="quiet-button" type="submit">Save invite draft</button></div></form></article><article class="community-safety panel"><p class="section-kicker"><i></i> Safety baseline</p><h2>Block and report ready.</h2><p>When Community is connected, mutual-friend controls, blocking, reporting, upload limits, and moderation records will be required before messages or media can reach anyone.</p><span><i></i> No account, message, image, GIF, or invite is currently transmitted</span></article></section>
+  </div>`;
+}
+
+function saveCommunityMessageDraft(form) {
+  const text = String(new FormData(form).get('message') || '').trim().slice(0, 1500);
+  const recipientInput = form.querySelector('[name="recipient"]');
+  const recipient = normalizeCommunityHandle(new FormData(form).get('recipient'));
+  if (!recipient) {
+    recipientInput?.setAttribute('aria-invalid', 'true');
+    recipientInput?.focus();
+    showToast('Enter a valid Eclipse handle for this local direct-message draft.');
+    return;
+  }
+  recipientInput?.setAttribute('aria-invalid', 'false');
+  if (!text && !communityAttachment) {
+    showToast('Write a message or attach an image/GIF before saving a local draft.');
+    return;
+  }
+  state.community.messageDrafts = [{
+    id: createCommunityDraftId('message'),
+    text,
+    recipient,
+    invitePlaceId: '',
+    attachmentName: communityAttachment?.name || '',
+    createdAt: new Date().toISOString()
+  }, ...state.community.messageDrafts].slice(0, 24);
+  state.community.composerText = '';
+  state.community.composerRecipient = '';
+  communityAttachment = null;
+  saveCommunity();
+  renderCommunity();
+  showToast('Message draft saved on this device. It was not sent.');
+}
+
+function saveCommunityInviteDraft(form) {
+  const placeId = normalizeCommunityPlaceId(new FormData(form).get('placeId'));
+  if (!placeId) {
+    showToast('Enter a valid official Roblox place ID to save an invite draft.');
+    return;
+  }
+  state.community.messageDrafts = [{
+    id: createCommunityDraftId('invite'),
+    text: '',
+    invitePlaceId: placeId,
+    attachmentName: '',
+    createdAt: new Date().toISOString()
+  }, ...state.community.messageDrafts].slice(0, 24);
+  state.community.invitePlaceId = '';
+  saveCommunity();
+  renderCommunity();
+  showToast('Roblox experience invite draft saved locally.');
+}
+
+function setCommunityAttachment(file) {
+  const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+  if (!file || !allowedTypes.has(file.type) || file.size > 4 * 1024 * 1024) {
+    showToast('Choose a PNG, JPEG, WebP, or GIF no larger than 4 MB.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    communityAttachment = { name: String(file.name || 'attachment').slice(0, 160), type: file.type, size: file.size, url: String(reader.result || '') };
+    if (state.page === 'community') renderCommunity();
+    showToast('Attachment added to this session’s local draft.');
+  };
+  reader.onerror = () => showToast('The selected attachment could not be read.');
+  reader.readAsDataURL(file);
+}
+
 function renderLibrary() {
   pageContent.innerHTML = `<div class="page-shell library-page">
     ${pageHeader('Your library', 'Saved Roblox experiences.', 'Library items are official Roblox places you saved in Eclipse. They are stored locally on this device.', '<button class="primary-button" type="button" data-page-link="discover">Discover games</button>')}
@@ -651,7 +858,7 @@ function renderSettings() {
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', fastflags: 'Fast Flags', integrations: 'Integrations', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', community: 'Community', tools: 'Tools', fastflags: 'Fast Flags', integrations: 'Integrations', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -664,6 +871,7 @@ function renderCurrentPage() {
   updateWindowTab();
   if (state.page === 'discover') renderDiscover();
   else if (state.page === 'library') renderLibrary();
+  else if (state.page === 'community') renderCommunity();
   else if (state.page === 'tools') renderTools();
   else if (state.page === 'fastflags') renderFastFlags();
   else if (state.page === 'integrations') renderIntegrations();
@@ -673,7 +881,7 @@ function renderCurrentPage() {
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'integrations', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'community', 'tools', 'fastflags', 'integrations', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
@@ -771,6 +979,24 @@ document.addEventListener('click', async (event) => {
   }
   if (profileAction === 'open') openProfileDialog();
   if (action === 'close-profile-dialog') closeProfileDialog();
+  if (action === 'open-community-request') openCommunityRequestDialog();
+  if (action === 'close-community-request') closeCommunityRequestDialog();
+  if (action === 'clear-community-attachment') {
+    communityAttachment = null;
+    if (state.page === 'community') renderCommunity();
+  }
+  if (action === 'remove-community-connection') {
+    state.community.connectionDrafts = state.community.connectionDrafts.filter((draft) => draft.id !== button.dataset.draftId);
+    saveCommunity();
+    if (state.page === 'community') renderCommunity();
+    showToast('Local connection request removed.');
+  }
+  if (action === 'remove-community-draft') {
+    state.community.messageDrafts = state.community.messageDrafts.filter((draft) => draft.id !== button.dataset.draftId);
+    saveCommunity();
+    if (state.page === 'community') renderCommunity();
+    showToast('Local Community draft removed.');
+  }
   if (action === 'launch-game') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'save-game') {
@@ -813,6 +1039,21 @@ document.addEventListener('submit', async (event) => {
     saveEclipseProfile(event.target);
     return;
   }
+  if (event.target.matches('[data-community-request-form]')) {
+    event.preventDefault();
+    saveCommunityConnectionDraft(event.target);
+    return;
+  }
+  if (event.target.matches('[data-community-message-form]')) {
+    event.preventDefault();
+    saveCommunityMessageDraft(event.target);
+    return;
+  }
+  if (event.target.matches('[data-community-invite-form]')) {
+    event.preventDefault();
+    saveCommunityInviteDraft(event.target);
+    return;
+  }
   if (event.target.matches('[data-discovery-form]')) {
     event.preventDefault();
     const query = new FormData(event.target).get('query');
@@ -849,10 +1090,35 @@ document.addEventListener('input', (event) => {
     profileInput.setAttribute('aria-invalid', 'false');
     const error = profileInput.closest('[data-profile-form]')?.querySelector('[data-profile-input-error]');
     if (error) error.hidden = true;
+    return;
+  }
+  const communityComposer = event.target.closest('[data-community-composer]');
+  if (communityComposer) {
+    state.community.composerText = String(communityComposer.value || '').slice(0, 1500);
+    saveCommunity();
+    return;
+  }
+  const communityRecipient = event.target.closest('[data-community-recipient]');
+  if (communityRecipient) {
+    state.community.composerRecipient = String(communityRecipient.value || '').trim().replace(/^@+/, '').slice(0, 32);
+    communityRecipient.setAttribute('aria-invalid', 'false');
+    saveCommunity();
+    return;
+  }
+  const communityHandle = event.target.closest('[name="handle"]');
+  if (communityHandle) {
+    communityHandle.setAttribute('aria-invalid', 'false');
+    const error = communityHandle.closest('[data-community-request-form]')?.querySelector('[data-community-request-error]');
+    if (error) error.hidden = true;
   }
 });
 
 document.addEventListener('change', (event) => {
+  const communityAttachmentInput = event.target.closest('[data-community-attachment]');
+  if (communityAttachmentInput) {
+    setCommunityAttachment(communityAttachmentInput.files?.[0]);
+    return;
+  }
   const fastFlagInput = event.target.closest('[data-fastflag-field]');
   if (fastFlagInput) {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : fastFlagInput.dataset.fastflagType === 'string' ? fastFlagInput.value : Number(fastFlagInput.value);
