@@ -41,7 +41,7 @@ Start with [`.env.example`](.env.example). All of these values are required befo
 | `COMMUNITY_EMAIL_FROM` | Sender address authorized by the SMTP provider. |
 | `COMMUNITY_PUBLIC_URL` | Exact public HTTPS origin, such as `https://community.example.com`. Used in verification links and origin checks. |
 
-`COMMUNITY_DATABASE_SSL` defaults to verified TLS. Set it to `false` only for a local development database with an intentional private network boundary. `COMMUNITY_TRUST_PROXY=true` is appropriate only if the immediate proxy overwrites incoming `X-Forwarded-For`; otherwise leave it false so request throttling uses the peer IP.
+`COMMUNITY_DATABASE_SSL` defaults to verified TLS. Set it to `false` only for a local development database with an intentional private network boundary. `COMMUNITY_DATABASE_POOL_MAX` defaults to `2` and accepts `1` through `10`; keep it low per serverless instance and size the database's total connection limit accordingly. `COMMUNITY_TRUST_PROXY=true` is appropriate only if the immediate proxy overwrites incoming `X-Forwarded-For`; otherwise leave it false so request throttling uses the peer IP.
 
 For local development only, `NODE_ENV=development` permits a `http://localhost` public URL. Production rejects non-HTTPS public URLs.
 
@@ -51,7 +51,7 @@ The repository is Vercel-ready: `api/index.js` creates the same Eclipse HTTP app
 
 1. Import this repository into a Vercel Node.js project or deploy it with the Vercel CLI.
 2. Provision PostgreSQL and transactional SMTP outside Vercel (or connect approved managed services). Vercel does not safely invent these credentials for a production account system.
-3. In **Project Settings → Environment Variables**, add every required value from the table above to the **Production** environment. Set `COMMUNITY_PUBLIC_URL` to the final Vercel/custom `https://` domain. Keep `COMMUNITY_TRUST_PROXY=false` unless a separately managed, immediate trusted proxy overwrites `X-Forwarded-For`.
+3. In **Project Settings → Environment Variables**, add every required value from the table above to the **Production** environment. Set `COMMUNITY_PUBLIC_URL` to the final Vercel/custom `https://` domain. Set `COMMUNITY_TRUST_PROXY=true` on Vercel so its trusted proxy address is used for the baseline throttles, and keep `COMMUNITY_DATABASE_POOL_MAX` low (the default is `2`) to protect your PostgreSQL connection limit.
 4. Redeploy after setting the variables. The first invocation runs idempotent schema setup, cleanup, and SMTP verification. Community stays unavailable if any of those steps fails.
 5. Verify registration email delivery, verification-link origin, session cookies, message-request acceptance, block/report audit records, and database backup/restore procedures before inviting users.
 

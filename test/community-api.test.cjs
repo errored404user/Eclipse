@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { handleCommunityApi } = require('../community/api.cjs');
 const { configuredCommunityUrl } = require('../electron/community-api.cjs');
-const { CommunityError, cleanEmail, cleanPlaceId, cleanUsername, configuredEnvironment } = require('../community/service.cjs');
+const { CommunityError, cleanEmail, cleanPlaceId, cleanUsername, configuredEnvironment, databasePoolSize } = require('../community/service.cjs');
 
 function sendJson(response, status, body, headers = {}) {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers });
@@ -77,6 +77,9 @@ test('Community configuration requires production identity, database, mail, and 
     COMMUNITY_PUBLIC_URL: 'https://community.example'
   });
   assert.equal(enabled.enabled, true);
+  assert.equal(databasePoolSize({}), 2);
+  assert.equal(databasePoolSize({ COMMUNITY_DATABASE_POOL_MAX: '1' }), 1);
+  assert.equal(databasePoolSize({ COMMUNITY_DATABASE_POOL_MAX: '250' }), 2);
   assert.equal(cleanUsername('@orbit.eclipse'), 'orbit.eclipse');
   assert.throws(() => cleanUsername('no'), { code: 'INVALID_USERNAME' });
   assert.throws(() => cleanUsername('a bad name'), { code: 'INVALID_USERNAME' });

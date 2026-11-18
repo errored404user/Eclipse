@@ -193,6 +193,11 @@ function configuredEnvironment(env) {
   return { enabled: missing.length === 0, missing, publicUrl };
 }
 
+function databasePoolSize(env) {
+  const configured = Number.parseInt(String(env.COMMUNITY_DATABASE_POOL_MAX || '2'), 10);
+  return Number.isInteger(configured) && configured >= 1 && configured <= 10 ? configured : 2;
+}
+
 class CommunityService {
   constructor(env = process.env, logger = console) {
     this.env = env;
@@ -202,13 +207,31 @@ class CommunityService {
     this.transporter = null;
     this.started = false;
     this.startError = '';
+    this.startPromise = null;
+    this.nextStartAttemptAt = 0;
     this.rateBuckets = new Map();
   }
 
   async start() {
     if (!this.config.enabled || this.started) return this.status();
+    if (this.startPromise) return this.startPromise;
+    if (Date.now() < this.nextStartAttemptAt) return this.status();
+
+    this.startPromise = this.startInfrastructure().finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
+  }
+
+  async startInfrastructure() {
     try {
-      this.pool = new Pool({ connectionString: this.env.DATABASE_URL, ssl: this.env.COMMUNITY_DATABASE_SSL === 'false' ? false : { rejectUnauthorized: true } });
+      this.pool = new Pool({
+        connectionString: this.env.DATABASE_URL,
+        ssl: this.env.COMMUNITY_DATABASE_SSL === 'false' ? false : { rejectUnauthorized: true },
+        max: databasePoolSize(this.env),
+        connectionTimeoutMillis: 5_000,
+        idleTimeoutMillis: 10_000
+      });
       this.transporter = nodemailer.createTransport(this.env.COMMUNITY_SMTP_URL);
       await this.pool.query(schema);
       await this.pool.query('DELETE FROM eclipse_community_sessions WHERE expires_at <= NOW()');
@@ -216,8 +239,10 @@ class CommunityService {
       await this.transporter.verify();
       this.started = true;
       this.startError = '';
+      this.nextStartAttemptAt = 0;
     } catch (error) {
       this.startError = 'The Community service could not connect to its required infrastructure.';
+      this.nextStartAttemptAt = Date.now() + 30_000;
       this.logger.error?.('Eclipse Community startup failed:', error);
       await this.pool?.end().catch(() => {});
       this.pool = null;
@@ -619,5 +644,6 @@ module.exports = {
   cleanPlaceId,
   cleanUsername,
   configuredEnvironment,
+  databasePoolSize,
   createCommunityService
 };
