@@ -7,7 +7,6 @@ Eclipse is a Windows desktop bootstrapper and launcher for official Roblox exper
 - **Home** shows locally recorded recent launches and saved Roblox experiences.
 - **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs. Selectable Roblox-provided collections expose more choices than a single trending feed, alongside search and result pagination.
 - **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games.
-- **Community** connects to a separately deployed Eclipse Community service when it is configured. It uses a unique Eclipse username plus email/password account and email verification: search a username, send a message request, and open private text chat only after the recipient accepts. Official Roblox place invites are available in accepted private chats. It never asks for, links, stores, or uses Roblox credentials or Roblox identity. Blocking, reporting, rate limits, and moderation-ready audit records are included; media uploads are deliberately disabled until a separately hardened media pipeline exists.
 - **Eclipse bootstrapper (Windows desktop)** detects the installed Roblox Player, checks Roblox’s official Windows Player release service before Eclipse launches, and downloads only the official Roblox installer when installation or an update is needed. Eclipse verifies the installer with Windows Authenticode before it runs, then confirms the installed version. It does not change the system `roblox://` association.
 - **Tools** validates a Roblox place ID, asks the bootstrapper to prepare the official Player, then requests the existing official `roblox://experiences/start?placeId=…` protocol handler. The Eclipse Player Handoff reports Eclipse-owned install/handoff stages only—it never claims Roblox game or server state.
 - **Fast Flags** has a dedicated sidebar destination for Windows-only Default, Performance, Balanced, and Quality rendering profiles; 1×, 2×, and 4× MSAA; mesh-detail and FRM-quality overrides; an Automatic, Direct3D 11, or Vulkan renderer preference; optional frame-rate targets; and a display-scaling option. Eclipse accepts only these bounded managed settings, merges only its managed keys into `ClientAppSettings.json`, and can remove only those keys again. During an official Player update, Eclipse carries only those managed keys into the new Player folder.
@@ -28,21 +27,7 @@ npm start
 
 Open `http://localhost:4173`.
 
-The browser preview fetches live Roblox discovery data through its local Node server. Launching a game hands off to the Roblox protocol registered on your computer. Community remains unavailable until the production service variables below are configured; this is intentional and does not create a public account service.
-
-## Deploy Eclipse Community
-
-Community is a separate Eclipse-native service that runs from this same Node server with PostgreSQL and a transactional SMTP provider. It is **not deployed by this repository or preview**. A public release needs a real HTTPS hostname, database, mail provider, session secret, reverse proxy/hosting, operations monitoring, and moderation process.
-
-1. Copy `.env.example` to a private environment file or configure the variables in your host. Never commit the real values.
-2. Point `DATABASE_URL` at a PostgreSQL database. The service creates its tables and indexes at startup and removes expired sessions/verification links.
-3. Set `COMMUNITY_PUBLIC_URL` to the exact public HTTPS origin that serves Eclipse. It is used for email-verification links and same-origin protection.
-4. Configure SMTP and a sender address that your provider authorizes. Startup verifies the SMTP connection before it exposes Community as enabled.
-5. Put the app behind HTTPS. If a trusted reverse proxy supplies `X-Forwarded-For`, set `COMMUNITY_TRUST_PROXY=true` and make sure the proxy strips any client-provided version of that header.
-
-For a containerized server, build and run the supplied `Dockerfile` with secrets injected by the hosting platform. The app listens on `PORT` (default `4173`); TLS should terminate at the platform or reverse proxy. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the environment contract, security boundaries, backups, and launch checklist.
-
-The browser UI uses the Community API at the same public origin. The Electron app instead needs `ECLIPSE_COMMUNITY_API_URL=https://community.example` in its launch environment; the desktop bridge accepts HTTPS Community URLs only and keeps its opaque session token out of renderer storage.
+The browser preview fetches live Roblox discovery data through its local Node server. Launching a game hands off to the Roblox protocol registered on your computer.
 
 ## Run as a desktop application
 
@@ -105,4 +90,4 @@ npm run check
 npm run test
 ```
 
-The test suite uses mocked responses from the fixed official Roblox endpoints. It verifies discovery response mapping, thumbnail attachment, strict place-ID validation, official Windows Player version/installer validation, managed Fast Flag migration, and the message-request Community contract without sending live Roblox requests.
+The test suite uses mocked responses from fixed official Roblox endpoints. It verifies discovery response mapping, thumbnail attachment, strict place-ID validation, official Windows Player version and installer validation, and managed Fast Flag migration without sending live Roblox requests.
