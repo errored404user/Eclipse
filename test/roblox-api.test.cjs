@@ -110,3 +110,52 @@ test('defines bounded player-handoff states without pretending to read Roblox co
   }
   assert.match(launchStates.complete.detail, /Eclipse has completed the handoff/i);
 });
+
+test('builds bounded mesh, FRM, display-scaling, and rendering-mode Fast Flags', () => {
+  const { buildManagedFlags, mergeManagedFlags } = require('../electron/fast-flags.cjs');
+  const flags = buildManagedFlags({
+    profile: 'default',
+    msaa: 4,
+    preserveDisplayScaling: true,
+    meshDetailEnabled: true,
+    meshDetail: 3,
+    frmQualityEnabled: true,
+    frmQuality: 2,
+    renderingMode: 'd3d11'
+  });
+  assert.deepEqual(flags, {
+    FIntDebugForceMSAASamples: '4',
+    DFFlagDisableDPIScale: 'True',
+    DFIntCSGLevelOfDetailSwitchingDistanceStatic: '3',
+    DFIntCSGLevelOfDetailSwitchingDistance: '1000',
+    DFIntCSGLevelOfDetailSwitchingDistanceL12: '750',
+    DFIntCSGLevelOfDetailSwitchingDistanceL23: '500',
+    DFIntCSGLevelOfDetailSwitchingDistanceL34: '250',
+    DFIntDebugFRMQualityLevelOverride: '2',
+    FFlagDebugGraphicsPreferD3D11: 'True'
+  });
+  const reset = mergeManagedFlags({ FFlagUnrelatedSetting: 'Keep', ...flags }, {});
+  assert.deepEqual(reset, { FFlagUnrelatedSetting: 'Keep' });
+});
+
+test('clamps numeric Fast Flag fine-tuning and rejects unsupported renderers', () => {
+  const { normalizeOptions, buildManagedFlags } = require('../electron/fast-flags.cjs');
+  assert.deepEqual(normalizeOptions({
+    profile: 'not-a-profile',
+    msaa: 8,
+    meshDetail: 99,
+    frmQuality: -5,
+    renderingMode: 'opengl'
+  }), {
+    profile: 'default',
+    fpsCap: 0,
+    msaa: 0,
+    preserveDisplayScaling: false,
+    meshDetailEnabled: false,
+    meshDetail: 3,
+    frmQualityEnabled: false,
+    frmQuality: 1,
+    renderingMode: 'automatic'
+  });
+  assert.deepEqual(buildManagedFlags({ renderingMode: 'vulkan' }), { FFlagDebugGraphicsPreferVulkan: 'True' });
+});

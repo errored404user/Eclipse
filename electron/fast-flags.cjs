@@ -2,50 +2,99 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
-const PROFILE_FLAGS = {
-  default: {},
-  performance: {
+const PROFILE_FLAGS = Object.freeze({
+  default: Object.freeze({}),
+  performance: Object.freeze({
     DFFlagTextureQualityOverrideEnabled: 'True',
-    DFIntTextureQualityOverride: '0',
-    FIntDebugForceMSAASamples: '1'
-  },
-  balanced: {
+    DFIntTextureQualityOverride: '0'
+  }),
+  balanced: Object.freeze({
     DFFlagTextureQualityOverrideEnabled: 'True',
-    DFIntTextureQualityOverride: '2',
-    FIntDebugForceMSAASamples: '2'
-  },
-  quality: {
+    DFIntTextureQualityOverride: '2'
+  }),
+  quality: Object.freeze({
     DFFlagTextureQualityOverrideEnabled: 'True',
-    DFIntTextureQualityOverride: '3',
-    FIntDebugForceMSAASamples: '4'
-  }
-};
+    DFIntTextureQualityOverride: '3'
+  })
+});
+
+const PROFILE_MSAA = Object.freeze({ default: 0, performance: 1, balanced: 2, quality: 4 });
+const FPS_CAPS = Object.freeze([60, 120, 144, 165, 240]);
+const MSAA_LEVELS = Object.freeze([0, 1, 2, 4]);
+const MESH_DETAIL_RANGE = Object.freeze({ min: 0, max: 3 });
+const FRM_QUALITY_RANGE = Object.freeze({ min: 1, max: 21 });
+const RENDERING_MODES = Object.freeze(['automatic', 'd3d11', 'vulkan']);
 
 const MANAGED_KEYS = Object.freeze([
   'DFFlagTextureQualityOverrideEnabled',
   'DFIntTextureQualityOverride',
   'FIntDebugForceMSAASamples',
   'DFIntTaskSchedulerTargetFps',
-  'DFFlagDisableDPIScale'
+  'DFFlagDisableDPIScale',
+  'DFIntCSGLevelOfDetailSwitchingDistanceStatic',
+  'DFIntCSGLevelOfDetailSwitchingDistance',
+  'DFIntCSGLevelOfDetailSwitchingDistanceL12',
+  'DFIntCSGLevelOfDetailSwitchingDistanceL23',
+  'DFIntCSGLevelOfDetailSwitchingDistanceL34',
+  'DFIntDebugFRMQualityLevelOverride',
+  'FFlagDebugGraphicsPreferD3D11',
+  'FFlagDebugGraphicsPreferVulkan'
 ]);
 
-const FPS_CAPS = Object.freeze([60, 120, 144, 165, 240]);
+function clampInteger(value, range, fallback) {
+  const number = Number(value);
+  if (!Number.isInteger(number)) return fallback;
+  return Math.min(range.max, Math.max(range.min, number));
+}
 
 function normalizeOptions(options = {}) {
   const profile = Object.hasOwn(PROFILE_FLAGS, options.profile) ? options.profile : 'default';
   const requestedCap = Number(options.fpsCap);
+  const requestedMsaa = Number(options.msaa);
+  const hasPreserveSetting = Object.hasOwn(options, 'preserveDisplayScaling');
+  const requestedMode = String(options.renderingMode || 'automatic').toLowerCase();
   return {
     profile,
     fpsCap: FPS_CAPS.includes(requestedCap) ? requestedCap : 0,
-    disableDpiScaling: options.disableDpiScaling === true
+    msaa: MSAA_LEVELS.includes(requestedMsaa) ? requestedMsaa : PROFILE_MSAA[profile],
+    preserveDisplayScaling: hasPreserveSetting ? options.preserveDisplayScaling === true : options.disableDpiScaling === true,
+    meshDetailEnabled: options.meshDetailEnabled === true,
+    meshDetail: clampInteger(options.meshDetail, MESH_DETAIL_RANGE, MESH_DETAIL_RANGE.max),
+    frmQualityEnabled: options.frmQualityEnabled === true,
+    frmQuality: clampInteger(options.frmQuality, FRM_QUALITY_RANGE, FRM_QUALITY_RANGE.max),
+    renderingMode: RENDERING_MODES.includes(requestedMode) ? requestedMode : 'automatic'
   };
+}
+
+function buildMeshDetailFlags(detail) {
+  const names = [
+    'DFIntCSGLevelOfDetailSwitchingDistance',
+    'DFIntCSGLevelOfDetailSwitchingDistanceL12',
+    'DFIntCSGLevelOfDetailSwitchingDistanceL23',
+    'DFIntCSGLevelOfDetailSwitchingDistanceL34'
+  ];
+  const flags = { DFIntCSGLevelOfDetailSwitchingDistanceStatic: String(detail) };
+  names.forEach((name, index) => {
+    flags[name] = String((Math.max(0, Math.min(3, detail - index)) + 1) * 250);
+  });
+  return flags;
+}
+
+function buildRenderingModeFlags(mode) {
+  if (mode === 'd3d11') return { FFlagDebugGraphicsPreferD3D11: 'True' };
+  if (mode === 'vulkan') return { FFlagDebugGraphicsPreferVulkan: 'True' };
+  return {};
 }
 
 function buildManagedFlags(options = {}) {
   const normalized = normalizeOptions(options);
   const flags = { ...PROFILE_FLAGS[normalized.profile] };
+  if (normalized.msaa) flags.FIntDebugForceMSAASamples = String(normalized.msaa);
   if (normalized.fpsCap) flags.DFIntTaskSchedulerTargetFps = String(normalized.fpsCap);
-  if (normalized.disableDpiScaling) flags.DFFlagDisableDPIScale = 'True';
+  if (normalized.preserveDisplayScaling) flags.DFFlagDisableDPIScale = 'True';
+  if (normalized.meshDetailEnabled) Object.assign(flags, buildMeshDetailFlags(normalized.meshDetail));
+  if (normalized.frmQualityEnabled) flags.DFIntDebugFRMQualityLevelOverride = String(normalized.frmQuality);
+  Object.assign(flags, buildRenderingModeFlags(normalized.renderingMode));
   return flags;
 }
 
@@ -137,4 +186,4 @@ async function reset() {
   return { ...status, managedFlags: {} };
 }
 
-module.exports = { FPS_CAPS, MANAGED_KEYS, PROFILE_FLAGS, apply, buildManagedFlags, getStatus, mergeManagedFlags, normalizeOptions, reset };
+module.exports = { FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, getStatus, mergeManagedFlags, normalizeOptions, reset };

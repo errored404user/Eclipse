@@ -14,7 +14,7 @@ const state = {
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
   discover: { games: [], query: '', cursor: '', loading: false, error: '' },
-  fastFlags: { status: null, profile: 'balanced', fpsCap: 0, disableDpiScaling: false, busy: false, message: '' }
+  fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
 };
 
 const browserRoblox = {
@@ -333,25 +333,41 @@ function renderLibrary() {
 }
 
 const fastFlagProfiles = {
-  default: { label: 'Default', detail: 'Remove Eclipse-managed overrides.', flags: {} },
-  performance: { label: 'Performance', detail: 'Lower texture quality and 1× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '0', FIntDebugForceMSAASamples: '1' } },
-  balanced: { label: 'Balanced', detail: 'Moderate texture quality and 2× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '2', FIntDebugForceMSAASamples: '2' } },
-  quality: { label: 'Quality', detail: 'Higher texture quality and 4× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '3', FIntDebugForceMSAASamples: '4' } }
+  default: { label: 'Default', detail: 'Remove Eclipse-managed texture and MSAA overrides.', flags: {}, msaa: 0 },
+  performance: { label: 'Performance', detail: 'Lower texture quality with 1× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '0' }, msaa: 1 },
+  balanced: { label: 'Balanced', detail: 'Moderate texture quality with 2× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '2' }, msaa: 2 },
+  quality: { label: 'Quality', detail: 'Higher texture quality with 4× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '3' }, msaa: 4 }
 };
 
 function fastFlagPreview() {
   const selection = state.fastFlags;
   const flags = { ...fastFlagProfiles[selection.profile].flags };
+  if ([1, 2, 4].includes(Number(selection.msaa))) flags.FIntDebugForceMSAASamples = String(selection.msaa);
   if ([60, 120, 144, 165, 240].includes(Number(selection.fpsCap))) flags.DFIntTaskSchedulerTargetFps = String(selection.fpsCap);
-  if (selection.disableDpiScaling) flags.DFFlagDisableDPIScale = 'True';
+  if (selection.preserveDisplayScaling) flags.DFFlagDisableDPIScale = 'True';
+  if (selection.meshDetailEnabled) {
+    const detail = Math.max(0, Math.min(3, Number(selection.meshDetail) || 0));
+    const meshKeys = ['DFIntCSGLevelOfDetailSwitchingDistance', 'DFIntCSGLevelOfDetailSwitchingDistanceL12', 'DFIntCSGLevelOfDetailSwitchingDistanceL23', 'DFIntCSGLevelOfDetailSwitchingDistanceL34'];
+    flags.DFIntCSGLevelOfDetailSwitchingDistanceStatic = String(detail);
+    meshKeys.forEach((key, index) => { flags[key] = String((Math.max(0, Math.min(3, detail - index)) + 1) * 250); });
+  }
+  if (selection.frmQualityEnabled) flags.DFIntDebugFRMQualityLevelOverride = String(Math.max(1, Math.min(21, Number(selection.frmQuality) || 21)));
+  if (selection.renderingMode === 'd3d11') flags.FFlagDebugGraphicsPreferD3D11 = 'True';
+  if (selection.renderingMode === 'vulkan') flags.FFlagDebugGraphicsPreferVulkan = 'True';
   return flags;
 }
 
+function fastFlagToggle(field, checked, title, description, disabled) {
+  return `<label class="ff-toggle"><input type="checkbox" data-fastflag-field="${field}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}/><span></span><b>${title}</b><small>${description}</small></label>`;
+}
+
 function fastFlagsPanel() {
-  const { status, profile, fpsCap, disableDpiScaling, busy, message } = state.fastFlags;
+  const selection = state.fastFlags;
+  const { status, profile, msaa, fpsCap, preserveDisplayScaling, meshDetailEnabled, meshDetail, frmQualityEnabled, frmQuality, renderingMode, busy, message } = selection;
   const supported = status?.supported === true;
+  const disabled = busy || !supported;
   const flags = fastFlagPreview();
-  const profileButtons = Object.entries(fastFlagProfiles).map(([key, item]) => `<button class="ff-profile ${profile === key ? 'selected' : ''}" type="button" data-action="fastflag-profile" data-fastflag-profile="${key}" ${busy || !supported ? 'disabled' : ''}><strong>${item.label}</strong><span>${item.detail}</span></button>`).join('');
+  const profileButtons = Object.entries(fastFlagProfiles).map(([key, item]) => `<button class="ff-profile ${profile === key ? 'selected' : ''}" type="button" data-action="fastflag-profile" data-fastflag-profile="${key}" ${disabled ? 'disabled' : ''}><strong>${item.label}</strong><span>${item.detail}</span></button>`).join('');
   const flagsJson = Object.keys(flags).length ? JSON.stringify(flags, null, 2) : '{}';
   const statusText = status
     ? supported
@@ -361,16 +377,21 @@ function fastFlagsPanel() {
   const pathText = supported ? `Target: ${status.settingsPath}` : 'Eclipse writes only to the active Roblox Player ClientSettings file.';
 
   return `<section class="fastflags-panel panel">
-    <div class="ff-heading"><div><p class="section-kicker"><i></i> Fast Flags</p><h2>Rendering profiles</h2><p>Choose a managed preset for the installed Roblox Player. Roblox decides which local flags it accepts.</p></div><span class="ff-status ${supported ? 'available' : ''}"><i></i>${supported ? 'Windows player detected' : 'Desktop app required'}</span></div>
+    <div class="ff-heading"><div><p class="section-kicker"><i></i> Fast Flags</p><h2>Managed graphics controls</h2><p>Choose a supported preset, then fine-tune the same rendering controls used by established Roblox launchers. Roblox decides which local flags it accepts.</p></div><span class="ff-status ${supported ? 'available' : ''}"><i></i>${supported ? 'Windows player detected' : 'Desktop app required'}</span></div>
     <div class="ff-profile-grid">${profileButtons}</div>
-    <form class="ff-controls" data-fastflags-form>
-      <label><span>Frame-rate target</span><select data-fastflag-field="fpsCap" ${busy || !supported ? 'disabled' : ''}><option value="0" ${Number(fpsCap) === 0 ? 'selected' : ''}>Roblox default</option><option value="60" ${Number(fpsCap) === 60 ? 'selected' : ''}>60 FPS</option><option value="120" ${Number(fpsCap) === 120 ? 'selected' : ''}>120 FPS</option><option value="144" ${Number(fpsCap) === 144 ? 'selected' : ''}>144 FPS</option><option value="165" ${Number(fpsCap) === 165 ? 'selected' : ''}>165 FPS</option><option value="240" ${Number(fpsCap) === 240 ? 'selected' : ''}>240 FPS</option></select></label>
-      <label class="ff-toggle"><input type="checkbox" data-fastflag-field="disableDpiScaling" ${disableDpiScaling ? 'checked' : ''} ${busy || !supported ? 'disabled' : ''}/><span></span><b>Disable display scaling</b><small>May improve sharpness on high-DPI displays.</small></label>
-      <div class="ff-actions"><button class="primary-button" type="submit" ${busy || !supported ? 'disabled' : ''}>${busy ? 'Applying…' : 'Apply Fast Flags'}</button><button class="quiet-button" type="button" data-action="fastflag-reset" ${busy || !supported ? 'disabled' : ''}>Reset managed flags</button></div>
+    <form class="ff-options" data-fastflags-form>
+      <section class="ff-setting-group"><h3>Geometry</h3><div class="ff-setting-card ${meshDetailEnabled ? 'is-expanded' : ''}"><div class="ff-setting-top"><div><strong>Mesh detail</strong><p>Control how detailed meshes appear in-game.</p></div>${fastFlagToggle('meshDetailEnabled', meshDetailEnabled, 'Enable override', 'Lower qualities can make meshes disappear.', disabled)}</div>${meshDetailEnabled ? `<div class="ff-range-area"><p>Lower qualities may cause meshes to disappear.</p><div class="ff-range-line"><span>Lowest quality</span><input type="range" min="0" max="3" step="1" value="${meshDetail}" data-fastflag-field="meshDetail" aria-label="Mesh detail" ${disabled ? 'disabled' : ''}/><span>Highest quality</span><output data-fastflag-output="meshDetail">${meshDetail}</output></div></div>` : ''}</div></section>
+      <section class="ff-setting-group"><h3>Rendering &amp; graphics</h3><div class="ff-setting-card ff-choice-card"><div><strong>Anti-aliasing quality (MSAA)</strong><p>Choose the managed sample count for Roblox Player.</p></div><label class="ff-select"><span class="sr-only">Anti-aliasing quality</span><select data-fastflag-field="msaa" ${disabled ? 'disabled' : ''}><option value="0" ${Number(msaa) === 0 ? 'selected' : ''}>Roblox default</option><option value="1" ${Number(msaa) === 1 ? 'selected' : ''}>1×</option><option value="2" ${Number(msaa) === 2 ? 'selected' : ''}>2×</option><option value="4" ${Number(msaa) === 4 ? 'selected' : ''}>4×</option></select></label></div>
+        <div class="ff-setting-card">${fastFlagToggle('preserveDisplayScaling', preserveDisplayScaling, 'Preserve rendering quality with display scaling', 'Prevents Roblox from reducing rendering quality based on Windows display scaling.', disabled)}</div>
+        <div class="ff-setting-card ${frmQualityEnabled ? 'is-expanded' : ''}"><div class="ff-setting-top"><div><strong>FRM quality override</strong><p>Choose the FRM quality Roblox should use.</p></div>${fastFlagToggle('frmQualityEnabled', frmQualityEnabled, 'Enable override', 'Higher values can cost more GPU performance.', disabled)}</div>${frmQualityEnabled ? `<div class="ff-range-area"><div class="ff-range-line"><span>Lowest quality</span><input type="range" min="1" max="21" step="1" value="${frmQuality}" data-fastflag-field="frmQuality" aria-label="FRM quality override" ${disabled ? 'disabled' : ''}/><span>Highest quality</span><output data-fastflag-output="frmQuality">${frmQuality}</output></div></div>` : ''}</div>
+        <div class="ff-setting-card ff-choice-card"><div><strong>Rendering mode</strong><p>Use Automatic unless you need to prefer a specific renderer.</p></div><label class="ff-select"><span class="sr-only">Rendering mode</span><select data-fastflag-field="renderingMode" data-fastflag-type="string" ${disabled ? 'disabled' : ''}><option value="automatic" ${renderingMode === 'automatic' ? 'selected' : ''}>Automatic</option><option value="d3d11" ${renderingMode === 'd3d11' ? 'selected' : ''}>Direct3D 11</option><option value="vulkan" ${renderingMode === 'vulkan' ? 'selected' : ''}>Vulkan</option></select></label></div>
+      </section>
+      <section class="ff-setting-group"><h3>Player pacing</h3><div class="ff-setting-card ff-choice-card"><div><strong>Frame-rate target</strong><p>Set a managed target or leave Roblox Player at its default.</p></div><label class="ff-select"><span class="sr-only">Frame-rate target</span><select data-fastflag-field="fpsCap" ${disabled ? 'disabled' : ''}><option value="0" ${Number(fpsCap) === 0 ? 'selected' : ''}>Roblox default</option><option value="60" ${Number(fpsCap) === 60 ? 'selected' : ''}>60 FPS</option><option value="120" ${Number(fpsCap) === 120 ? 'selected' : ''}>120 FPS</option><option value="144" ${Number(fpsCap) === 144 ? 'selected' : ''}>144 FPS</option><option value="165" ${Number(fpsCap) === 165 ? 'selected' : ''}>165 FPS</option><option value="240" ${Number(fpsCap) === 240 ? 'selected' : ''}>240 FPS</option></select></label></div></section>
+      <div class="ff-actions"><button class="primary-button" type="submit" ${disabled ? 'disabled' : ''}>${busy ? 'Applying…' : 'Apply Fast Flags'}</button><button class="quiet-button" type="button" data-action="fastflag-reset" ${disabled ? 'disabled' : ''}>Reset managed flags</button></div>
     </form>
     <div class="ff-preview"><div><p class="section-kicker">Eclipse-managed preview</p><p>${escapeHtml(statusText)}</p><small>${escapeHtml(pathText)}</small></div><pre>${escapeHtml(flagsJson)}</pre></div>
     ${message ? `<p class="ff-message">${escapeHtml(message)}</p>` : ''}
-    <p class="ff-safety">Eclipse never writes arbitrary Fast Flags. Applying preserves settings it does not manage; close Roblox Player before applying changes, then relaunch it.</p>
+    <p class="ff-safety">Eclipse writes only the fixed graphics keys shown above. Applying preserves settings it does not manage; close Roblox Player before applying changes, then relaunch it.</p>
   </section>`;
 }
 
@@ -393,7 +414,7 @@ async function applyFastFlags() {
   state.fastFlags.busy = true;
   updateFastFlagsPanel();
   try {
-    const result = await fastFlags.apply({ profile: state.fastFlags.profile, fpsCap: state.fastFlags.fpsCap, disableDpiScaling: state.fastFlags.disableDpiScaling });
+    const result = await fastFlags.apply({ profile: state.fastFlags.profile, msaa: state.fastFlags.msaa, fpsCap: state.fastFlags.fpsCap, preserveDisplayScaling: state.fastFlags.preserveDisplayScaling, meshDetailEnabled: state.fastFlags.meshDetailEnabled, meshDetail: state.fastFlags.meshDetail, frmQualityEnabled: state.fastFlags.frmQualityEnabled, frmQuality: state.fastFlags.frmQuality, renderingMode: state.fastFlags.renderingMode });
     state.fastFlags.status = result;
     state.fastFlags.message = 'Fast Flags were written. Restart Roblox Player to use them.';
     showToast('Fast Flags applied to Roblox Player.');
@@ -574,7 +595,9 @@ document.addEventListener('click', async (event) => {
   if (action === 'load-more') await loadDiscover({ append: true });
   if (action === 'open-status') showToast('Eclipse uses official Roblox discovery data and Player deep links.');
   if (action === 'fastflag-profile') {
-    state.fastFlags.profile = button.dataset.fastflagProfile;
+    const profile = button.dataset.fastflagProfile;
+    state.fastFlags.profile = profile;
+    state.fastFlags.msaa = fastFlagProfiles[profile]?.msaa ?? 0;
     updateFastFlagsPanel();
   }
   if (action === 'fastflag-reset') await resetFastFlags();
@@ -602,10 +625,18 @@ document.addEventListener('submit', async (event) => {
   }
 });
 
+document.addEventListener('input', (event) => {
+  const fastFlagInput = event.target.closest('input[type="range"][data-fastflag-field]');
+  if (!fastFlagInput) return;
+  state.fastFlags[fastFlagInput.dataset.fastflagField] = Number(fastFlagInput.value);
+  const output = pageContent.querySelector(`[data-fastflag-output="${fastFlagInput.dataset.fastflagField}"]`);
+  if (output) output.textContent = fastFlagInput.value;
+});
+
 document.addEventListener('change', (event) => {
   const fastFlagInput = event.target.closest('[data-fastflag-field]');
   if (fastFlagInput) {
-    state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : Number(fastFlagInput.value);
+    state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : fastFlagInput.dataset.fastflagType === 'string' ? fastFlagInput.value : Number(fastFlagInput.value);
     updateFastFlagsPanel();
     return;
   }
