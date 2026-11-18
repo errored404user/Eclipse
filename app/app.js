@@ -1109,6 +1109,17 @@ async function resetFastFlags() {
   }
 }
 
+function bootstrapperErrorMessage(error) {
+  const raw = error instanceof Error ? error.message : String(error || 'Eclipse could not inspect Roblox Player.');
+  const message = raw
+    .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+    .replace(/^RobloxBootstrapperError:\s*/i, '');
+  if (/HTTP 403|download returned HTTP 403/i.test(message)) {
+    return 'Roblox temporarily rejected the installer download. Eclipse will use its official fallback source; check your connection and retry if it continues.';
+  }
+  return message;
+}
+
 function bootstrapperPanel() {
   const { status, busy, progress, error } = state.bootstrapper;
   const desktopSupported = Boolean(window.eclipseBootstrapper);
@@ -1144,7 +1155,7 @@ async function refreshBootstrapperStatus({ render = true } = {}) {
     state.bootstrapper.status = await bootstrapper.status();
   } catch (error) {
     state.bootstrapper.status = { supported: Boolean(window.eclipseBootstrapper), installed: false, updateAvailable: false };
-    state.bootstrapper.error = error instanceof Error ? error.message : 'Eclipse could not inspect Roblox Player.';
+    state.bootstrapper.error = bootstrapperErrorMessage(error);
   } finally {
     if (render && state.page === 'tools') renderTools();
   }
@@ -1162,7 +1173,7 @@ async function updateRobloxPlayer() {
     state.bootstrapper.status = result;
     showToast(result.changed ? 'Official Roblox Player is ready.' : 'Official Roblox Player is already current.');
   } catch (error) {
-    state.bootstrapper.error = error instanceof Error ? error.message : 'Roblox Player could not be installed or updated.';
+    state.bootstrapper.error = bootstrapperErrorMessage(error);
     showToast(state.bootstrapper.error);
   } finally {
     state.bootstrapper.busy = false;
