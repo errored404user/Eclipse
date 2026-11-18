@@ -1,8 +1,9 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0-preview.3",
+  "version": "0.1.0-preview.4",
   "private": true,
   "description": "Eclipse client home-shell visual prototype",
+  "author": "Eclipse contributors",
   "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.js",
@@ -26,7 +27,7 @@
       "package.json"
     ],
     "win": {
-      "artifactName": "${productName}-${version}-${arch}-${target}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

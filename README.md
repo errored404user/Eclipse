@@ -47,7 +47,7 @@ npm run dist:win
 This creates a portable executable in `release/`, named similarly to:
 
 ```text
-Eclipse-0.1.0-preview.3-x64-portable.exe
+Eclipse-0.1.0-preview.4-x64.exe
 ```
 
 To create a conventional Windows installer with Start menu and desktop shortcut options instead:
