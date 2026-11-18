@@ -73,23 +73,30 @@
           </div>
         </nav>
 
-        <div class="sidebar-bottom">
-          <div class="account-card">
-            <button class="account-profile-button" type="button" data-profile-action="open" aria-label="Edit Eclipse profile">
-              <span class="avatar avatar-profile" data-profile-avatar>E</span>
-              <span class="account-copy">
+        <div class="sidebar-bottom profile-footer" data-profile-footer>
+          <div class="account-card profile-card">
+            <button class="account-profile-button profile-identity" type="button" data-profile-action="open" aria-label="Open Eclipse profile editor">
+              <span class="profile-avatar-shell"><span class="avatar avatar-profile" data-profile-avatar>E</span><i aria-hidden="true"></i></span>
+              <span class="account-copy profile-copy">
+                <span class="profile-eyebrow">Eclipse profile</span>
                 <strong data-profile-name>Eclipse guest</strong>
-                <small><i></i><span data-profile-status>Local profile</span></small>
+                <small><span data-profile-status>Local profile</span></small>
               </span>
             </button>
-            <button class="profile-menu-toggle" type="button" aria-label="Toggle Eclipse profile actions" aria-controls="profile-actions" aria-expanded="false" data-profile-button>
-              <span class="more" aria-hidden="true">···</span>
+            <button class="profile-menu-toggle" type="button" aria-label="Open Eclipse profile actions" aria-controls="profile-actions" aria-expanded="false" data-profile-button>
+              <span class="more" aria-hidden="true"><i></i><i></i><i></i></span>
             </button>
           </div>
-          <div class="account-menu" id="profile-actions" data-profile-menu hidden>
+          <div class="account-menu profile-actions-menu" id="profile-actions" data-profile-menu role="menu" aria-label="Eclipse profile actions" hidden>
+            <div class="profile-menu-header">
+              <span class="avatar avatar-profile profile-menu-avatar" data-profile-avatar>E</span>
+              <span><strong data-profile-name>Eclipse guest</strong><small data-profile-status>Local profile</small></span>
+            </div>
             <p data-profile-menu-note>Create an Eclipse profile stored only on this device.</p>
-            <button class="profile-menu-primary" type="button" data-profile-action="open">Create Eclipse profile</button>
-            <button type="button" data-player-action="download">Install Roblox Player</button>
+            <div class="profile-menu-actions">
+              <button class="profile-menu-primary" type="button" role="menuitem" data-profile-action="open"><span class="profile-action-icon edit" aria-hidden="true"></span><span data-profile-action-label>Create Eclipse profile</span></button>
+              <button type="button" role="menuitem" data-player-action="download"><span class="profile-action-icon download" aria-hidden="true"></span><span>Install Roblox Player</span></button>
+            </div>
           </div>
         </div>
       </aside>

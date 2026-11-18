@@ -299,21 +299,27 @@ test('adds local activity tracking and transparent Discord Rich Presence prefere
   assert.match(styles, /\.integration-section/);
 });
 
-test('keeps Fast Flags in visible primary navigation and gives the profile overflow a true action-menu toggle', () => {
+test('keeps Fast Flags visible and gives the reworked profile overflow an outboard, functional action menu', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
   const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
   const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
   const libraryIndex = shell.indexOf('data-page="library"');
   const fastFlagsIndex = shell.indexOf('data-page="fastflags"');
   const workspaceIndex = shell.indexOf('nav-group nav-group-bottom');
   const wireShellSlice = renderer.slice(renderer.indexOf('function wireShell()'), renderer.indexOf("document.addEventListener('click', async"));
   assert.ok(libraryIndex >= 0 && fastFlagsIndex > libraryIndex && fastFlagsIndex < workspaceIndex);
+  assert.match(shell, /class="account-profile-button profile-identity"[^>]+data-profile-action="open"/);
   assert.match(shell, /class="profile-menu-toggle"[^>]+aria-controls="profile-actions"[^>]+data-profile-button/);
-  assert.match(shell, /class="account-menu" id="profile-actions" data-profile-menu hidden/);
-  assert.match(renderer, /function setProfileMenuOpen\(isOpen\) \{\r?\n  const profileButton = document\.querySelector\('\[data-profile-button\]'\);/);
-  assert.match(renderer, /if \(created\) setProfileMenuOpen\(false\);/);
-  assert.match(wireShellSlice, /const isOpen = profileButton\.getAttribute\('aria-expanded'\) === 'true';\r?\n    setProfileMenuOpen\(!isOpen\);/);
-  assert.doesNotMatch(wireShellSlice, /state\.profile\.created[\s\S]*openProfileDialog\(\)/);
+  assert.match(shell, /class="account-menu profile-actions-menu" id="profile-actions" data-profile-menu role="menu"/);
+  assert.match(shell, /data-profile-action-label/);
+  assert.match(renderer, /document\.querySelectorAll\('\[data-profile-action-label\]'\)/);
+  assert.doesNotMatch(renderer, /document\.querySelectorAll\('\[data-profile-action="open"\]'\)/);
+  assert.match(renderer, /function setProfileMenuOpen\(isOpen, focusAction = false\)/);
+  assert.match(renderer, /event\.stopPropagation\(\);\r?\n    const isOpen = profileButton\.getAttribute\('aria-expanded'\) === 'true';/);
+  assert.match(wireShellSlice, /event\.key === 'Escape'/);
+  assert.match(styles, /\.profile-actions-menu \{[^}]+left: calc\(100% \+ 11px\)/);
+  assert.match(styles, /\.sidebar \{ overflow: visible; \}/);
 });

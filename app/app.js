@@ -96,12 +96,16 @@ function profileInitials(profile = state.profile) {
   return (initials || 'E').toUpperCase();
 }
 
-function setProfileMenuOpen(isOpen) {
+function setProfileMenuOpen(isOpen, focusAction = false) {
   const profileButton = document.querySelector('[data-profile-button]');
   const profileMenu = document.querySelector('[data-profile-menu]');
+  const profileFooter = document.querySelector('[data-profile-footer]');
   if (!profileButton || !profileMenu) return;
   profileButton.setAttribute('aria-expanded', String(isOpen));
+  profileButton.setAttribute('aria-label', isOpen ? 'Close Eclipse profile actions' : 'Open Eclipse profile actions');
   profileMenu.hidden = !isOpen;
+  profileFooter?.classList.toggle('menu-open', isOpen);
+  if (isOpen && focusAction) window.requestAnimationFrame(() => profileMenu.querySelector('[role="menuitem"]')?.focus());
 }
 
 function updateProfileSurface() {
@@ -111,7 +115,7 @@ function updateProfileSurface() {
   document.querySelectorAll('[data-profile-name]').forEach((element) => { element.textContent = name; });
   document.querySelectorAll('[data-profile-status]').forEach((element) => { element.textContent = status; });
   document.querySelectorAll('[data-profile-avatar]').forEach((element) => { element.textContent = profileInitials(); });
-  document.querySelectorAll('[data-profile-action="open"]').forEach((element) => { element.textContent = created ? 'Edit Eclipse profile' : 'Create Eclipse profile'; });
+  document.querySelectorAll('[data-profile-action-label]').forEach((element) => { element.textContent = created ? 'Edit Eclipse profile' : 'Create Eclipse profile'; });
   document.querySelectorAll('[data-profile-menu-note]').forEach((element) => {
     element.textContent = created ? 'Your Eclipse profile is stored only on this device.' : 'Create an Eclipse profile stored only on this device.';
   });
@@ -739,12 +743,19 @@ function wireShell() {
 
   const profileButton = document.querySelector('[data-profile-button]');
   const profileMenu = document.querySelector('[data-profile-menu]');
-  profileButton.addEventListener('click', () => {
+  profileButton.addEventListener('click', (event) => {
+    event.stopPropagation();
     const isOpen = profileButton.getAttribute('aria-expanded') === 'true';
-    setProfileMenuOpen(!isOpen);
+    setProfileMenuOpen(!isOpen, event.detail === 0);
   });
   document.addEventListener('click', (event) => {
     if (!profileButton.contains(event.target) && !profileMenu.contains(event.target)) setProfileMenuOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && profileButton.getAttribute('aria-expanded') === 'true') {
+      setProfileMenuOpen(false);
+      profileButton.focus();
+    }
   });
   document.querySelector('[data-mobile-menu]').addEventListener('click', () => sidebar.classList.toggle('open'));
 }
@@ -754,7 +765,10 @@ document.addEventListener('click', async (event) => {
   if (!button) return;
   const { action, playerAction, profileAction, pageLink } = button.dataset;
   if (pageLink) setPage(pageLink);
-  if (playerAction) await openOfficial(playerAction);
+  if (playerAction) {
+    setProfileMenuOpen(false);
+    await openOfficial(playerAction);
+  }
   if (profileAction === 'open') openProfileDialog();
   if (action === 'close-profile-dialog') closeProfileDialog();
   if (action === 'launch-game') await launchGame(button.dataset.placeId);
