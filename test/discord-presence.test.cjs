@@ -59,8 +59,9 @@ test('normalizes public Discord application IDs and produces the Open Eclipse ac
 });
 
 test('uses Discord local IPC to publish and clear Open Eclipse presence', async (context) => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'eclipse-discord-'));
-  const socketPath = path.join(directory, 'discord-ipc-0');
+  const isWindows = process.platform === 'win32';
+  const directory = isWindows ? '' : await fs.mkdtemp(path.join(os.tmpdir(), 'eclipse-discord-'));
+  const socketPath = isWindows ? ipcPaths('win32')[0] : path.join(directory, 'discord-ipc-0');
   const received = [];
   const server = net.createServer((socket) => {
     socket.on('data', packetReader((opcode, payload) => {
@@ -74,13 +75,13 @@ test('uses Discord local IPC to publish and clear Open Eclipse presence', async 
   });
   context.after(async () => {
     await new Promise((resolve) => server.close(resolve));
-    await fs.rm(directory, { recursive: true, force: true });
+    if (directory) await fs.rm(directory, { recursive: true, force: true });
   });
 
   const presence = createDiscordPresence({
     applicationId: '123456789012345678',
-    environment: { XDG_RUNTIME_DIR: directory },
-    platform: 'linux',
+    environment: isWindows ? {} : { XDG_RUNTIME_DIR: directory },
+    platform: isWindows ? 'win32' : 'linux',
     logger: { debug() {} }
   });
   context.after(() => presence.close());
