@@ -67,18 +67,18 @@
         </nav>
 
         <div class="sidebar-bottom">
-          <button class="account-card" type="button" aria-expanded="false" data-account-button>
-            <span class="avatar avatar-profile">R</span>
+          <button class="account-card" type="button" aria-expanded="false" data-profile-button>
+            <span class="avatar avatar-profile" data-profile-avatar>E</span>
             <span class="account-copy">
-              <strong>Roblox account</strong>
-              <small><i></i> Official sign-in</small>
+              <strong data-profile-name>Eclipse guest</strong>
+              <small><i></i><span data-profile-status>Local profile</span></small>
             </span>
             <span class="more" aria-hidden="true">···</span>
           </button>
-          <div class="account-menu" data-account-menu hidden>
-            <p>Roblox handles sign-in securely.</p>
-            <button type="button" data-account-action="login">Sign in at Roblox</button>
-            <button type="button" data-account-action="download">Install Roblox Player</button>
+          <div class="account-menu" data-profile-menu hidden>
+            <p data-profile-menu-note>Create an Eclipse profile stored only on this device.</p>
+            <button class="profile-menu-primary" type="button" data-profile-action="open">Create Eclipse profile</button>
+            <button type="button" data-player-action="download">Install Roblox Player</button>
           </div>
         </div>
       </aside>
@@ -90,6 +90,20 @@
       </section>
 
       <div class="toast" data-toast role="status" aria-live="polite" hidden></div>
+
+      <dialog class="profile-dialog" data-profile-dialog aria-labelledby="profile-dialog-title">
+        <form class="profile-dialog-card" data-profile-form novalidate>
+          <button class="profile-dialog-close" type="button" data-action="close-profile-dialog" aria-label="Close profile dialog">×</button>
+          <p class="section-kicker"><i></i> Eclipse profile</p>
+          <h2 id="profile-dialog-title" data-profile-dialog-title>Create your Eclipse profile</h2>
+          <p data-profile-dialog-copy>Choose a display name for this device. This is not a Roblox account and Eclipse never asks for Roblox credentials.</p>
+          <label for="profile-name">Display name</label>
+          <input id="profile-name" name="displayName" maxlength="28" autocomplete="nickname" placeholder="Your Eclipse name" required />
+          <p class="profile-input-error" data-profile-input-error hidden></p>
+          <div class="profile-dialog-actions"><button class="quiet-button" type="button" data-action="close-profile-dialog">Cancel</button><button class="primary-button" type="submit" data-profile-submit>Create local profile</button></div>
+          <small>Stored locally in Eclipse on this device. No email, password, Roblox session, or online account is created.</small>
+        </form>
+      </dialog>
     </main>
     <script src="app.js"></script>
   </body>

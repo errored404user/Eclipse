@@ -5,7 +5,8 @@ const desktopWindow = window.eclipseWindow;
 const storageKeys = {
   library: 'eclipse.roblox.library.v1',
   recent: 'eclipse.roblox.recent.v1',
-  settings: 'eclipse.settings.v1'
+  settings: 'eclipse.settings.v1',
+  profile: 'eclipse.profile.v1'
 };
 
 const state = {
@@ -13,6 +14,7 @@ const state = {
   library: readStored(storageKeys.library, []),
   recent: readStored(storageKeys.recent, []),
   settings: { reducedMotion: false, compactCards: false, ...readStored(storageKeys.settings, {}) },
+  profile: normalizeProfile(readStored(storageKeys.profile, {})),
   discover: { games: [], query: '', cursor: '', loading: false, error: '' },
   fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
 };
@@ -33,7 +35,6 @@ const browserRoblox = {
   },
   async openOfficial(action, placeId) {
     const urls = {
-      login: 'https://www.roblox.com/login',
       download: 'https://www.roblox.com/download',
       game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`
     };
@@ -66,6 +67,87 @@ function readStored(key, fallback) {
 
 function writeStored(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function normalizeProfile(value) {
+  const displayName = String(value?.displayName || '').trim().replace(/\s+/g, ' ').slice(0, 28);
+  return displayName ? { displayName, created: true } : { displayName: 'Eclipse guest', created: false };
+}
+
+function profileInitials(profile = state.profile) {
+  const initials = profile.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('');
+  return (initials || 'E').toUpperCase();
+}
+
+function updateProfileSurface() {
+  const { created, displayName } = state.profile;
+  const name = created ? displayName : 'Eclipse guest';
+  const status = created ? 'Stored on this device' : 'Local profile';
+  document.querySelectorAll('[data-profile-name]').forEach((element) => { element.textContent = name; });
+  document.querySelectorAll('[data-profile-status]').forEach((element) => { element.textContent = status; });
+  document.querySelectorAll('[data-profile-avatar]').forEach((element) => { element.textContent = profileInitials(); });
+  document.querySelectorAll('[data-profile-action="open"]').forEach((element) => { element.textContent = created ? 'Edit Eclipse profile' : 'Create Eclipse profile'; });
+  document.querySelectorAll('[data-profile-menu-note]').forEach((element) => {
+    element.textContent = created ? 'Your Eclipse profile is stored only on this device.' : 'Create an Eclipse profile stored only on this device.';
+  });
+}
+
+function profileDialog() {
+  return document.querySelector('[data-profile-dialog]');
+}
+
+function closeProfileDialog() {
+  const dialog = profileDialog();
+  if (!dialog) return;
+  if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+  else dialog.removeAttribute('open');
+}
+
+function openProfileDialog() {
+  const dialog = profileDialog();
+  if (!dialog) return;
+  const profileButton = document.querySelector('[data-profile-button]');
+  const profileMenu = document.querySelector('[data-profile-menu]');
+  if (profileButton) profileButton.setAttribute('aria-expanded', 'false');
+  if (profileMenu) profileMenu.hidden = true;
+  const input = dialog.querySelector('[name="displayName"]');
+  const title = dialog.querySelector('[data-profile-dialog-title]');
+  const copy = dialog.querySelector('[data-profile-dialog-copy]');
+  const submit = dialog.querySelector('[data-profile-submit]');
+  const error = dialog.querySelector('[data-profile-input-error]');
+  const editing = state.profile.created;
+  if (title) title.textContent = editing ? 'Edit your Eclipse profile' : 'Create your Eclipse profile';
+  if (copy) copy.textContent = editing ? 'Update the display name stored locally in Eclipse on this device.' : 'Choose a display name for this device. This is not a Roblox account and Eclipse never asks for Roblox credentials.';
+  if (submit) submit.textContent = editing ? 'Save profile' : 'Create local profile';
+  if (input) {
+    input.value = editing ? state.profile.displayName : '';
+    input.setAttribute('aria-invalid', 'false');
+  }
+  if (error) error.hidden = true;
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+  window.setTimeout(() => input?.focus(), 0);
+}
+
+function saveEclipseProfile(form) {
+  const input = form.querySelector('[name="displayName"]');
+  const error = form.querySelector('[data-profile-input-error]');
+  const displayName = String(new FormData(form).get('displayName') || '').trim().replace(/\s+/g, ' ').slice(0, 28);
+  if (!displayName) {
+    if (error) {
+      error.textContent = 'Enter a display name to create your local Eclipse profile.';
+      error.hidden = false;
+    }
+    input?.setAttribute('aria-invalid', 'true');
+    input?.focus();
+    return;
+  }
+  state.profile = normalizeProfile({ displayName });
+  writeStored(storageKeys.profile, state.profile);
+  updateProfileSurface();
+  closeProfileDialog();
+  renderCurrentPage();
+  showToast('Your local Eclipse profile was saved.');
 }
 
 function escapeHtml(value = '') {
@@ -241,7 +323,7 @@ function renderHome() {
       ${recent.length ? `<div class="game-grid home-game-grid">${recent.map((game) => gameCard(game)).join('')}</div>` : '<p class="section-note">Games you start through Eclipse appear here. Roblox Player handles your account session.</p>'}
     </section>
     <section class="home-utility-grid">
-      <article class="utility-panel panel"><span class="utility-symbol">◈</span><div><p class="section-kicker">Account safety</p><h3>Sign in only with Roblox</h3><p>Eclipse never asks for or stores your Roblox password.</p></div><button class="text-button" type="button" data-account-action="login">Sign in <span>→</span></button></article>
+      <article class="utility-panel panel"><span class="utility-symbol">◈</span><div><p class="section-kicker">Eclipse profile</p><h3>${escapeHtml(state.profile.created ? state.profile.displayName : 'Make Eclipse yours')}</h3><p>${state.profile.created ? 'Your display name is stored only in this Eclipse workspace.' : 'Create a local profile to personalize this device.'}</p></div><button class="text-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'} <span>→</span></button></article>
       <article class="utility-panel panel"><span class="utility-symbol">↗</span><div><p class="section-kicker">Roblox Player</p><h3>Ready when you are</h3><p>Use the official player protocol to launch selected experiences.</p></div><button class="text-button" type="button" data-page-link="tools">Player tools <span>→</span></button></article>
     </section>
   </div>`;
@@ -449,9 +531,9 @@ function renderTools() {
     ${pageHeader('Player tools', 'Launch Roblox Player.', 'Eclipse asks the installed Roblox Player to open an official experience. Roblox manages the account session and gameplay.', '')}
     <div class="tools-grid">
       <article class="tool-panel panel"><p class="section-kicker"><i></i> Direct launch</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse validates it, then opens Roblox Player using the official Roblox protocol.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored.</p></article>
-      <article class="tool-panel panel"><p class="section-kicker">Account</p><h2>Use an existing Roblox account</h2><p>Eclipse does not create Roblox accounts. Sign in through Roblox’s official website, then the installed Roblox Player uses that account when it launches.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-account-action="login">Sign in at Roblox</button><button class="text-button" type="button" data-account-action="download">Get Roblox Player <span>→</span></button></div></article>
+      <article class="tool-panel panel"><p class="section-kicker">Eclipse profile</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'Create your local workspace')}</h2><p>Eclipse profiles personalize this device only. They are not Roblox accounts, do not sign you in to Roblox, and never collect Roblox credentials.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit Eclipse profile' : 'Create Eclipse profile'}</button><button class="text-button" type="button" data-player-action="download">Install Roblox Player <span>→</span></button></div></article>
       <div class="tool-wide" data-fastflags-panel>${fastFlagsPanel()}</div>
-      <article class="tool-panel panel tool-wide"><p class="section-kicker">How it works</p><ol class="protocol-list"><li><span>1</span><p>Sign in to your Roblox account through Roblox’s official site or installed Player.</p></li><li><span>2</span><p>Choose a live game from Discover or paste a trusted place ID.</p></li><li><span>3</span><p>Eclipse opens <code>roblox://experiences/start?placeId=…</code> and Roblox Player handles the launch.</p></li></ol></article>
+      <article class="tool-panel panel tool-wide"><p class="section-kicker">How it works</p><ol class="protocol-list"><li><span>1</span><p>Create an optional local Eclipse profile to personalize this workspace.</p></li><li><span>2</span><p>Choose a live game from Discover or paste a trusted place ID.</p></li><li><span>3</span><p>Eclipse opens <code>roblox://experiences/start?placeId=…</code> and Roblox Player handles the launch.</p></li></ol></article>
     </div>
   </div>`;
   refreshFastFlagsStatus();
@@ -459,8 +541,8 @@ function renderTools() {
 
 function renderSettings() {
   pageContent.innerHTML = `<div class="page-shell settings-page">
-    ${pageHeader('Settings', 'Make Eclipse yours.', 'These interface preferences stay on this device. Roblox account credentials are never part of Eclipse settings.', '')}
-    <section class="settings-list panel"><div class="setting-row"><div><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Account privacy</p><h2>Roblox credentials stay with Roblox</h2><p>Eclipse opens only Roblox’s official sign-in page and does not store cookies, passwords, or authentication tokens.</p></div><button class="quiet-button" type="button" data-account-action="login">Official sign-in</button></div></section>
+    ${pageHeader('Settings', 'Make Eclipse yours.', 'These interface preferences and your optional Eclipse profile stay on this device.', '')}
+    <section class="settings-list panel"><div class="setting-row"><div><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div></section>
   </div>`;
 }
 
@@ -474,6 +556,7 @@ function updateWindowTab() {
 
 function renderCurrentPage() {
   setSettings();
+  updateProfileSurface();
   updateWindowTab();
   if (state.page === 'discover') renderDiscover();
   else if (state.page === 'library') renderLibrary();
@@ -515,7 +598,7 @@ async function launchGame(placeId) {
 async function openOfficial(action, placeId) {
   try {
     await roblox.openOfficial(action, placeId);
-    const messages = { login: 'Opening Roblox’s official sign-in page.', download: 'Opening the official Roblox Player download page.', game: 'Opening the official Roblox game page.' };
+    const messages = { download: 'Opening the official Roblox Player download page.', game: 'Opening the official Roblox game page.' };
     showToast(messages[action] || 'Opening Roblox.');
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Roblox could not be opened.');
@@ -552,17 +635,17 @@ function wireShell() {
   document.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => setPage(button.dataset.page)));
   document.querySelectorAll('[data-page-link]').forEach((button) => button.addEventListener('click', () => setPage(button.dataset.pageLink)));
 
-  const accountButton = document.querySelector('[data-account-button]');
-  const accountMenu = document.querySelector('[data-account-menu]');
-  accountButton.addEventListener('click', () => {
-    const isOpen = accountButton.getAttribute('aria-expanded') === 'true';
-    accountButton.setAttribute('aria-expanded', String(!isOpen));
-    accountMenu.hidden = isOpen;
+  const profileButton = document.querySelector('[data-profile-button]');
+  const profileMenu = document.querySelector('[data-profile-menu]');
+  profileButton.addEventListener('click', () => {
+    const isOpen = profileButton.getAttribute('aria-expanded') === 'true';
+    profileButton.setAttribute('aria-expanded', String(!isOpen));
+    profileMenu.hidden = isOpen;
   });
   document.addEventListener('click', (event) => {
-    if (!accountButton.contains(event.target) && !accountMenu.contains(event.target)) {
-      accountButton.setAttribute('aria-expanded', 'false');
-      accountMenu.hidden = true;
+    if (!profileButton.contains(event.target) && !profileMenu.contains(event.target)) {
+      profileButton.setAttribute('aria-expanded', 'false');
+      profileMenu.hidden = true;
     }
   });
   document.querySelector('[data-mobile-menu]').addEventListener('click', () => sidebar.classList.toggle('open'));
@@ -571,9 +654,11 @@ function wireShell() {
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('button');
   if (!button) return;
-  const { action, accountAction, pageLink } = button.dataset;
+  const { action, playerAction, profileAction, pageLink } = button.dataset;
   if (pageLink) setPage(pageLink);
-  if (accountAction) await openOfficial(accountAction);
+  if (playerAction) await openOfficial(playerAction);
+  if (profileAction === 'open') openProfileDialog();
+  if (action === 'close-profile-dialog') closeProfileDialog();
   if (action === 'launch-game') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'save-game') {
@@ -604,6 +689,11 @@ document.addEventListener('click', async (event) => {
 });
 
 document.addEventListener('submit', async (event) => {
+  if (event.target.matches('[data-profile-form]')) {
+    event.preventDefault();
+    saveEclipseProfile(event.target);
+    return;
+  }
   if (event.target.matches('[data-discovery-form]')) {
     event.preventDefault();
     const query = new FormData(event.target).get('query');
@@ -627,10 +717,18 @@ document.addEventListener('submit', async (event) => {
 
 document.addEventListener('input', (event) => {
   const fastFlagInput = event.target.closest('input[type="range"][data-fastflag-field]');
-  if (!fastFlagInput) return;
-  state.fastFlags[fastFlagInput.dataset.fastflagField] = Number(fastFlagInput.value);
-  const output = pageContent.querySelector(`[data-fastflag-output="${fastFlagInput.dataset.fastflagField}"]`);
-  if (output) output.textContent = fastFlagInput.value;
+  if (fastFlagInput) {
+    state.fastFlags[fastFlagInput.dataset.fastflagField] = Number(fastFlagInput.value);
+    const output = pageContent.querySelector(`[data-fastflag-output="${fastFlagInput.dataset.fastflagField}"]`);
+    if (output) output.textContent = fastFlagInput.value;
+    return;
+  }
+  const profileInput = event.target.closest('[name="displayName"]');
+  if (profileInput) {
+    profileInput.setAttribute('aria-invalid', 'false');
+    const error = profileInput.closest('[data-profile-form]')?.querySelector('[data-profile-input-error]');
+    if (error) error.hidden = true;
+  }
 });
 
 document.addEventListener('change', (event) => {

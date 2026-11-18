@@ -9,7 +9,6 @@ let activeLaunchWindow;
 let activeLaunchTimer;
 
 const officialRobloxUrls = {
-  login: 'https://www.roblox.com/login',
   download: 'https://www.roblox.com/download'
 };
 

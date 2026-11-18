@@ -159,3 +159,16 @@ test('clamps numeric Fast Flag fine-tuning and rejects unsupported renderers', (
   });
   assert.deepEqual(buildManagedFlags({ renderingMode: 'vulkan' }), { FFlagDebugGraphicsPreferVulkan: 'True' });
 });
+
+test('uses a local Eclipse profile surface and exposes no Roblox login handoff', () => {
+  const renderer = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'app.js'), 'utf8');
+  const shell = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'index.html'), 'utf8');
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+  assert.match(renderer, /eclipse\.profile\.v1/);
+  assert.match(renderer, /Create your Eclipse profile/);
+  assert.match(shell, /data-profile-form/);
+  assert.match(shell, /data-player-action="download"/);
+  assert.doesNotMatch(renderer, /roblox\.com\/login|data-account-action|accountAction/);
+  assert.doesNotMatch(shell, /Sign in at Roblox|data-account-action/);
+  assert.doesNotMatch(main, /roblox\.com\/login/);
+});
