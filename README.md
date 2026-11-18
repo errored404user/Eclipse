@@ -8,7 +8,7 @@ Eclipse is an early desktop launcher for official Roblox experiences.
 - **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs.
 - **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games.
 - **Tools** can validate a Roblox place ID and start the installed Roblox Player through the official `roblox://experiences/start?placeId=…` protocol.
-- **Accounts** always open official Roblox sign-in, sign-up, and download pages. Eclipse never requests, stores, or submits Roblox passwords, cookies, or authentication tokens.
+- **Accounts** provide only an official Roblox sign-in handoff for existing accounts. Eclipse never requests, stores, or submits Roblox passwords, cookies, or authentication tokens.
 - **Settings** persist only Eclipse interface preferences locally.
 
 > Eclipse is not affiliated with Roblox. Availability, rankings, game details, and the player-launch protocol are controlled by Roblox and may change.
@@ -47,7 +47,7 @@ npm run dist:win
 This creates a portable executable in `release/`, named similarly to:
 
 ```text
-Eclipse-0.1.0-preview.4-x64.exe
+Eclipse-0.1.0-preview.5-x64.exe
 ```
 
 To create a conventional Windows installer with Start menu and desktop shortcut options instead:

@@ -6,7 +6,6 @@ let mainWindow;
 
 const officialRobloxUrls = {
   login: 'https://www.roblox.com/login',
-  signup: 'https://www.roblox.com/',
   download: 'https://www.roblox.com/download'
 };
 

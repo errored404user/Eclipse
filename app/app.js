@@ -33,7 +33,6 @@ const browserRoblox = {
   async openOfficial(action, placeId) {
     const urls = {
       login: 'https://www.roblox.com/login',
-      signup: 'https://www.roblox.com/',
       download: 'https://www.roblox.com/download',
       game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`
     };
@@ -329,7 +328,7 @@ function renderTools() {
     ${pageHeader('Player tools', 'Launch Roblox Player.', 'Eclipse asks the installed Roblox Player to open an official experience. Roblox manages the account session and gameplay.', '')}
     <div class="tools-grid">
       <article class="tool-panel panel"><p class="section-kicker"><i></i> Direct launch</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse validates it, then opens Roblox Player using the official Roblox protocol.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored.</p></article>
-      <article class="tool-panel panel"><p class="section-kicker">Account</p><h2>Use your own Roblox account</h2><p>Create an account or sign in only on Roblox’s official website. The installed Roblox Player uses that account when it launches.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-account-action="login">Sign in at Roblox</button><button class="quiet-button" type="button" data-account-action="signup">Create a Roblox account</button><button class="text-button" type="button" data-account-action="download">Get Roblox Player <span>→</span></button></div></article>
+      <article class="tool-panel panel"><p class="section-kicker">Account</p><h2>Use an existing Roblox account</h2><p>Eclipse does not create Roblox accounts. Sign in through Roblox’s official website, then the installed Roblox Player uses that account when it launches.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-account-action="login">Sign in at Roblox</button><button class="text-button" type="button" data-account-action="download">Get Roblox Player <span>→</span></button></div></article>
       <article class="tool-panel panel tool-wide"><p class="section-kicker">How it works</p><ol class="protocol-list"><li><span>1</span><p>Sign in to your Roblox account through Roblox’s official site or installed Player.</p></li><li><span>2</span><p>Choose a live game from Discover or paste a trusted place ID.</p></li><li><span>3</span><p>Eclipse opens <code>roblox://experiences/start?placeId=…</code> and Roblox Player handles the launch.</p></li></ol></article>
     </div>
   </div>`;
@@ -338,7 +337,7 @@ function renderTools() {
 function renderSettings() {
   pageContent.innerHTML = `<div class="page-shell settings-page">
     ${pageHeader('Settings', 'Make Eclipse yours.', 'These interface preferences stay on this device. Roblox account credentials are never part of Eclipse settings.', '')}
-    <section class="settings-list panel"><div class="setting-row"><div><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Account privacy</p><h2>Roblox credentials stay with Roblox</h2><p>Sign-in and account creation open only official Roblox pages. Eclipse does not store cookies, passwords, or authentication tokens.</p></div><button class="quiet-button" type="button" data-account-action="login">Official sign-in</button></div></section>
+    <section class="settings-list panel"><div class="setting-row"><div><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Account privacy</p><h2>Roblox credentials stay with Roblox</h2><p>Eclipse opens only Roblox’s official sign-in page and does not store cookies, passwords, or authentication tokens.</p></div><button class="quiet-button" type="button" data-account-action="login">Official sign-in</button></div></section>
   </div>`;
 }
 
@@ -384,7 +383,7 @@ async function launchGame(placeId) {
 async function openOfficial(action, placeId) {
   try {
     await roblox.openOfficial(action, placeId);
-    const messages = { login: 'Opening Roblox’s official sign-in page.', signup: 'Opening Roblox’s official account creation page.', download: 'Opening the official Roblox Player download page.', game: 'Opening the official Roblox game page.' };
+    const messages = { login: 'Opening Roblox’s official sign-in page.', download: 'Opening the official Roblox Player download page.', game: 'Opening the official Roblox game page.' };
     showToast(messages[action] || 'Opening Roblox.');
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Roblox could not be opened.');
