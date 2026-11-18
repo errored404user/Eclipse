@@ -341,8 +341,17 @@ function renderSettings() {
   </div>`;
 }
 
+function updateWindowTab() {
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', tools: 'Tools', settings: 'Settings' };
+  const label = labels[state.page] || 'Home';
+  const target = document.querySelector('[data-active-page]');
+  if (target) target.textContent = label;
+  document.title = `Eclipse — ${label}`;
+}
+
 function renderCurrentPage() {
   setSettings();
+  updateWindowTab();
   if (state.page === 'discover') renderDiscover();
   else if (state.page === 'library') renderLibrary();
   else if (state.page === 'tools') renderTools();

@@ -15,9 +15,17 @@
         <button class="mobile-menu icon-button" type="button" aria-label="Toggle navigation" data-mobile-menu>
           <span></span><span></span><span></span>
         </button>
-        <div class="window-caption">Eclipse</div>
+        <div class="window-tab" aria-label="Current Eclipse workspace">
+          <span class="eclipse-mark title-mark" aria-hidden="true"><i></i></span>
+          <span class="window-caption">Eclipse</span>
+          <span class="tab-slash" aria-hidden="true">/</span>
+          <span class="active-page-name" data-active-page>Home</span>
+        </div>
+        <button class="command-strip" type="button" data-page-link="discover" aria-label="Open Roblox discovery">
+          <span aria-hidden="true">⌕</span><span>Search Roblox experiences</span><kbd>⌘ K</kbd>
+        </button>
         <div class="titlebar-right">
-          <button class="title-action" type="button" data-action="open-status">Roblox launcher</button>
+          <button class="title-action service-status" type="button" data-action="open-status"><i></i><span>Roblox services</span></button>
           <span class="titlebar-divider" aria-hidden="true"></span>
           <div class="window-controls" aria-label="Window controls">
             <button type="button" aria-label="Minimize" data-window-control="minimize">−</button>
