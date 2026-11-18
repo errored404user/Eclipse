@@ -13,8 +13,10 @@ const DEPLOYMENT_ENDPOINTS = Object.freeze([
   'https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer',
   'https://clientsettings.roblox.com/v2/client-version/WindowsPlayer'
 ]);
-const INSTALLER_BASE_URL = 'https://setup.rbxcdn.com';
+const OFFICIAL_INSTALLER_URL = 'https://www.roblox.com/download/client?os=win';
+const FALLBACK_INSTALLER_URL = 'https://setup.rbxcdn.com/RobloxPlayerLauncher.exe';
 const OFFICIAL_INSTALLER_HOSTS = new Set(['www.roblox.com', 'setup.rbxcdn.com', 'setup-aws.rbxcdn.com', 'setup-ak.rbxcdn.com']);
+const ROBLOX_INSTALLER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 EclipseBootstrapper/0.1';
 const MAX_INSTALLER_BYTES = 256 * 1024 * 1024;
 const INSTALL_TIMEOUT_MS = 120_000;
 const POLL_INTERVAL_MS = 1_000;
@@ -55,7 +57,12 @@ function robloxVersionsPath(env = process.env) {
 
 function installerUrlFor(versionGuid) {
   if (!isSafeVersionGuid(versionGuid)) throw new RobloxBootstrapperError('Roblox version identifier is invalid.', 'INVALID_VERSION');
-  return `${INSTALLER_BASE_URL}/${encodeURIComponent(versionGuid)}-Roblox.exe`;
+  return OFFICIAL_INSTALLER_URL;
+}
+
+function installerFallbackUrlFor(versionGuid) {
+  if (!isSafeVersionGuid(versionGuid)) throw new RobloxBootstrapperError('Roblox version identifier is invalid.', 'INVALID_VERSION');
+  return FALLBACK_INSTALLER_URL;
 }
 
 function isOfficialRobloxDownload(url) {
@@ -147,7 +154,7 @@ async function downloadOfficialInstaller(url, destination, fetchImpl = globalThi
       throw new RobloxBootstrapperError('Roblox installer download redirected outside official Roblox domains.', 'UNTRUSTED_DOWNLOAD');
     }
     response = await fetchImpl(currentUrl, {
-      headers: { Accept: 'application/octet-stream' },
+      headers: { Accept: 'application/octet-stream,application/vnd.microsoft.portable-executable,*/*;q=0.8', 'User-Agent': ROBLOX_INSTALLER_USER_AGENT },
       redirect: 'manual',
       signal: AbortSignal.timeout(60_000)
     });
@@ -193,6 +200,20 @@ async function downloadOfficialInstaller(url, destination, fetchImpl = globalThi
     await fs.rm(destination, { force: true }).catch(() => {});
     throw error;
   }
+}
+
+async function downloadOfficialInstallerWithFallback(versionGuid, destination, fetchImpl = globalThis.fetch) {
+  const sources = [installerUrlFor(versionGuid), installerFallbackUrlFor(versionGuid)];
+  let lastError;
+  for (const source of sources) {
+    try {
+      return await downloadOfficialInstaller(source, destination, fetchImpl);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const detail = lastError instanceof Error ? ` ${lastError.message}` : '';
+  throw new RobloxBootstrapperError(`Roblox's official installer endpoints could not be downloaded.${detail}`, 'DOWNLOAD_FAILED');
 }
 
 function verifyAuthenticode(filePath, spawnImpl = spawn) {
@@ -316,13 +337,12 @@ class RobloxBootstrapper extends EventEmitter {
         return { ...(await this.inspect({ refresh: false })), changed: false };
       }
 
-      const installerUrl = installerUrlFor(latest.versionGuid);
       const installerPath = path.join(this.temporaryRoot, `${latest.versionGuid}-Roblox.exe`);
       try {
         await fs.mkdir(this.temporaryRoot, { recursive: true });
         await fs.rm(installerPath, { force: true });
         this.emitProgress('downloading', 'Downloading the signed official Roblox installer.');
-        await downloadOfficialInstaller(installerUrl, installerPath, this.fetchImpl);
+        await downloadOfficialInstallerWithFallback(latest.versionGuid, installerPath, this.fetchImpl);
         this.emitProgress('verifying', 'Validating the Windows signature before installation.');
         await verifyAuthenticode(installerPath, this.spawnImpl);
         this.emitProgress('installing', 'Installing the official Roblox Player update.');
@@ -381,13 +401,15 @@ function createRobloxBootstrapper(options = {}) {
 
 module.exports = {
   DEPLOYMENT_ENDPOINTS,
-  INSTALLER_BASE_URL,
+  FALLBACK_INSTALLER_URL,
   MAX_INSTALLER_BYTES,
+  OFFICIAL_INSTALLER_URL,
   PLAYER_EXECUTABLE,
   RobloxBootstrapper,
   RobloxBootstrapperError,
   createRobloxBootstrapper,
   getOfficialClientVersion,
+  installerFallbackUrlFor,
   installerUrlFor,
   isOfficialRobloxDownload,
   isSafeVersionGuid,

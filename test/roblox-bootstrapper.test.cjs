@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const {
   createRobloxBootstrapper,
+  installerFallbackUrlFor,
   installerUrlFor,
   isOfficialRobloxDownload,
   isSafeVersionGuid,
@@ -45,7 +46,8 @@ test('validates official Windows Player version data and installer origins', () 
   assert.equal(isSafeVersionGuid('version-../../outside'), false);
   assert.equal(normalizeClientVersion({ clientVersionUpload: latestVersion, version: '0.1.2.3' }).versionGuid, latestVersion);
   assert.throws(() => normalizeClientVersion({ clientVersionUpload: '../not-a-version' }), { code: 'INVALID_VERSION' });
-  assert.equal(installerUrlFor(latestVersion), `https://setup.rbxcdn.com/${latestVersion}-Roblox.exe`);
+  assert.equal(installerUrlFor(latestVersion), 'https://www.roblox.com/download/client?os=win');
+  assert.equal(installerFallbackUrlFor(latestVersion), 'https://setup.rbxcdn.com/RobloxPlayerLauncher.exe');
   assert.equal(isOfficialRobloxDownload('https://setup.rbxcdn.com/file.exe'), true);
   assert.equal(isOfficialRobloxDownload('https://www.roblox.com/download/client?os=win'), true);
   assert.equal(isOfficialRobloxDownload('https://evil.example/Roblox.exe'), false);
@@ -89,16 +91,19 @@ test('updates only through the official installer path, validates its signature,
       });
       return child;
     };
+    const requestedUrls = [];
     const bootstrapper = createRobloxBootstrapper({
       platform: 'win32',
       env,
       temporaryRoot: path.join(root, 'EclipseDownload'),
       spawnImpl,
       fetchImpl: async (url) => {
+        requestedUrls.push(String(url));
         if (String(url).includes('/v2/client-version/WindowsPlayer')) {
           return new Response(JSON.stringify({ clientVersionUpload: latestVersion, version: '0.1.2.3' }), { status: 200, headers: { 'content-type': 'application/json' } });
         }
-        assert.equal(url, installerUrlFor(latestVersion));
+        if (url === installerUrlFor(latestVersion)) return new Response('Roblox web installer endpoint unavailable', { status: 403 });
+        assert.equal(url, installerFallbackUrlFor(latestVersion));
         return new Response(Buffer.from('MZ signed official installer'), { status: 200, headers: { 'content-length': '28' } });
       }
     });
@@ -107,6 +112,7 @@ test('updates only through the official installer path, validates its signature,
     assert.equal(result.changed, true);
     assert.equal(result.installedVersion, latestVersion);
     assert.deepEqual(progress, ['checking', 'downloading', 'verifying', 'installing', 'finalizing', 'ready']);
+    assert.deepEqual(requestedUrls.slice(1), [installerUrlFor(latestVersion), installerFallbackUrlFor(latestVersion)]);
 
     const migrated = JSON.parse(await fs.readFile(path.join(versionsPath, latestVersion, 'ClientSettings', 'ClientAppSettings.json'), 'utf8'));
     assert.equal(migrated.FIntDebugForceMSAASamples, '4');

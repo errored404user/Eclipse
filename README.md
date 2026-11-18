@@ -55,7 +55,7 @@ npm run desktop:dev
 
 ### Official Roblox Player bootstrapper
 
-The first bootstrapper release is **Windows desktop only**. Before an Eclipse launch it checks `WindowsPlayer` release metadata from Roblox’s official client-settings service. If Roblox Player is missing or out of date, Eclipse downloads the matching installer from `setup.rbxcdn.com`, checks that it is a Windows executable, requires a valid Windows Authenticode signature, runs it, and confirms the new Player version folder.
+The first bootstrapper release is **Windows desktop only**. Before an Eclipse launch it checks `WindowsPlayer` release metadata from Roblox’s official client-settings service. If Roblox Player is missing or out of date, Eclipse downloads the official web installer from Roblox’s download endpoint and falls back only to Roblox’s official setup CDN launcher if that endpoint is unavailable. It checks that the download is a Windows executable, requires a valid Windows Authenticode signature, runs it, and confirms the new Player version folder.
 
 Eclipse does not download Roblox Player from third-party mirrors, never accepts Roblox credentials, and does not register itself as the `roblox://` protocol handler. If an update check is temporarily unavailable but an installed Player exists, Eclipse leaves the installed Player in place and requests the existing Roblox protocol handoff; if no Player is installed, it asks you to retry when Roblox’s official deployment service is reachable.
 
