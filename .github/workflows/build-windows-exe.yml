@@ -27,6 +27,9 @@ jobs:
       - name: Verify source
         run: npm run check
 
+      - name: Run launcher tests
+        run: npm run test
+
       - name: Build portable executable
         run: npm run dist:win
 
