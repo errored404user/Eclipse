@@ -98,7 +98,7 @@ document.querySelector('[data-refresh]').addEventListener('click', () => {
 });
 
 document.querySelectorAll('[data-status-button]').forEach((button) => {
-  button.addEventListener('click', () => showToast('Eclipse Preview v0.1.0 is healthy and ready to launch.'));
+  button.addEventListener('click', () => showToast('Eclipse Preview v0.1.0-preview.2 is healthy and ready to launch.'));
 });
 
 document.querySelectorAll('[data-action]').forEach((button) => {
