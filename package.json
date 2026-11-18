@@ -1,13 +1,13 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0-preview.7",
+  "version": "0.1.0-preview.8",
   "private": true,
   "description": "Eclipse client home-shell visual prototype",
   "author": "Eclipse contributors",
   "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check electron/fast-flags.cjs && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
+    "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check electron/fast-flags.cjs && node --check electron/launch-window.cjs && node --check electron/launch-preload.cjs && node --check electron/launch.js && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
     "test": "node --test",
     "desktop:dev": "electron .",
     "dist:win": "electron-builder --win portable --x64",

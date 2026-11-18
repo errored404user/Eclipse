@@ -98,3 +98,15 @@ test('builds and resets only the safe managed Fast Flag keys', () => {
   const reset = mergeManagedFlags(merged, {});
   assert.deepEqual(reset, { FFlagUnrelatedSetting: 'Keep' });
 });
+
+test('defines bounded player-handoff states without pretending to read Roblox connection status', () => {
+  const { launchStates } = require('../electron/launch-window.cjs');
+  assert.deepEqual(Object.keys(launchStates), ['starting', 'connecting', 'complete', 'error']);
+  for (const state of Object.values(launchStates)) {
+    assert.equal(typeof state.label, 'string');
+    assert.equal(typeof state.detail, 'string');
+    assert.equal(Number.isInteger(state.progress), true);
+    assert.equal(state.progress >= 0 && state.progress <= 100, true);
+  }
+  assert.match(launchStates.complete.detail, /Eclipse has completed the handoff/i);
+});

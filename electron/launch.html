@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Eclipse — Roblox Player</title>
+  <link rel="stylesheet" href="launch.css" />
+</head>
+<body>
+  <main class="launch-shell" aria-live="polite">
+    <header class="launch-header">
+      <span class="launch-channel">Eclipse Player Handoff</span>
+      <span class="launch-status" data-status>Secure protocol</span>
+    </header>
+    <section class="launch-body" aria-labelledby="launch-heading">
+      <div class="player-tile" aria-hidden="true"><span class="player-orbit"></span><span class="player-core"></span></div>
+      <h1 id="launch-heading" data-heading>Starting Roblox Player…</h1>
+      <p data-detail>Preparing your official Roblox Player handoff.</p>
+      <div class="progress-track" role="progressbar" aria-label="Roblox Player handoff progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="26"><span data-progress></span></div>
+      <button type="button" class="dismiss-button" data-dismiss>Dismiss</button>
+      <p class="launch-note">Eclipse requests the handoff; Roblox Player handles sign-in and connection.</p>
+    </section>
+  </main>
+  <script src="launch.js"></script>
+</body>
+</html>
