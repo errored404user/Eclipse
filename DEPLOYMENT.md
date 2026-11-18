@@ -45,6 +45,18 @@ Start with [`.env.example`](.env.example). All of these values are required befo
 
 For local development only, `NODE_ENV=development` permits a `http://localhost` public URL. Production rejects non-HTTPS public URLs.
 
+## Deploy to Vercel
+
+The repository is Vercel-ready: `api/index.js` creates the same Eclipse HTTP application used by `server.js`, and `vercel.json` rewrites every request to it. This keeps the browser interface and `/api/community` same-origin; do not add permissive CORS settings.
+
+1. Import this repository into a Vercel Node.js project or deploy it with the Vercel CLI.
+2. Provision PostgreSQL and transactional SMTP outside Vercel (or connect approved managed services). Vercel does not safely invent these credentials for a production account system.
+3. In **Project Settings → Environment Variables**, add every required value from the table above to the **Production** environment. Set `COMMUNITY_PUBLIC_URL` to the final Vercel/custom `https://` domain. Keep `COMMUNITY_TRUST_PROXY=false` unless a separately managed, immediate trusted proxy overwrites `X-Forwarded-For`.
+4. Redeploy after setting the variables. The first invocation runs idempotent schema setup, cleanup, and SMTP verification. Community stays unavailable if any of those steps fails.
+5. Verify registration email delivery, verification-link origin, session cookies, message-request acceptance, block/report audit records, and database backup/restore procedures before inviting users.
+
+A serverless function can be cold-started and process-local throttles are not shared among instances. Configure edge rate limiting, monitoring, alerting, abuse controls, and a managed PostgreSQL connection limit appropriate for your Vercel plan. Do not treat a successful build as proof that Community is enabled.
+
 ## Run and containerize
 
 ```bash
