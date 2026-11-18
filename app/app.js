@@ -19,6 +19,7 @@ const state = {
   community: createCommunityState(),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '' },
+  bootstrapper: { status: null, busy: false, progress: null, error: '' },
   fastFlags: { status: null, profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', busy: false, message: '' }
 };
 
@@ -38,7 +39,6 @@ const browserRoblox = {
   },
   async openOfficial(action, placeId) {
     const urls = {
-      download: 'https://www.roblox.com/download',
       game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`
     };
     const url = urls[action];
@@ -49,6 +49,21 @@ const browserRoblox = {
 };
 
 const roblox = window.eclipseRoblox || browserRoblox;
+
+const browserBootstrapper = {
+  async status() {
+    return {
+      supported: false,
+      installed: false,
+      updateAvailable: false,
+      reason: 'The Eclipse bootstrapper runs in the Windows desktop app. Browser mode can still request the installed Roblox Player through its official protocol.'
+    };
+  },
+  async update() { throw new Error('The Eclipse bootstrapper runs in the Windows desktop app.'); },
+  onProgress() { return () => {}; }
+};
+
+const bootstrapper = window.eclipseBootstrapper || browserBootstrapper;
 
 const browserFastFlags = {
   async getStatus() { return { supported: false, reason: 'Fast Flags can be applied from the Windows Eclipse desktop app.' }; },
@@ -80,6 +95,15 @@ if (window.eclipseDiscord) {
   window.eclipseDiscord.onStatus((status) => {
     discordStatus = status;
     if (state.page === 'integrations') renderIntegrations();
+  });
+}
+if (window.eclipseBootstrapper) {
+  window.eclipseBootstrapper.onProgress((progress) => {
+    state.bootstrapper.progress = progress;
+    state.bootstrapper.busy = Boolean(progress?.busy);
+    if (progress?.phase === 'error') state.bootstrapper.error = String(progress.detail || 'Roblox Player update failed.');
+    if (progress?.phase === 'ready') state.bootstrapper.error = '';
+    if (state.page === 'tools') renderTools();
   });
 }
 
@@ -1085,13 +1109,78 @@ async function resetFastFlags() {
   }
 }
 
+function bootstrapperPanel() {
+  const { status, busy, progress, error } = state.bootstrapper;
+  const desktopSupported = Boolean(window.eclipseBootstrapper);
+  const phase = String(progress?.phase || '');
+  const detail = String(progress?.detail || '');
+  const unsupported = status && !status.supported;
+  const statusLabel = !status
+    ? 'Checking official Player…'
+    : !status.supported
+      ? 'Windows desktop app required'
+      : busy
+        ? detail || 'Working with official Roblox Player…'
+        : !status.installed
+          ? 'Roblox Player not installed'
+          : status.updateAvailable
+            ? 'Official Roblox Player update available'
+            : status.checkError
+              ? 'Installed Player · update check unavailable'
+              : 'Official Roblox Player is current';
+  const actionLabel = busy
+    ? phase === 'downloading' ? 'Downloading official installer…' : phase === 'installing' ? 'Installing official Player…' : 'Checking Player…'
+    : status?.installed && !status.updateAvailable ? 'Check for updates' : status?.installed ? 'Update Roblox Player' : 'Install Roblox Player';
+  const actionDisabled = !desktopSupported || unsupported || busy;
+  const note = error || status?.checkError || status?.reason || (status?.installed
+    ? 'Eclipse checks the official Windows Player release before it launches an experience. The Roblox protocol association stays unchanged.'
+    : 'Eclipse downloads only from official Roblox distribution endpoints, validates the Windows signature, then runs the official installer.');
+  return `<article class="tool-panel panel bootstrapper-panel"><p class="section-kicker"><i></i> Eclipse bootstrapper</p><div class="bootstrapper-heading"><div><h2>Official Roblox Player</h2><p>Keep the installed Windows Player ready without sharing a Roblox password or changing your system’s Roblox link handler.</p></div><span class="bootstrapper-status ${status?.installed && !status?.updateAvailable && !error ? 'ready' : busy ? 'working' : ''}"><i></i>${escapeHtml(statusLabel)}</span></div><div class="bootstrapper-actions"><button class="primary-button" type="button" data-action="bootstrapper-update" ${actionDisabled ? 'disabled' : ''}>${escapeHtml(actionLabel)}</button>${status?.latestVersion ? `<small>Official release: ${escapeHtml(status.latestVersion)}</small>` : ''}</div><p class="bootstrapper-note"><i></i>${escapeHtml(note)}</p></article>`;
+}
+
+async function refreshBootstrapperStatus({ render = true } = {}) {
+  if (state.bootstrapper.busy) return state.bootstrapper.status;
+  try {
+    state.bootstrapper.status = await bootstrapper.status();
+  } catch (error) {
+    state.bootstrapper.status = { supported: Boolean(window.eclipseBootstrapper), installed: false, updateAvailable: false };
+    state.bootstrapper.error = error instanceof Error ? error.message : 'Eclipse could not inspect Roblox Player.';
+  } finally {
+    if (render && state.page === 'tools') renderTools();
+  }
+  return state.bootstrapper.status;
+}
+
+async function updateRobloxPlayer() {
+  if (state.bootstrapper.busy) return;
+  state.bootstrapper.busy = true;
+  state.bootstrapper.error = '';
+  state.bootstrapper.progress = { phase: 'checking', detail: 'Checking the official Roblox Windows Player release.', busy: true };
+  renderTools();
+  try {
+    const result = await bootstrapper.update();
+    state.bootstrapper.status = result;
+    showToast(result.changed ? 'Official Roblox Player is ready.' : 'Official Roblox Player is already current.');
+  } catch (error) {
+    state.bootstrapper.error = error instanceof Error ? error.message : 'Roblox Player could not be installed or updated.';
+    showToast(state.bootstrapper.error);
+  } finally {
+    state.bootstrapper.busy = false;
+    state.bootstrapper.progress = null;
+    await refreshBootstrapperStatus({ render: false });
+    if (state.page === 'tools') renderTools();
+  }
+}
+
 function renderTools() {
+  if (!state.bootstrapper.status && !state.bootstrapper.busy) Promise.resolve().then(() => refreshBootstrapperStatus());
   pageContent.innerHTML = `<div class="page-shell tools-page">
-    ${pageHeader('Player tools', 'Launch Roblox Player.', 'Eclipse asks the installed Roblox Player to open an official experience. Roblox manages the account session and gameplay.', '')}
+    ${pageHeader('Roblox Player', 'Eclipse bootstrapper.', 'Eclipse checks, installs, and updates the official Windows Roblox Player before an Eclipse launch. It never handles Roblox credentials or takes over your Roblox links.', '')}
     <div class="tools-grid">
-      <article class="tool-panel panel"><p class="section-kicker"><i></i> Direct launch</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse validates it, then opens Roblox Player using the official Roblox protocol.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored.</p></article>
-      <article class="tool-panel panel"><p class="section-kicker">Eclipse profile</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'Create your local workspace')}</h2><p>Eclipse profiles personalize this device only. They are not Roblox accounts, do not sign you in to Roblox, and never collect Roblox credentials.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit Eclipse profile' : 'Create Eclipse profile'}</button><button class="text-button" type="button" data-player-action="download">Install Roblox Player <span>→</span></button></div></article>
-      <article class="tool-panel panel tool-wide"><p class="section-kicker">How it works</p><ol class="protocol-list"><li><span>1</span><p>Create an optional local Eclipse profile to personalize this workspace.</p></li><li><span>2</span><p>Choose a live game from Discover or paste a trusted place ID.</p></li><li><span>3</span><p>Eclipse opens <code>roblox://experiences/start?placeId=…</code> and Roblox Player handles the launch.</p></li></ol></article>
+      ${bootstrapperPanel()}
+      <article class="tool-panel panel"><p class="section-kicker"><i></i> Launch an experience</p><h2>Start an official place</h2><p>Paste a Roblox place ID. Eclipse prepares the official Player, then requests the existing Roblox protocol handler to open the experience.</p><form class="place-form" data-place-form><label for="place-id">Roblox place ID</label><div><input id="place-id" name="placeId" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 1818" required /><button class="primary-button" type="submit"><span class="play-icon"></span> Launch</button></div></form><p class="form-note">No Roblox password is requested or stored. Eclipse does not change the <code>roblox://</code> link handler.</p></article>
+      <article class="tool-panel panel"><p class="section-kicker">Eclipse profile</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'Create your local workspace')}</h2><p>Eclipse profiles personalize this device only. They are not Roblox accounts, do not sign you in to Roblox, and never collect Roblox credentials.</p><div class="stacked-actions"><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit Eclipse profile' : 'Create Eclipse profile'}</button></div></article>
+      <article class="tool-panel panel tool-wide"><p class="section-kicker">How bootstrapper launches work</p><ol class="protocol-list"><li><span>1</span><p>Eclipse checks the installed Windows Player against Roblox’s official release service.</p></li><li><span>2</span><p>If needed, Eclipse validates and runs the signed official Roblox installer. It never downloads client files from third parties.</p></li><li><span>3</span><p>Eclipse requests <code>roblox://experiences/start?placeId=…</code>. Roblox keeps account sign-in, connection, and gameplay under its own control.</p></li></ol></article>
     </div>
   </div>`;
 }
@@ -1205,7 +1294,7 @@ async function launchGame(placeId) {
 async function openOfficial(action, placeId) {
   try {
     await roblox.openOfficial(action, placeId);
-    const messages = { download: 'Opening the official Roblox Player download page.', game: 'Opening the official Roblox game page.' };
+    const messages = { game: 'Opening the official Roblox game page.' };
     showToast(messages[action] || 'Opening Roblox.');
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Roblox could not be opened.');
@@ -1247,9 +1336,8 @@ function wireShell() {
 document.addEventListener('click', async (event) => {
   const button = event.target.closest('button');
   if (!button) return;
-  const { action, playerAction, profileAction, pageLink } = button.dataset;
+  const { action, profileAction, pageLink } = button.dataset;
   if (pageLink) setPage(pageLink);
-  if (playerAction) await openOfficial(playerAction);
   if (profileAction === 'open') openProfileDialog();
   if (action === 'close-profile-dialog') closeProfileDialog();
   if (action === 'clear-profile-image') {
@@ -1265,6 +1353,7 @@ document.addEventListener('click', async (event) => {
     renderCommunity();
   }
   if (action === 'community-logout') await logoutCommunity();
+  if (action === 'bootstrapper-update') await updateRobloxPlayer();
   if (action === 'community-resend-verification') {
     try {
       await communityApi.resendVerification();

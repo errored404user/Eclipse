@@ -4,7 +4,8 @@ const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
 const { createDiscordPresence } = require('./discord-presence.cjs');
 const { createCommunityApi } = require('./community-api.cjs');
-const { createPlayerLaunchWindow, sendLaunchState } = require('./launch-window.cjs');
+const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
+const { createPlayerLaunchWindow, launchStates, sendLaunchState } = require('./launch-window.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
 
@@ -12,14 +13,15 @@ let mainWindow;
 let activeLaunchWindow;
 let activeLaunchTimer;
 const communityApi = createCommunityApi(process.env);
+const robloxBootstrapper = createRobloxBootstrapper();
 const discordPresence = createDiscordPresence({ applicationId: process.env.ECLIPSE_DISCORD_CLIENT_ID });
 discordPresence.on('status', (status) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('discord:status', status);
 });
-
-const officialRobloxUrls = {
-  download: 'https://www.roblox.com/download'
-};
+robloxBootstrapper.on('progress', (progress) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('roblox-bootstrapper:progress', progress);
+  if (activeLaunchWindow && launchStates[progress.phase]) sendLaunchState(activeLaunchWindow, progress.phase);
+});
 
 function gamePageUrl(placeId) {
   return `https://www.roblox.com/games/${placeId}`;
@@ -63,6 +65,8 @@ async function launchRobloxPlayer(placeId) {
   await launch.ready;
   sendLaunchState(launch.window, 'starting');
   try {
+    await robloxBootstrapper.ensureReady();
+    sendLaunchState(launch.window, 'starting');
     const result = await openOfficialUrl(`roblox://experiences/start?placeId=${placeId}`);
     sendLaunchState(launch.window, 'connecting');
     setTimeout(() => {
@@ -148,6 +152,9 @@ app.whenReady().then(() => {
   ipcMain.handle('community:block', (_event, username) => communityApi.block(username));
   ipcMain.handle('community:report', (_event, details) => communityApi.report(details));
 
+  ipcMain.handle('roblox-bootstrapper:status', () => robloxBootstrapper.status());
+  ipcMain.handle('roblox-bootstrapper:update', () => robloxBootstrapper.installOrUpdate());
+
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
   ipcMain.handle('roblox:launch-place', async (_event, placeId) => {
     const validPlaceId = normalizePlaceId(placeId);
@@ -160,8 +167,7 @@ app.whenReady().then(() => {
       if (!validPlaceId) throw new Error('A valid Roblox place ID is required.');
       return openOfficialUrl(gamePageUrl(validPlaceId));
     }
-    if (!Object.hasOwn(officialRobloxUrls, action)) throw new Error('Unsupported official Roblox action.');
-    return openOfficialUrl(officialRobloxUrls[action]);
+    throw new Error('Unsupported official Roblox action.');
   });
 
   createMainWindow();

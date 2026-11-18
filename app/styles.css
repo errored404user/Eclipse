@@ -244,3 +244,21 @@ html { scroll-behavior: smooth; }.content { scroll-behavior: smooth; }.page-shel
 .integration-client-id input[aria-invalid="true"] { border-color: rgba(239,116,139,.8); }
 .integration-note .text-button { flex: 0 0 auto; align-self: center; margin-left: auto; font-size: 9px; white-space: nowrap; }
 @media (max-width: 700px) { .integration-client-id { width: 100%; flex-basis: auto; }.integration-note { align-items: flex-start; flex-wrap: wrap; }.integration-note .text-button { width: 100%; margin-left: 15px; } }
+
+/* Windows-only official Roblox Player bootstrapper. */
+.bootstrapper-panel { display: grid; align-content: start; gap: 15px; border-color: rgba(181,155,255,.21); background: radial-gradient(circle at 100% 0, rgba(125,93,218,.16), transparent 44%), rgba(26,22,35,.9); }
+.bootstrapper-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.bootstrapper-heading h2 { margin: 0; }
+.bootstrapper-heading > div > p { margin-bottom: 0; }
+.bootstrapper-status { display: inline-flex; max-width: 185px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid rgba(211,194,255,.15); border-radius: 999px; color: #c1b7cf; background: rgba(8,6,13,.3); font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; line-height: 1.35; }
+.bootstrapper-status i, .bootstrapper-note > i { display: inline-block; width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: #958aa7; }
+.bootstrapper-status.ready { border-color: rgba(102,208,169,.22); color: #d7f5e8; background: rgba(59,147,111,.12); }
+.bootstrapper-status.ready i { background: var(--success); box-shadow: 0 0 8px rgba(102,208,169,.68); }
+.bootstrapper-status.working { border-color: rgba(181,155,255,.3); color: #e1d5ff; background: rgba(123,87,211,.15); }
+.bootstrapper-status.working i { background: #c7afff; box-shadow: 0 0 8px rgba(199,175,255,.65); animation: bootstrapper-pulse 1.25s ease-in-out infinite; }
+.bootstrapper-actions { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.bootstrapper-actions small { color: #958a9f; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; word-break: break-all; }
+.bootstrapper-note { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: #a89eb4; font-size: 10px; line-height: 1.55; }
+.bootstrapper-note > i { margin-top: 5px; background: #a78de3; box-shadow: 0 0 7px rgba(167,141,227,.5); }
+@keyframes bootstrapper-pulse { 50% { opacity: .38; transform: scale(.74); } }
+@media (max-width: 560px) { .bootstrapper-heading { align-items: stretch; flex-direction: column; }.bootstrapper-status { max-width: none; width: fit-content; } }

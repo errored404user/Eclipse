@@ -1,6 +1,36 @@
 const path = require('node:path');
 
 const launchStates = Object.freeze({
+  checking: Object.freeze({
+    label: 'Checking Roblox Player…',
+    detail: 'Eclipse is checking the official Windows Player release.',
+    progress: 12,
+    tone: 'active'
+  }),
+  downloading: Object.freeze({
+    label: 'Updating Roblox Player…',
+    detail: 'Downloading the official signed Roblox installer.',
+    progress: 30,
+    tone: 'active'
+  }),
+  verifying: Object.freeze({
+    label: 'Verifying Roblox Player…',
+    detail: 'Checking the Windows signature before installation.',
+    progress: 48,
+    tone: 'active'
+  }),
+  installing: Object.freeze({
+    label: 'Installing Roblox Player…',
+    detail: 'The official Roblox installer is updating the Player.',
+    progress: 64,
+    tone: 'active'
+  }),
+  finalizing: Object.freeze({
+    label: 'Finalizing Roblox Player…',
+    detail: 'Confirming the installed Roblox Player version.',
+    progress: 77,
+    tone: 'active'
+  }),
   starting: Object.freeze({
     label: 'Starting Roblox Player…',
     detail: 'Preparing your official Roblox Player handoff.',

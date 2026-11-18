@@ -22,6 +22,17 @@ contextBridge.exposeInMainWorld('eclipseRoblox', {
   openOfficial: (action, placeId) => ipcRenderer.invoke('roblox:open-official', action, placeId)
 });
 
+contextBridge.exposeInMainWorld('eclipseBootstrapper', {
+  status: () => ipcRenderer.invoke('roblox-bootstrapper:status'),
+  update: () => ipcRenderer.invoke('roblox-bootstrapper:update'),
+  onProgress: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('roblox-bootstrapper:progress', listener);
+    return () => ipcRenderer.removeListener('roblox-bootstrapper:progress', listener);
+  }
+});
+
 contextBridge.exposeInMainWorld('eclipseFastFlags', {
   getStatus: () => ipcRenderer.invoke('fastflags:status'),
   apply: (options = {}) => ipcRenderer.invoke('fastflags:apply', options),

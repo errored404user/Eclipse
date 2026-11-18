@@ -1,6 +1,6 @@
 # Eclipse
 
-Eclipse is an early desktop launcher for official Roblox experiences.
+Eclipse is a Windows desktop bootstrapper and launcher for official Roblox experiences.
 
 ## What works in this preview
 
@@ -8,8 +8,9 @@ Eclipse is an early desktop launcher for official Roblox experiences.
 - **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs. Selectable Roblox-provided collections expose more choices than a single trending feed, alongside search and result pagination.
 - **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games.
 - **Community** connects to a separately deployed Eclipse Community service when it is configured. It uses a unique Eclipse username plus email/password account and email verification: search a username, send a message request, and open private text chat only after the recipient accepts. Official Roblox place invites are available in accepted private chats. It never asks for, links, stores, or uses Roblox credentials or Roblox identity. Blocking, reporting, rate limits, and moderation-ready audit records are included; media uploads are deliberately disabled until a separately hardened media pipeline exists.
-- **Tools** can validate a Roblox place ID and start the installed Roblox Player through the official `roblox://experiences/start?placeId=…` protocol. The Windows desktop app shows an Eclipse Player Handoff window while the protocol is requested, then dismisses it after the handoff completes.
-- **Fast Flags** has a dedicated sidebar destination for Windows-only Default, Performance, Balanced, and Quality rendering profiles; 1×, 2×, and 4× MSAA; mesh-detail and FRM-quality overrides; an Automatic, Direct3D 11, or Vulkan renderer preference; optional frame-rate targets; and a display-scaling option. Eclipse accepts only these bounded managed settings, merges only its managed keys into `ClientAppSettings.json`, and can remove only those keys again.
+- **Eclipse bootstrapper (Windows desktop)** detects the installed Roblox Player, checks Roblox’s official Windows Player release service before Eclipse launches, and downloads only the official Roblox installer when installation or an update is needed. Eclipse verifies the installer with Windows Authenticode before it runs, then confirms the installed version. It does not change the system `roblox://` association.
+- **Tools** validates a Roblox place ID, asks the bootstrapper to prepare the official Player, then requests the existing official `roblox://experiences/start?placeId=…` protocol handler. The Eclipse Player Handoff reports Eclipse-owned install/handoff stages only—it never claims Roblox game or server state.
+- **Fast Flags** has a dedicated sidebar destination for Windows-only Default, Performance, Balanced, and Quality rendering profiles; 1×, 2×, and 4× MSAA; mesh-detail and FRM-quality overrides; an Automatic, Direct3D 11, or Vulkan renderer preference; optional frame-rate targets; and a display-scaling option. Eclipse accepts only these bounded managed settings, merges only its managed keys into `ClientAppSettings.json`, and can remove only those keys again. During an official Player update, Eclipse carries only those managed keys into the new Player folder.
 - **Integrations** keeps an optional local history of launch requests Eclipse starts. On the desktop app, Discord Rich Presence uses Discord’s local IPC connection to show **Open Eclipse** while Eclipse is running. It requires a public Discord Application ID, never asks for Discord credentials, and does not pretend to know Roblox server/gameplay state.
 - **Eclipse profile** is a single-click local editor in the sidebar for an optional display name and profile image. JPEG, PNG, and WebP images are center-cropped to a bounded local avatar; no image is uploaded. The profile creates no online account, never requests Roblox credentials, and is not connected to a Roblox account.
 - **Settings** persist only Eclipse interface preferences locally, including a Reduce interface motion option that also suppresses Eclipse animations.
@@ -45,12 +46,18 @@ The browser UI uses the Community API at the same public origin. The Electron ap
 
 ## Run as a desktop application
 
-Electron wraps the UI in a secure desktop window. The renderer has no Node.js access; it uses a narrow preload bridge for game discovery, official web handoff, and validated player launches.
+Electron wraps the UI in a secure desktop window. The renderer has no Node.js access; it uses narrow preload bridges for game discovery, bootstrapper status/update operations, official web handoff, and validated player launches. Bootstrapper filesystem, download, signature-validation, and process work stays in Electron’s main process.
 
 ```bash
 npm install
 npm run desktop:dev
 ```
+
+### Official Roblox Player bootstrapper
+
+The first bootstrapper release is **Windows desktop only**. Before an Eclipse launch it checks `WindowsPlayer` release metadata from Roblox’s official client-settings service. If Roblox Player is missing or out of date, Eclipse downloads the matching installer from `setup.rbxcdn.com`, checks that it is a Windows executable, requires a valid Windows Authenticode signature, runs it, and confirms the new Player version folder.
+
+Eclipse does not download Roblox Player from third-party mirrors, never accepts Roblox credentials, and does not register itself as the `roblox://` protocol handler. If an update check is temporarily unavailable but an installed Player exists, Eclipse leaves the installed Player in place and requests the existing Roblox protocol handoff; if no Player is installed, it asks you to retry when Roblox’s official deployment service is reachable.
 
 ### Enable Discord Rich Presence
 
@@ -98,4 +105,4 @@ npm run check
 npm run test
 ```
 
-The test suite uses mocked responses from the fixed official Roblox endpoints. It verifies response mapping, thumbnail attachment, and strict place-ID validation without sending network requests.
+The test suite uses mocked responses from the fixed official Roblox endpoints. It verifies discovery response mapping, thumbnail attachment, strict place-ID validation, official Windows Player version/installer validation, managed Fast Flag migration, and the message-request Community contract without sending live Roblox requests.

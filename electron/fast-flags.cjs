@@ -153,6 +153,24 @@ async function writeSettings(settingsPath, settings) {
   await fs.rename(temporaryPath, settingsPath);
 }
 
+async function migrateManagedFlags(sourceDirectory, targetDirectory) {
+  if (!sourceDirectory || !targetDirectory || sourceDirectory === targetDirectory) return {};
+  const sourcePath = path.join(sourceDirectory, 'ClientSettings', 'ClientAppSettings.json');
+  let source;
+  try {
+    source = await readSettings(sourcePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {};
+    throw error;
+  }
+  const managedFlags = Object.fromEntries(MANAGED_KEYS.filter((key) => typeof source[key] === 'string').map((key) => [key, source[key]]));
+  if (!Object.keys(managedFlags).length) return {};
+  const targetPath = path.join(targetDirectory, 'ClientSettings', 'ClientAppSettings.json');
+  const target = await readSettings(targetPath);
+  await writeSettings(targetPath, mergeManagedFlags(target, managedFlags));
+  return managedFlags;
+}
+
 async function getStatus() {
   if (process.platform !== 'win32') {
     return { supported: false, reason: 'Fast Flags can be applied from the Windows Eclipse app only.' };
@@ -186,4 +204,4 @@ async function reset() {
   return { ...status, managedFlags: {} };
 }
 
-module.exports = { FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, getStatus, mergeManagedFlags, normalizeOptions, reset };
+module.exports = { FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, getStatus, mergeManagedFlags, migrateManagedFlags, normalizeOptions, reset };

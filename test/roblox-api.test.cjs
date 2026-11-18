@@ -140,7 +140,7 @@ test('builds and resets only the safe managed Fast Flag keys', () => {
 
 test('defines bounded player-handoff states without pretending to read Roblox connection status', () => {
   const { launchStates } = require('../electron/launch-window.cjs');
-  assert.deepEqual(Object.keys(launchStates), ['starting', 'connecting', 'complete', 'error']);
+  assert.deepEqual(Object.keys(launchStates), ['checking', 'downloading', 'verifying', 'installing', 'finalizing', 'starting', 'connecting', 'complete', 'error']);
   for (const state of Object.values(launchStates)) {
     assert.equal(typeof state.label, 'string');
     assert.equal(typeof state.detail, 'string');
@@ -199,17 +199,22 @@ test('clamps numeric Fast Flag fine-tuning and rejects unsupported renderers', (
   assert.deepEqual(buildManagedFlags({ renderingMode: 'vulkan' }), { FFlagDebugGraphicsPreferVulkan: 'True' });
 });
 
-test('uses a local Eclipse profile surface and exposes no Roblox login handoff', () => {
-  const renderer = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'app.js'), 'utf8');
-  const shell = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'index.html'), 'utf8');
-  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+test('uses a local Eclipse profile and official Windows Player bootstrapper without Roblox login or protocol ownership', () => {
+  const root = require('node:path').join(__dirname, '..');
+  const renderer = require('node:fs').readFileSync(require('node:path').join(root, 'app', 'app.js'), 'utf8');
+  const shell = require('node:fs').readFileSync(require('node:path').join(root, 'app', 'index.html'), 'utf8');
+  const main = require('node:fs').readFileSync(require('node:path').join(root, 'electron', 'main.cjs'), 'utf8');
+  const preload = require('node:fs').readFileSync(require('node:path').join(root, 'electron', 'preload.cjs'), 'utf8');
   assert.match(renderer, /eclipse\.profile\.v1/);
   assert.match(renderer, /Create your Eclipse profile/);
   assert.match(shell, /data-profile-form/);
-  assert.match(renderer, /data-player-action="download"/);
+  assert.match(renderer, /Eclipse bootstrapper/);
+  assert.match(renderer, /data-action="bootstrapper-update"/);
+  assert.match(main, /roblox-bootstrapper:status/);
+  assert.match(preload, /eclipseBootstrapper/);
   assert.doesNotMatch(renderer, /roblox\.com\/login|data-account-action|accountAction/);
   assert.doesNotMatch(shell, /Sign in at Roblox|data-account-action/);
-  assert.doesNotMatch(main, /roblox\.com\/login/);
+  assert.doesNotMatch(main, /roblox\.com\/login|setAsDefaultProtocolClient/);
 });
 
 test('uses the Eclipse corona asset in the shell and Windows desktop package', () => {
