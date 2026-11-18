@@ -1,10 +1,40 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0",
+  "version": "0.1.0-preview.1",
   "private": true,
   "description": "Eclipse client home-shell visual prototype",
+  "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check app/app.js"
+    "check": "node --check server.js && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
+    "desktop:dev": "electron .",
+    "dist:win": "electron-builder --win portable --x64",
+    "dist:win:installer": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "app.eclipse.client",
+    "productName": "Eclipse",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "app/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "artifactName": "${productName}-${version}-${arch}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "45.3.4",
+    "electron-builder": "26.18.0"
   }
 }

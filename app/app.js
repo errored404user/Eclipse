@@ -1,4 +1,5 @@
 const toast = document.querySelector('[data-toast]');
+const desktopWindow = window.eclipseWindow;
 let toastTimer;
 
 function showToast(message) {
@@ -18,6 +19,35 @@ function setLaunchLoading(button) {
     showToast('Launch request prepared. Native client wiring is the next milestone.');
   }, 900);
 }
+
+function setMaximizeControl(isMaximized) {
+  const button = document.querySelector('[data-window-control="maximize"]');
+  if (!button) return;
+  button.setAttribute('aria-label', isMaximized ? 'Restore window' : 'Maximize');
+  button.textContent = isMaximized ? '❐' : '□';
+}
+
+function wireWindowControls() {
+  document.querySelectorAll('[data-window-control]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const action = button.dataset.windowControl;
+      if (!desktopWindow) {
+        showToast('Window controls are available in the Eclipse desktop app.');
+        return;
+      }
+      if (action === 'minimize') await desktopWindow.minimize();
+      if (action === 'maximize') setMaximizeControl(await desktopWindow.toggleMaximize());
+      if (action === 'close') await desktopWindow.close();
+    });
+  });
+
+  if (desktopWindow) {
+    desktopWindow.isMaximized().then(setMaximizeControl);
+    desktopWindow.onMaximizedChange(setMaximizeControl);
+  }
+}
+
+wireWindowControls();
 
 document.querySelectorAll('[data-launch]').forEach((button) => {
   button.addEventListener('click', () => setLaunchLoading(button));
