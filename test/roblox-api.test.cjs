@@ -239,7 +239,7 @@ test('keeps Fast Flags in visible primary navigation and closes setup actions af
   const fastFlagsIndex = shell.indexOf('data-page="fastflags"');
   const workspaceIndex = shell.indexOf('nav-group nav-group-bottom');
   assert.ok(libraryIndex >= 0 && fastFlagsIndex > libraryIndex && fastFlagsIndex < workspaceIndex);
-  assert.match(renderer, /if \(created\) \{\n    const profileButton = document\.querySelector\('\[data-profile-button\]'\);/);
+  assert.match(renderer, /if \(created\) \{\r?\n    const profileButton = document\.querySelector\('\[data-profile-button\]'\);/);
   assert.match(renderer, /if \(profileMenu\) profileMenu\.hidden = true;/);
-  assert.match(renderer, /if \(state\.profile\.created\) \{\n      openProfileDialog\(\);\n      return;/);
+  assert.match(renderer, /if \(state\.profile\.created\) \{\r?\n      openProfileDialog\(\);\r?\n      return;/);
 });
