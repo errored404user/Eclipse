@@ -209,6 +209,9 @@ function createMainWindow() {
   });
   return window;
 }
+// Eclipse is primarily a desktop control surface; software rendering avoids driver-specific
+// Chromium startup failures that otherwise leave a background-only portable process.
+app.disableHardwareAcceleration();
 app.setAppUserModelId('app.eclipse.client');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();

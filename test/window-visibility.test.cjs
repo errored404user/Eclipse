@@ -35,6 +35,7 @@ test('main process recovers a hidden single-instance window and has a visible fa
   const fs = require('node:fs');
   const path = require('node:path');
   const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+  assert.match(main, /app\.disableHardwareAcceleration\(\)/);
   assert.match(main, /function recoverMainWindow\(\)/);
   assert.match(main, /else recoverMainWindow\(\);/);
   assert.match(main, /window\.isVisible\(\).*revealMainWindow\(window\)/);
