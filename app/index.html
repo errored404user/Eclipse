@@ -76,31 +76,15 @@
           </div>
         </nav>
 
-        <div class="sidebar-bottom profile-footer" data-profile-footer>
-          <div class="account-card profile-card">
-            <button class="account-profile-button profile-identity" type="button" data-profile-action="open" aria-label="Open Eclipse profile editor">
-              <span class="profile-avatar-shell"><span class="avatar avatar-profile" data-profile-avatar>E</span><i aria-hidden="true"></i></span>
-              <span class="account-copy profile-copy">
-                <span class="profile-eyebrow">Eclipse profile</span>
-                <strong data-profile-name>Eclipse guest</strong>
-                <small><span data-profile-status>Local profile</span></small>
-              </span>
-            </button>
-            <button class="profile-menu-toggle" type="button" aria-label="Open Eclipse profile actions" aria-controls="profile-actions" aria-expanded="false" data-profile-button>
-              <span class="more" aria-hidden="true"><i></i><i></i><i></i></span>
-            </button>
-          </div>
-          <div class="account-menu profile-actions-menu" id="profile-actions" data-profile-menu role="menu" aria-label="Eclipse profile actions" hidden>
-            <div class="profile-menu-header">
-              <span class="avatar avatar-profile profile-menu-avatar" data-profile-avatar>E</span>
-              <span><strong data-profile-name>Eclipse guest</strong><small data-profile-status>Local profile</small></span>
-            </div>
-            <p data-profile-menu-note>Create an Eclipse profile stored only on this device.</p>
-            <div class="profile-menu-actions">
-              <button class="profile-menu-primary" type="button" role="menuitem" data-profile-action="open"><span class="profile-action-icon edit" aria-hidden="true"></span><span data-profile-action-label>Create Eclipse profile</span></button>
-              <button type="button" role="menuitem" data-player-action="download"><span class="profile-action-icon download" aria-hidden="true"></span><span>Install Roblox Player</span></button>
-            </div>
-          </div>
+        <div class="sidebar-bottom profile-footer">
+          <button class="account-card profile-card account-profile-button profile-identity" type="button" data-profile-action="open" aria-label="Create or edit your local Eclipse profile">
+            <span class="profile-avatar-shell"><span class="avatar avatar-profile" data-profile-avatar>E</span><i aria-hidden="true"></i></span>
+            <span class="account-copy profile-copy">
+              <span class="profile-eyebrow">Eclipse profile</span>
+              <strong data-profile-name>Eclipse guest</strong>
+              <small><span data-profile-status>Local profile</span></small>
+            </span>
+          </button>
         </div>
       </aside>
 
@@ -120,7 +104,15 @@
           <p data-profile-dialog-copy>Choose a display name for this device. This is not a Roblox account and Eclipse never asks for Roblox credentials.</p>
           <label for="profile-name">Display name</label>
           <input id="profile-name" name="displayName" maxlength="28" autocomplete="nickname" placeholder="Your Eclipse name" required />
-          <p class="profile-input-error" data-profile-input-error hidden></p>
+          <div class="profile-image-field">
+            <span>Profile image <em>optional</em></span>
+            <div class="profile-image-controls">
+              <span class="avatar avatar-profile profile-dialog-avatar" data-profile-dialog-avatar>E</span>
+              <label class="profile-image-upload" for="profile-image-input"><input id="profile-image-input" type="file" data-profile-image-input accept="image/png,image/jpeg,image/webp" /><span>Upload image</span><small>JPEG, PNG, or WebP · resized and stored locally</small></label>
+              <button class="profile-image-remove" type="button" data-action="clear-profile-image" aria-label="Remove selected profile image">Remove</button>
+            </div>
+          </div>
+          <p class="profile-input-error" data-profile-input-error role="alert" hidden></p>
           <div class="profile-dialog-actions"><button class="quiet-button" type="button" data-action="close-profile-dialog">Cancel</button><button class="primary-button" type="submit" data-profile-submit>Create local profile</button></div>
           <small>Stored locally in Eclipse on this device. No email, password, Roblox session, or online account is created.</small>
         </form>

@@ -206,7 +206,7 @@ test('uses a local Eclipse profile surface and exposes no Roblox login handoff',
   assert.match(renderer, /eclipse\.profile\.v1/);
   assert.match(renderer, /Create your Eclipse profile/);
   assert.match(shell, /data-profile-form/);
-  assert.match(shell, /data-player-action="download"/);
+  assert.match(renderer, /data-player-action="download"/);
   assert.doesNotMatch(renderer, /roblox\.com\/login|data-account-action|accountAction/);
   assert.doesNotMatch(shell, /Sign in at Roblox|data-account-action/);
   assert.doesNotMatch(main, /roblox\.com\/login/);
@@ -299,7 +299,7 @@ test('adds local activity tracking and transparent Discord Rich Presence prefere
   assert.match(styles, /\.integration-section/);
 });
 
-test('keeps Fast Flags visible and gives the reworked profile overflow an outboard, functional action menu', () => {
+test('keeps Fast Flags visible and lets the single profile card open a local editor with a bounded image upload', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
@@ -309,19 +309,23 @@ test('keeps Fast Flags visible and gives the reworked profile overflow an outboa
   const libraryIndex = shell.indexOf('data-page="library"');
   const fastFlagsIndex = shell.indexOf('data-page="fastflags"');
   const workspaceIndex = shell.indexOf('nav-group nav-group-bottom');
-  const wireShellSlice = renderer.slice(renderer.indexOf('function wireShell()'), renderer.indexOf("document.addEventListener('click', async"));
   assert.ok(libraryIndex >= 0 && fastFlagsIndex > libraryIndex && fastFlagsIndex < workspaceIndex);
-  assert.match(shell, /class="account-profile-button profile-identity"[^>]+data-profile-action="open"/);
-  assert.match(shell, /class="profile-menu-toggle"[^>]+aria-controls="profile-actions"[^>]+data-profile-button/);
-  assert.match(shell, /class="account-menu profile-actions-menu" id="profile-actions" data-profile-menu role="menu"/);
-  assert.match(shell, /data-profile-action-label/);
-  assert.match(renderer, /document\.querySelectorAll\('\[data-profile-action-label\]'\)/);
-  assert.doesNotMatch(renderer, /document\.querySelectorAll\('\[data-profile-action="open"\]'\)/);
-  assert.match(renderer, /function setProfileMenuOpen\(isOpen, focusAction = false\)/);
-  assert.match(renderer, /event\.stopPropagation\(\);\r?\n    const isOpen = profileButton\.getAttribute\('aria-expanded'\) === 'true';/);
-  assert.match(wireShellSlice, /event\.key === 'Escape'/);
-  assert.match(styles, /\.profile-actions-menu \{[^}]+left: calc\(100% \+ 11px\)/);
-  assert.match(styles, /\.sidebar \{ overflow: visible; \}/);
+  assert.match(shell, /class="account-card profile-card account-profile-button profile-identity"[^>]+data-profile-action="open"/);
+  assert.match(shell, /data-profile-image-input accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(shell, /data-profile-dialog-avatar/);
+  assert.match(shell, /data-action="clear-profile-image"/);
+  assert.doesNotMatch(shell, /data-profile-button|data-profile-menu|profile-actions-menu|profile-menu-toggle/);
+  assert.match(renderer, /function normalizeProfileImage\(value\)/);
+  assert.match(renderer, /data:image\\\/\(\?:jpeg\|png\|webp\)/);
+  assert.match(renderer, /function prepareProfileImage\(file\)/);
+  assert.match(renderer, /file\.size > 4 \* 1024 \* 1024/);
+  assert.match(renderer, /canvas\.width = 256/);
+  assert.match(renderer, /function setPendingProfileImage\(file\)/);
+  assert.match(renderer, /function updateProfileDialogAvatar\(\)/);
+  assert.doesNotMatch(renderer, /setProfileMenuOpen|data-profile-menu|data-profile-button/);
+  assert.match(styles, /\.profile-card \{ position: relative; min-height: 54px/);
+  assert.match(styles, /\.profile-dialog-avatar\.has-image/);
+  assert.match(styles, /\.profile-image-upload/);
 });
 
 test('adds a local-only Community shell with bounded drafts, official place invites, and no account handoff', () => {

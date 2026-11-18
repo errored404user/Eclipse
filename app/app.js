@@ -60,6 +60,8 @@ const browserFastFlags = {
 const fastFlags = window.eclipseFastFlags || browserFastFlags;
 let toastTimer;
 let communityAttachment = null;
+let pendingProfileAvatar = null;
+let profileImageRequest = 0;
 
 function readStored(key, fallback) {
   try {
@@ -74,9 +76,16 @@ function writeStored(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function normalizeProfileImage(value) {
+  const dataUrl = String(value || '');
+  if (dataUrl.length > 375_000) return '';
+  return /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(dataUrl) ? dataUrl : '';
+}
+
 function normalizeProfile(value) {
   const displayName = String(value?.displayName || '').trim().replace(/\s+/g, ' ').slice(0, 28);
-  return displayName ? { displayName, created: true } : { displayName: 'Eclipse guest', created: false };
+  const avatarDataUrl = normalizeProfileImage(value?.avatarDataUrl);
+  return displayName ? { displayName, avatarDataUrl, created: true } : { displayName: 'Eclipse guest', avatarDataUrl: '', created: false };
 }
 
 function normalizeIntegrations(value) {
@@ -158,30 +167,30 @@ function profileInitials(profile = state.profile) {
   return (initials || 'E').toUpperCase();
 }
 
-function setProfileMenuOpen(isOpen, focusAction = false) {
-  const profileButton = document.querySelector('[data-profile-button]');
-  const profileMenu = document.querySelector('[data-profile-menu]');
-  const profileFooter = document.querySelector('[data-profile-footer]');
-  if (!profileButton || !profileMenu) return;
-  profileButton.setAttribute('aria-expanded', String(isOpen));
-  profileButton.setAttribute('aria-label', isOpen ? 'Close Eclipse profile actions' : 'Open Eclipse profile actions');
-  profileMenu.hidden = !isOpen;
-  profileFooter?.classList.toggle('menu-open', isOpen);
-  if (isOpen && focusAction) window.requestAnimationFrame(() => profileMenu.querySelector('[role="menuitem"]')?.focus());
+function setAvatarSurface(element, avatarDataUrl, initials = profileInitials()) {
+  if (!element) return;
+  const hasImage = Boolean(avatarDataUrl);
+  element.textContent = hasImage ? '' : initials;
+  element.classList.toggle('has-image', hasImage);
+  if (hasImage) element.style.backgroundImage = `url("${avatarDataUrl}")`;
+  else element.style.removeProperty('background-image');
 }
 
 function updateProfileSurface() {
-  const { created, displayName } = state.profile;
+  const { created, displayName, avatarDataUrl } = state.profile;
   const name = created ? displayName : 'Eclipse guest';
   const status = created ? 'Stored on this device' : 'Local profile';
   document.querySelectorAll('[data-profile-name]').forEach((element) => { element.textContent = name; });
   document.querySelectorAll('[data-profile-status]').forEach((element) => { element.textContent = status; });
-  document.querySelectorAll('[data-profile-avatar]').forEach((element) => { element.textContent = profileInitials(); });
-  document.querySelectorAll('[data-profile-action-label]').forEach((element) => { element.textContent = created ? 'Edit Eclipse profile' : 'Create Eclipse profile'; });
-  document.querySelectorAll('[data-profile-menu-note]').forEach((element) => {
-    element.textContent = created ? 'Your Eclipse profile is stored only on this device.' : 'Create an Eclipse profile stored only on this device.';
+  document.querySelectorAll('[data-profile-avatar]').forEach((element) => setAvatarSurface(element, avatarDataUrl));
+}
+
+function updateProfileDialogAvatar() {
+  const avatar = normalizeProfileImage(pendingProfileAvatar);
+  document.querySelectorAll('[data-profile-dialog-avatar]').forEach((element) => setAvatarSurface(element, avatar));
+  document.querySelectorAll('[data-action="clear-profile-image"]').forEach((button) => {
+    button.hidden = !avatar;
   });
-  if (created) setProfileMenuOpen(false);
 }
 
 function profileDialog() {
@@ -189,6 +198,8 @@ function profileDialog() {
 }
 
 function closeProfileDialog() {
+  profileImageRequest += 1;
+  pendingProfileAvatar = null;
   const dialog = profileDialog();
   if (!dialog) return;
   if (typeof dialog.close === 'function' && dialog.open) dialog.close();
@@ -198,24 +209,82 @@ function closeProfileDialog() {
 function openProfileDialog() {
   const dialog = profileDialog();
   if (!dialog) return;
-  setProfileMenuOpen(false);
   const input = dialog.querySelector('[name="displayName"]');
+  const imageInput = dialog.querySelector('[data-profile-image-input]');
   const title = dialog.querySelector('[data-profile-dialog-title]');
   const copy = dialog.querySelector('[data-profile-dialog-copy]');
   const submit = dialog.querySelector('[data-profile-submit]');
   const error = dialog.querySelector('[data-profile-input-error]');
   const editing = state.profile.created;
+  pendingProfileAvatar = state.profile.avatarDataUrl || '';
   if (title) title.textContent = editing ? 'Edit your Eclipse profile' : 'Create your Eclipse profile';
-  if (copy) copy.textContent = editing ? 'Update the display name stored locally in Eclipse on this device.' : 'Choose a display name for this device. This is not a Roblox account and Eclipse never asks for Roblox credentials.';
+  if (copy) copy.textContent = editing ? 'Update the display name and profile image stored locally in Eclipse on this device.' : 'Choose a display name and optional profile image for this device. This is not a Roblox account and Eclipse never asks for Roblox credentials.';
   if (submit) submit.textContent = editing ? 'Save profile' : 'Create local profile';
   if (input) {
     input.value = editing ? state.profile.displayName : '';
     input.setAttribute('aria-invalid', 'false');
   }
+  if (imageInput) imageInput.value = '';
   if (error) error.hidden = true;
+  updateProfileDialogAvatar();
   if (typeof dialog.showModal === 'function') dialog.showModal();
   else dialog.setAttribute('open', '');
   window.setTimeout(() => input?.focus(), 0);
+}
+
+function readLocalImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('The selected image could not be read.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadLocalImage(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('The selected image could not be decoded.'));
+    image.src = source;
+  });
+}
+
+async function prepareProfileImage(file) {
+  const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+  if (!file || !allowedTypes.has(file.type) || file.size > 4 * 1024 * 1024) {
+    throw new Error('Choose a PNG, JPEG, or WebP profile image no larger than 4 MB.');
+  }
+  const image = await loadLocalImage(await readLocalImage(file));
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  if (!sourceWidth || !sourceHeight) throw new Error('The selected image has no usable dimensions.');
+  const sourceSide = Math.min(sourceWidth, sourceHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Eclipse could not prepare the selected profile image.');
+  context.fillStyle = '#21182e';
+  context.fillRect(0, 0, 256, 256);
+  context.drawImage(image, (sourceWidth - sourceSide) / 2, (sourceHeight - sourceSide) / 2, sourceSide, sourceSide, 0, 0, 256, 256);
+  const avatarDataUrl = canvas.toDataURL('image/jpeg', .84);
+  if (!normalizeProfileImage(avatarDataUrl)) throw new Error('The prepared profile image is too large to store locally.');
+  return avatarDataUrl;
+}
+
+async function setPendingProfileImage(file) {
+  const request = ++profileImageRequest;
+  try {
+    const avatarDataUrl = await prepareProfileImage(file);
+    if (request !== profileImageRequest) return;
+    pendingProfileAvatar = avatarDataUrl;
+    updateProfileDialogAvatar();
+    showToast('Profile image prepared for this local Eclipse profile.');
+  } catch (error) {
+    if (request !== profileImageRequest) return;
+    showToast(error instanceof Error ? error.message : 'The selected profile image could not be used.');
+  }
 }
 
 function saveEclipseProfile(form) {
@@ -231,7 +300,7 @@ function saveEclipseProfile(form) {
     input?.focus();
     return;
   }
-  state.profile = normalizeProfile({ displayName });
+  state.profile = normalizeProfile({ displayName, avatarDataUrl: pendingProfileAvatar || '' });
   writeStored(storageKeys.profile, state.profile);
   updateProfileSurface();
   closeProfileDialog();
@@ -948,23 +1017,6 @@ function wireWindowControls() {
 function wireShell() {
   document.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => setPage(button.dataset.page)));
   document.querySelectorAll('[data-page-link]').forEach((button) => button.addEventListener('click', () => setPage(button.dataset.pageLink)));
-
-  const profileButton = document.querySelector('[data-profile-button]');
-  const profileMenu = document.querySelector('[data-profile-menu]');
-  profileButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const isOpen = profileButton.getAttribute('aria-expanded') === 'true';
-    setProfileMenuOpen(!isOpen, event.detail === 0);
-  });
-  document.addEventListener('click', (event) => {
-    if (!profileButton.contains(event.target) && !profileMenu.contains(event.target)) setProfileMenuOpen(false);
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && profileButton.getAttribute('aria-expanded') === 'true') {
-      setProfileMenuOpen(false);
-      profileButton.focus();
-    }
-  });
   document.querySelector('[data-mobile-menu]').addEventListener('click', () => sidebar.classList.toggle('open'));
 }
 
@@ -973,12 +1025,16 @@ document.addEventListener('click', async (event) => {
   if (!button) return;
   const { action, playerAction, profileAction, pageLink } = button.dataset;
   if (pageLink) setPage(pageLink);
-  if (playerAction) {
-    setProfileMenuOpen(false);
-    await openOfficial(playerAction);
-  }
+  if (playerAction) await openOfficial(playerAction);
   if (profileAction === 'open') openProfileDialog();
   if (action === 'close-profile-dialog') closeProfileDialog();
+  if (action === 'clear-profile-image') {
+    pendingProfileAvatar = '';
+    profileImageRequest += 1;
+    const imageInput = profileDialog()?.querySelector('[data-profile-image-input]');
+    if (imageInput) imageInput.value = '';
+    updateProfileDialogAvatar();
+  }
   if (action === 'open-community-request') openCommunityRequestDialog();
   if (action === 'close-community-request') closeCommunityRequestDialog();
   if (action === 'clear-community-attachment') {
@@ -1114,6 +1170,11 @@ document.addEventListener('input', (event) => {
 });
 
 document.addEventListener('change', (event) => {
+  const profileImageInput = event.target.closest('[data-profile-image-input]');
+  if (profileImageInput) {
+    setPendingProfileImage(profileImageInput.files?.[0]);
+    return;
+  }
   const communityAttachmentInput = event.target.closest('[data-community-attachment]');
   if (communityAttachmentInput) {
     setCommunityAttachment(communityAttachmentInput.files?.[0]);
