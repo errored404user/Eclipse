@@ -90,6 +90,12 @@ function updateProfileSurface() {
   document.querySelectorAll('[data-profile-menu-note]').forEach((element) => {
     element.textContent = created ? 'Your Eclipse profile is stored only on this device.' : 'Create an Eclipse profile stored only on this device.';
   });
+  if (created) {
+    const profileButton = document.querySelector('[data-profile-button]');
+    const profileMenu = document.querySelector('[data-profile-menu]');
+    if (profileButton) profileButton.setAttribute('aria-expanded', 'false');
+    if (profileMenu) profileMenu.hidden = true;
+  }
 }
 
 function profileDialog() {
@@ -645,6 +651,10 @@ function wireShell() {
   const profileButton = document.querySelector('[data-profile-button]');
   const profileMenu = document.querySelector('[data-profile-menu]');
   profileButton.addEventListener('click', () => {
+    if (state.profile.created) {
+      openProfileDialog();
+      return;
+    }
     const isOpen = profileButton.getAttribute('aria-expanded') === 'true';
     profileButton.setAttribute('aria-expanded', String(!isOpen));
     profileMenu.hidden = isOpen;

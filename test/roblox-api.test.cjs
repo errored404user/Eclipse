@@ -228,3 +228,18 @@ test('routes the complete managed Fast Flags panel through its dedicated sidebar
   assert.match(fastFlagsSlice, /fastFlagsPanel\(\)/);
   assert.match(fastFlagsSlice, /refreshFastFlagsStatus\(\)/);
 });
+
+test('keeps Fast Flags in visible primary navigation and closes setup actions after profile creation', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const libraryIndex = shell.indexOf('data-page="library"');
+  const fastFlagsIndex = shell.indexOf('data-page="fastflags"');
+  const workspaceIndex = shell.indexOf('nav-group nav-group-bottom');
+  assert.ok(libraryIndex >= 0 && fastFlagsIndex > libraryIndex && fastFlagsIndex < workspaceIndex);
+  assert.match(renderer, /if \(created\) \{\n    const profileButton = document\.querySelector\('\[data-profile-button\]'\);/);
+  assert.match(renderer, /if \(profileMenu\) profileMenu\.hidden = true;/);
+  assert.match(renderer, /if \(state\.profile\.created\) \{\n      openProfileDialog\(\);\n      return;/);
+});
