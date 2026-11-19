@@ -4,6 +4,8 @@ const sidebar = document.querySelector('[data-sidebar]');
 const appSplash = document.querySelector('[data-app-splash]');
 const splashStartedAt = performance.now();
 const desktopWindow = window.eclipseWindow;
+const SERVER_RENDER_BATCH_SIZE = 40;
+
 const storageKeys = {
   library: 'eclipse.roblox.library.v1',
   recent: 'eclipse.roblox.recent.v1',
@@ -23,7 +25,7 @@ const state = {
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '', sort: 'featured', filter: 'all' },
-  gameDetails: { universeId: 0, placeId: 0, game: null, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', origin: 'discover' },
+  gameDetails: { universeId: 0, placeId: 0, game: null, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', serverLimit: SERVER_RENDER_BATCH_SIZE, origin: 'discover' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
   mods: { status: null, targets: null, targetsLoading: false, targetError: '', busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
   startup: { status: null, busy: false },
@@ -227,6 +229,7 @@ function normalizeSettings(value) {
     reducedMotion: value?.reducedMotion === true,
     compactCards: value?.compactCards === true,
     highContrast: value?.highContrast === true,
+    performanceMode: value?.performanceMode !== false,
     uiScale: [1, 1.1, 1.2, 1.3].includes(scale) ? scale : 1,
     clock24Hour: value?.clock24Hour === true
   };
@@ -488,9 +491,14 @@ function safeImageUrl(value) {
   }
 }
 
+const countFormatters = {
+  compact: new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }),
+  standard: new Intl.NumberFormat(undefined, { notation: 'standard', maximumFractionDigits: 0 })
+};
+
 function formatCount(value) {
   const count = Math.max(0, Number(value) || 0);
-  return new Intl.NumberFormat(undefined, { notation: count >= 1_000 ? 'compact' : 'standard', maximumFractionDigits: count >= 1_000 ? 1 : 0 }).format(count);
+  return (count >= 1_000 ? countFormatters.compact : countFormatters.standard).format(count);
 }
 
 function formatDate(value) {
@@ -608,7 +616,7 @@ function gameDetailsSeed(universeId, placeId) {
 }
 
 function gameDetailsDefaults({ universeId = 0, placeId = 0, origin = 'discover', game = null } = {}) {
-  return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', origin };
+  return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', serverLimit: SERVER_RENDER_BATCH_SIZE, origin };
 }
 
 function openGameDetails(universeId, placeId, requestedTab = 'about') {
@@ -677,6 +685,7 @@ async function loadGameDetails() {
   else detail.passesError = passesResult.reason instanceof Error ? passesResult.reason.message : 'Roblox game passes are unavailable.';
   if (serversResult.status === 'fulfilled') {
     detail.servers = normalizeGameServers(serversResult.value?.servers);
+    detail.serverLimit = SERVER_RENDER_BATCH_SIZE;
     detail.serversCursor = typeof serversResult.value?.nextCursor === 'string' ? serversResult.value.nextCursor : '';
   } else detail.serversError = serversResult.reason instanceof Error ? serversResult.reason.message : 'Roblox servers are unavailable.';
   detail.loading = false;
@@ -690,17 +699,18 @@ async function loadMoreGameServers() {
   if (detail.serversLoading || !detail.serversCursor) return;
   detail.serversLoading = true;
   detail.serversError = '';
-  if (state.page === 'game-details') renderGameDetails();
+  if (state.page === 'game-details') renderGameServersPanel();
   try {
     const result = await roblox.gameServers(detail.placeId, detail.serversCursor);
     const incoming = normalizeGameServers(result?.servers);
     detail.servers = [...new Map([...detail.servers, ...incoming].map((server) => [server.id, server])).values()].slice(0, 200);
+    detail.serverLimit = Math.min(200, Math.max(SERVER_RENDER_BATCH_SIZE, Number(detail.serverLimit) || SERVER_RENDER_BATCH_SIZE) + SERVER_RENDER_BATCH_SIZE);
     detail.serversCursor = typeof result?.nextCursor === 'string' ? result.nextCursor : '';
   } catch (error) {
     detail.serversError = error instanceof Error ? error.message : 'Roblox servers are unavailable.';
   } finally {
     detail.serversLoading = false;
-    if (state.page === 'game-details') renderGameDetails();
+    if (state.page === 'game-details') renderGameServersPanel();
   }
 }
 
@@ -709,16 +719,17 @@ async function refreshGameServers() {
   if (detail.serversLoading || !detail.placeId) return;
   detail.serversLoading = true;
   detail.serversError = '';
-  if (state.page === 'game-details') renderGameDetails();
+  if (state.page === 'game-details') renderGameServersPanel();
   try {
     const result = await roblox.gameServers(detail.placeId);
     detail.servers = normalizeGameServers(result?.servers);
+    detail.serverLimit = SERVER_RENDER_BATCH_SIZE;
     detail.serversCursor = typeof result?.nextCursor === 'string' ? result.nextCursor : '';
   } catch (error) {
     detail.serversError = error instanceof Error ? error.message : 'Roblox servers are unavailable.';
   } finally {
     detail.serversLoading = false;
-    if (state.page === 'game-details') renderGameDetails();
+    if (state.page === 'game-details') renderGameServersPanel();
   }
 }
 
@@ -768,6 +779,7 @@ function setSettings() {
   document.documentElement.classList.toggle('reduce-motion', Boolean(state.settings.reducedMotion));
   document.documentElement.classList.toggle('compact-cards', Boolean(state.settings.compactCards));
   document.documentElement.classList.toggle('high-contrast', Boolean(state.settings.highContrast));
+  document.documentElement.classList.toggle('performance-mode', Boolean(state.settings.performanceMode));
   document.documentElement.style.setProperty('--ui-scale', String(state.settings.uiScale));
 }
 
@@ -802,7 +814,7 @@ function gameCard(game, options = {}) {
 
   return `<article class="game-card panel" data-game-place="${game.placeId}">
     <div class="game-cover" style="--cover-hue:${hue}">
-      ${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}
+      ${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}
       <div class="game-cover-shade"></div>
       ${secondaryAction}
       <button class="card-play" type="button" data-action="launch-game" data-place-id="${game.placeId}" aria-label="Play ${escapeHtml(game.name)}"><span class="play-icon"></span></button>
@@ -821,7 +833,7 @@ function featuredGame(game) {
   const image = safeImageUrl(game.imageUrl);
   return `<article class="live-feature panel">
     <div class="live-feature-art" style="--cover-hue:${Number(game.universeId) % 280}">
-      ${image ? `<img src="${escapeHtml(image)}" alt="" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}
+      ${image ? `<img src="${escapeHtml(image)}" alt="" decoding="async" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}
       <div class="live-feature-shade"></div>
     </div>
     <div class="live-feature-copy">
@@ -843,6 +855,45 @@ function gameDetailsTabButton(tab, label) {
   return `<button class="game-details-tab ${state.gameDetails.tab === tab ? 'active' : ''}" type="button" data-action="game-details-tab" data-game-details-tab="${tab}" aria-pressed="${state.gameDetails.tab === tab ? 'true' : 'false'}">${label}</button>`;
 }
 
+function serverSortDescription(sort) {
+  if (sort === 'ping') return 'Best ping puts the lowest Roblox-reported ping first; servers without a reported ping appear afterward.';
+  if (sort === 'players') return 'Low players puts the least occupied non-full public servers first.';
+  if (sort === 'high-players') return 'High players puts the busiest non-full public servers first.';
+  return 'Most open slots puts public servers with the largest remaining capacity first.';
+}
+
+function gameServersPanel() {
+  const detail = state.gameDetails;
+  const servers = sortedGameServers();
+  const requestedLimit = Number(detail.serverLimit);
+  const limit = Math.max(SERVER_RENDER_BATCH_SIZE, Number.isSafeInteger(requestedLimit) ? requestedLimit : SERVER_RENDER_BATCH_SIZE);
+  const visibleServers = servers.slice(0, limit);
+  const serverRows = detail.serversLoading && !servers.length
+    ? Array.from({ length: 6 }, () => '<li class="server-row skeleton"><span></span><span></span><span></span></li>').join('')
+    : servers.length
+      ? visibleServers.map((server, index) => `<li class="server-row"><span class="server-index">${String(index + 1).padStart(2, '0')}</span><div><strong>${formatCount(server.playing)} <small>/ ${formatCount(server.maxPlayers)} players</small></strong><span>${formatCount(Math.max(0, server.maxPlayers - server.playing))} open slot${server.maxPlayers - server.playing === 1 ? '' : 's'}</span></div><div class="server-signal"><strong>${server.ping === null ? '—' : `${server.ping} ms`}</strong><span>${server.ping === null ? 'Ping unavailable' : 'Roblox-reported ping'}${server.fps === null ? '' : ` · ${server.fps} FPS`}</span></div><button class="quiet-button compact-button server-join-button" type="button" data-action="join-server" data-place-id="${detail.placeId}" data-game-instance-id="${escapeHtml(server.id)}">Join server</button></li>`).join('')
+      : `<li class="server-empty">${escapeHtml(detail.serversError || 'No non-full public servers were returned by Roblox right now.')}</li>`;
+  const remaining = Math.max(0, servers.length - visibleServers.length);
+  const showMore = remaining
+    ? `<button class="quiet-button" type="button" data-action="game-servers-show-more">Show ${Math.min(SERVER_RENDER_BATCH_SIZE, remaining)} more (${remaining} remaining)</button>`
+    : '';
+  const loadMore = detail.serversCursor
+    ? `<button class="quiet-button" type="button" data-action="game-servers-more" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Loading servers…' : 'Load more from Roblox'}</button>`
+    : '';
+  return `<section class="game-detail-section" data-game-servers-panel><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Public servers</p><h2>Find a better room.</h2><p>Sorting uses the current public-server page returned by Roblox. Ping is only shown when Roblox reports a value; Eclipse does not measure your gameplay latency.</p></div><div class="game-detail-actions"><label class="game-server-sort"><span class="sr-only">Sort public servers</span><select data-game-server-sort><option value="ping" ${detail.serverSort === 'ping' ? 'selected' : ''}>Best ping</option><option value="players" ${detail.serverSort === 'players' ? 'selected' : ''}>Low players</option><option value="high-players" ${detail.serverSort === 'high-players' ? 'selected' : ''}>High players</option><option value="open-slots" ${detail.serverSort === 'open-slots' ? 'selected' : ''}>Most open slots</option></select></label><button class="quiet-button compact-button" type="button" data-action="game-servers-refresh" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Refreshing…' : 'Refresh'}</button></div></div><div class="server-sort-note"><i></i>${serverSortDescription(detail.serverSort)}</div><ul class="server-list panel">${serverRows}</ul><p class="server-join-note">Joining sends the selected public-server ID to Roblox Player. Roblox may place you elsewhere if the server fills or closes.</p>${showMore || loadMore ? `<div class="game-detail-load-more">${showMore}${loadMore}</div>` : ''}</section>`;
+}
+
+function renderGameServersPanel() {
+  const current = pageContent.querySelector('[data-game-servers-panel]');
+  if (current) current.outerHTML = gameServersPanel();
+}
+
+function showMoreGameServers() {
+  const detail = state.gameDetails;
+  detail.serverLimit = Math.min(detail.servers.length, Math.max(SERVER_RENDER_BATCH_SIZE, Number(detail.serverLimit) || SERVER_RENDER_BATCH_SIZE) + SERVER_RENDER_BATCH_SIZE);
+  renderGameServersPanel();
+}
+
 function renderGameDetails() {
   const detail = state.gameDetails;
   const game = detail.game;
@@ -858,20 +909,7 @@ function renderGameDetails() {
   const rating = game.rating === null || game.rating === undefined ? 'Rating unavailable' : `${game.rating}% liked`;
   const genres = Array.isArray(game.genres) ? game.genres : [];
   const about = `<section class="game-detail-about"><article class="game-detail-description panel"><p class="section-kicker"><i></i> About this experience</p><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || 'Roblox has not provided a description for this experience.')}</p>${genres.length ? `<div class="game-detail-tags">${genres.map((genre) => `<span>${escapeHtml(genre)}</span>`).join('')}</div>` : ''}</article><aside class="game-detail-facts panel"><p class="section-kicker">Official snapshot</p><div><span>Creator</span><strong>${escapeHtml(game.creator || 'Roblox creator')}</strong></div><div><span>Visits</span><strong>${formatCount(game.visits)}</strong></div><div><span>Favorites</span><strong>${formatCount(game.favorites)}</strong></div><div><span>Updated</span><strong>${escapeHtml(game.updated ? formatDate(game.updated) : 'Unavailable')}</strong></div></aside></section>`;
-  const servers = sortedGameServers();
-  const serverRows = detail.serversLoading && !servers.length
-    ? Array.from({ length: 6 }, () => '<li class="server-row skeleton"><span></span><span></span><span></span></li>').join('')
-    : servers.length
-      ? servers.map((server, index) => `<li class="server-row"><span class="server-index">${String(index + 1).padStart(2, '0')}</span><div><strong>${formatCount(server.playing)} <small>/ ${formatCount(server.maxPlayers)} players</small></strong><span>${formatCount(Math.max(0, server.maxPlayers - server.playing))} open slot${server.maxPlayers - server.playing === 1 ? '' : 's'}</span></div><div class="server-signal"><strong>${server.ping === null ? '—' : `${server.ping} ms`}</strong><span>${server.ping === null ? 'Ping unavailable' : 'Roblox-reported ping'}${server.fps === null ? '' : ` · ${server.fps} FPS`}</span></div><button class="quiet-button compact-button server-join-button" type="button" data-action="join-server" data-place-id="${detail.placeId}" data-game-instance-id="${escapeHtml(server.id)}">Join server</button></li>`).join('')
-      : `<li class="server-empty">${escapeHtml(detail.serversError || 'No non-full public servers were returned by Roblox right now.')}</li>`;
-  const serverSortDescription = detail.serverSort === 'ping'
-    ? 'Best ping puts the lowest Roblox-reported ping first; servers without a reported ping appear afterward.'
-    : detail.serverSort === 'players'
-      ? 'Low players puts the least occupied non-full public servers first.'
-      : detail.serverSort === 'high-players'
-        ? 'High players puts the busiest non-full public servers first.'
-        : 'Most open slots puts public servers with the largest remaining capacity first.';
-  const serversPanel = `<section class="game-detail-section"><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Public servers</p><h2>Find a better room.</h2><p>Sorting uses the current public-server page returned by Roblox. Ping is only shown when Roblox reports a value; Eclipse does not measure your gameplay latency.</p></div><div class="game-detail-actions"><label class="game-server-sort"><span class="sr-only">Sort public servers</span><select data-game-server-sort><option value="ping" ${detail.serverSort === 'ping' ? 'selected' : ''}>Best ping</option><option value="players" ${detail.serverSort === 'players' ? 'selected' : ''}>Low players</option><option value="high-players" ${detail.serverSort === 'high-players' ? 'selected' : ''}>High players</option><option value="open-slots" ${detail.serverSort === 'open-slots' ? 'selected' : ''}>Most open slots</option></select></label><button class="quiet-button compact-button" type="button" data-action="game-servers-refresh" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Refreshing…' : 'Refresh'}</button></div></div><div class="server-sort-note"><i></i>${serverSortDescription}</div><ul class="server-list panel">${serverRows}</ul><p class="server-join-note">Joining sends the selected public-server ID to Roblox Player. Roblox may place you elsewhere if the server fills or closes.</p>${detail.serversCursor ? `<div class="game-detail-load-more"><button class="quiet-button" type="button" data-action="game-servers-more" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Loading servers…' : 'Load more servers'}</button></div>` : ''}</section>`;
+  const serversPanel = gameServersPanel();
   const passRows = detail.passesLoading
     ? Array.from({ length: 4 }, () => '<article class="game-pass-card panel skeleton"><span></span><span></span></article>').join('')
     : detail.passes.length
@@ -879,7 +917,7 @@ function renderGameDetails() {
       : emptyState('◇', 'No game passes listed.', detail.passesError || 'Roblox did not return public game-pass information for this experience.', '');
   const passesPanel = `<section class="game-detail-section"><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Experience extras</p><h2>Official game passes.</h2><p>Prices and availability come from Roblox. Eclipse does not handle purchases or Roblox account details.</p></div></div><div class="game-pass-grid">${passRows}</div></section>`;
   const tabContent = detail.tab === 'servers' ? serversPanel : detail.tab === 'passes' ? passesPanel : about;
-  pageContent.innerHTML = `<div class="page-shell game-details-page">${pageHeader('Official Roblox experience', game.name, 'Explore official experience information, public server availability, and game passes without leaving Eclipse.', '<button class="quiet-button" type="button" data-action="game-details-back">← Back</button>')}<section class="game-detail-hero panel"><div class="game-detail-art" style="--cover-hue:${Number(game.universeId) % 280}">${image ? `<img src="${escapeHtml(image)}" alt="" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}<div></div></div><div class="game-detail-hero-copy"><p class="section-kicker"><i></i> ${escapeHtml(game.creator || 'Roblox creator')}</p><h2>${escapeHtml(game.name)}</h2><div class="game-detail-live"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span><span>${escapeHtml(rating)}</span>${game.maxPlayers ? `<span>${formatCount(game.maxPlayers)} max / server</span>` : ''}</div><div class="featured-actions"><button class="play-button" type="button" data-action="launch-game" data-place-id="${game.placeId}"><span class="play-icon"></span> Play in Roblox</button><button class="quiet-button" type="button" data-action="open-game" data-place-id="${game.placeId}">Official page</button></div></div></section><nav class="game-details-tabs" aria-label="${escapeHtml(game.name)} details">${gameDetailsTabButton('about', 'About')}${gameDetailsTabButton('servers', `Servers${detail.servers.length ? ` · ${detail.servers.length}` : ''}`)}${gameDetailsTabButton('passes', `Game passes${detail.passes.length ? ` · ${detail.passes.length}` : ''}`)}</nav>${tabContent}</div>`;
+  pageContent.innerHTML = `<div class="page-shell game-details-page">${pageHeader('Official Roblox experience', game.name, 'Explore official experience information, public server availability, and game passes without leaving Eclipse.', '<button class="quiet-button" type="button" data-action="game-details-back">← Back</button>')}<section class="game-detail-hero panel"><div class="game-detail-art" style="--cover-hue:${Number(game.universeId) % 280}">${image ? `<img src="${escapeHtml(image)}" alt="" decoding="async" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}<div></div></div><div class="game-detail-hero-copy"><p class="section-kicker"><i></i> ${escapeHtml(game.creator || 'Roblox creator')}</p><h2>${escapeHtml(game.name)}</h2><div class="game-detail-live"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span><span>${escapeHtml(rating)}</span>${game.maxPlayers ? `<span>${formatCount(game.maxPlayers)} max / server</span>` : ''}</div><div class="featured-actions"><button class="play-button" type="button" data-action="launch-game" data-place-id="${game.placeId}"><span class="play-icon"></span> Play in Roblox</button><button class="quiet-button" type="button" data-action="open-game" data-place-id="${game.placeId}">Official page</button></div></div></section><nav class="game-details-tabs" aria-label="${escapeHtml(game.name)} details">${gameDetailsTabButton('about', 'About')}${gameDetailsTabButton('servers', `Servers${detail.servers.length ? ` · ${detail.servers.length}` : ''}`)}${gameDetailsTabButton('passes', `Game passes${detail.passes.length ? ` · ${detail.passes.length}` : ''}`)}</nav>${tabContent}</div>`;
 }
 
 function renderHome() {
@@ -1760,7 +1798,7 @@ function renderSettings() {
   const startup = state.startup.status || { supported: false, enabled: false, reason: 'Checking Windows integration…' };
   pageContent.innerHTML = `<div class="page-shell settings-page">
     ${pageHeader('Settings', 'Make Eclipse yours.', 'Interface and Windows preferences remain local to this device. Eclipse never requests Roblox account credentials.', '')}
-    <section class="settings-list panel"><div class="setting-row"><div><p class="section-kicker">Accessibility</p><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions. Eclipse also honors your system reduced-motion preference.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>High contrast surfaces</h2><p>Increase boundaries and text separation across Eclipse panels.</p></div><label class="toggle"><input type="checkbox" data-setting="highContrast" ${state.settings.highContrast ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Interface scale</h2><p>Use a larger text and control scale without changing Windows settings.</p></div><label class="settings-select"><span class="sr-only">Interface scale</span><select data-setting-select="uiScale"><option value="1" ${state.settings.uiScale === 1 ? 'selected' : ''}>Default</option><option value="1.1" ${state.settings.uiScale === 1.1 ? 'selected' : ''}>Large 110%</option><option value="1.2" ${state.settings.uiScale === 1.2 ? 'selected' : ''}>Larger 120%</option><option value="1.3" ${state.settings.uiScale === 1.3 ? 'selected' : ''}>Largest 130%</option></select></label></div><div class="setting-row"><div><p class="section-kicker">Layout & locale</p><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Use a 24-hour clock</h2><p>Format local Eclipse launch times using your locale with 24-hour time.</p></div><label class="toggle"><input type="checkbox" data-setting="clock24Hour" ${state.settings.clock24Hour ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><p class="section-kicker">Windows integration</p><h2>Launch Eclipse at sign-in</h2><p>${escapeHtml(startup.supported ? 'Optional. Eclipse adds no Roblox protocol ownership and retains only its own Windows startup preference.' : startup.reason || 'Available in the packaged Windows app.')}</p></div><label class="toggle ${!startup.supported || state.startup.busy ? 'is-disabled' : ''}"><input type="checkbox" data-startup-setting ${startup.enabled ? 'checked' : ''} ${!startup.supported || state.startup.busy ? 'disabled' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div></section>
+    <section class="settings-list panel"><div class="setting-row"><div><p class="section-kicker">Accessibility</p><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions. Eclipse also honors your system reduced-motion preference.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><p class="section-kicker">Performance</p><h2>Eclipse performance mode</h2><p>Reduce blur, glow, shadows, and decorative animation so the portable software-rendered workspace stays responsive. Enabled by default.</p></div><label class="toggle"><input type="checkbox" data-setting="performanceMode" ${state.settings.performanceMode ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>High contrast surfaces</h2><p>Increase boundaries and text separation across Eclipse panels.</p></div><label class="toggle"><input type="checkbox" data-setting="highContrast" ${state.settings.highContrast ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Interface scale</h2><p>Use a larger text and control scale without changing Windows settings.</p></div><label class="settings-select"><span class="sr-only">Interface scale</span><select data-setting-select="uiScale"><option value="1" ${state.settings.uiScale === 1 ? 'selected' : ''}>Default</option><option value="1.1" ${state.settings.uiScale === 1.1 ? 'selected' : ''}>Large 110%</option><option value="1.2" ${state.settings.uiScale === 1.2 ? 'selected' : ''}>Larger 120%</option><option value="1.3" ${state.settings.uiScale === 1.3 ? 'selected' : ''}>Largest 130%</option></select></label></div><div class="setting-row"><div><p class="section-kicker">Layout & locale</p><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Use a 24-hour clock</h2><p>Format local Eclipse launch times using your locale with 24-hour time.</p></div><label class="toggle"><input type="checkbox" data-setting="clock24Hour" ${state.settings.clock24Hour ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><p class="section-kicker">Windows integration</p><h2>Launch Eclipse at sign-in</h2><p>${escapeHtml(startup.supported ? 'Optional. Eclipse adds no Roblox protocol ownership and retains only its own Windows startup preference.' : startup.reason || 'Available in the packaged Windows app.')}</p></div><label class="toggle ${!startup.supported || state.startup.busy ? 'is-disabled' : ''}"><input type="checkbox" data-startup-setting ${startup.enabled ? 'checked' : ''} ${!startup.supported || state.startup.busy ? 'disabled' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div></section>
   </div>`;
 }
 
@@ -1934,6 +1972,7 @@ document.addEventListener('click', async (event) => {
     }
   }
   if (action === 'game-servers-refresh') void refreshGameServers();
+  if (action === 'game-servers-show-more') showMoreGameServers();
   if (action === 'game-servers-more') void loadMoreGameServers();
   if (action === 'save-game') {
     const game = gameForPlace(button.dataset.placeId);
@@ -2130,7 +2169,7 @@ document.addEventListener('change', async (event) => {
   const serverSort = event.target.closest('[data-game-server-sort]');
   if (serverSort) {
     state.gameDetails.serverSort = ['ping', 'players', 'high-players', 'open-slots'].includes(serverSort.value) ? serverSort.value : 'ping';
-    if (state.page === 'game-details') renderGameDetails();
+    if (state.page === 'game-details') renderGameServersPanel();
     return;
   }
   const fastFlagImport = event.target.closest('[data-fastflag-import]');
@@ -2238,7 +2277,7 @@ document.addEventListener('change', async (event) => {
 function finishAppSplash() {
   if (!appSplash) return;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || state.settings.reducedMotion;
-  const minimumDuration = reducedMotion ? 180 : 720;
+  const minimumDuration = reducedMotion || state.settings.performanceMode ? 180 : 720;
   const remaining = Math.max(0, minimumDuration - (performance.now() - splashStartedAt));
   window.setTimeout(() => {
     document.body.classList.add('eclipse-ready');

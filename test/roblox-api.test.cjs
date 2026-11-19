@@ -220,6 +220,26 @@ test('uses a reduced-motion-aware renderer splash before the Eclipse workspace a
   assert.match(styles, /prefers-reduced-motion: reduce/);
 });
 
+test('uses a bounded renderer performance path without changing the safe startup backend', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'electron', 'main.cjs'), 'utf8');
+  assert.match(renderer, /const SERVER_RENDER_BATCH_SIZE = 40;/);
+  assert.match(renderer, /performanceMode: value\?\.performanceMode !== false/);
+  assert.match(renderer, /function renderGameServersPanel\(\)/);
+  assert.match(renderer, /data-action=\\?"game-servers-show-more\\?"/);
+  assert.match(renderer, /decoding=\\?"async\\?"/);
+  assert.match(renderer, /const countFormatters/);
+  assert.match(styles, /\.performance-mode \.titlebar/);
+  assert.match(styles, /content-visibility: auto/);
+  assert.match(styles, /animation: none !important/);
+  assert.match(main, /app\.commandLine\.appendSwitch\('disable-gpu'\)/);
+  assert.match(main, /app\.disableHardwareAcceleration\(\)/);
+});
+
 test('accepts only safe numeric Roblox place IDs', () => {
   const { normalizeGameInstanceId, normalizePlaceId } = require('../shared/roblox-api.cjs');
   assert.equal(normalizePlaceId('1818'), 1818);
