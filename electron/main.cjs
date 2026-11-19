@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
-const { getGameDetails, listGamePasses, listGameServers, listGames, normalizeGameInstanceId, normalizePlaceId } = require('../shared/roblox-api.cjs');
+const { getGameDetails, listGameServers, listGames, normalizeGameInstanceId, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
 const { createDiscordPresence } = require('./discord-presence.cjs');
 const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
@@ -61,10 +61,6 @@ robloxBootstrapper.on('progress', (progress) => {
 
 function gamePageUrl(placeId) {
   return `https://www.roblox.com/games/${placeId}`;
-}
-
-function gamePassPageUrl(passId) {
-  return `https://www.roblox.com/game-pass/${passId}`;
 }
 
 async function openOfficialUrl(url) {
@@ -418,7 +414,6 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
   ipcMain.handle('roblox:game-details', (_event, universeId) => getGameDetails(universeId));
-  ipcMain.handle('roblox:game-passes', (_event, universeId) => listGamePasses(universeId));
   ipcMain.handle('roblox:game-servers', (_event, placeId, cursor) => listGameServers(placeId, typeof cursor === 'string' ? cursor : ''));
   ipcMain.handle('roblox:launch-place', async (_event, placeId) => {
     const validPlaceId = normalizePlaceId(placeId);
@@ -436,11 +431,6 @@ app.whenReady().then(async () => {
       const validPlaceId = normalizePlaceId(placeId);
       if (!validPlaceId) throw new Error('A valid Roblox place ID is required.');
       return openOfficialUrl(gamePageUrl(validPlaceId));
-    }
-    if (action === 'game-pass') {
-      const validPassId = normalizePlaceId(placeId);
-      if (!validPassId) throw new Error('A valid Roblox game pass is required.');
-      return openOfficialUrl(gamePassPageUrl(validPassId));
     }
     throw new Error('Unsupported official Roblox action.');
   });

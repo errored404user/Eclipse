@@ -96,15 +96,13 @@ test('maps official Roblox explore and search payloads into launchable games', a
   }
 });
 
-test('maps official Roblox game details, game passes, and public server telemetry', async () => {
+test('maps official Roblox game details and public server telemetry', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (url) => {
     const value = String(url);
     let body;
     if (value.includes('games.roblox.com/v1/games?')) {
       body = { data: [{ id: 4242, rootPlaceId: 2424, name: 'Official Detail', description: 'An official detail payload.', creator: { name: 'Roblox' }, playing: 900, visits: 1234567, favoritedCount: 4567, maxPlayers: 24, upVotes: 90, downVotes: 10, created: '2025-01-01T00:00:00.000Z', updated: '2026-01-01T00:00:00.000Z', genre: 'Adventure' }] };
-    } else if (value.includes('game-passes/v1/universes/4242/game-passes')) {
-      body = { data: [{ id: 6, name: 'Official Pass', description: 'A pass.', priceInformation: { priceInRobux: 99, isForSale: true } }] };
     } else if (value.includes('games.roblox.com/v1/games/2424/servers/Public')) {
       body = { data: [{ id: '9c6b852e-8f41-4b0e-9b39-29e5cc201cb3', playing: 2, maxPlayers: 24, ping: 42, fps: 60 }], nextPageCursor: 'next-server-page' };
     } else {
@@ -115,12 +113,11 @@ test('maps official Roblox game details, game passes, and public server telemetr
 
   try {
     delete require.cache[require.resolve('../shared/roblox-api.cjs')];
-    const { getGameDetails, listGamePasses, listGameServers } = require('../shared/roblox-api.cjs');
-    const [detail, passes, servers] = await Promise.all([getGameDetails(4242), listGamePasses(4242), listGameServers(2424)]);
+    const { getGameDetails, listGameServers } = require('../shared/roblox-api.cjs');
+    const [detail, servers] = await Promise.all([getGameDetails(4242), listGameServers(2424)]);
     assert.equal(detail.name, 'Official Detail');
     assert.equal(detail.maxPlayers, 24);
     assert.deepEqual(detail.genres, ['Adventure']);
-    assert.deepEqual(passes, [{ id: 6, name: 'Official Pass', description: 'A pass.', price: 99, isForSale: true }]);
     assert.deepEqual(servers, { servers: [{ id: '9c6b852e-8f41-4b0e-9b39-29e5cc201cb3', playing: 2, maxPlayers: 24, ping: 42, fps: 60 }], nextCursor: 'next-server-page' });
   } finally {
     global.fetch = originalFetch;
@@ -143,7 +140,7 @@ test('surfaces multiple official Roblox collections in Discover instead of only 
   assert.match(styles, /\.discovery-collection-chip\.active/);
 });
 
-test('opens official game detail, server, and pass views through bounded desktop and browser bridges', () => {
+test('opens official game detail and server views through bounded desktop and browser bridges only', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const root = path.join(__dirname, '..');
@@ -158,25 +155,22 @@ test('opens official game detail, server, and pass views through bounded desktop
   assert.match(renderer, /Low players/);
   assert.match(renderer, /High players/);
   assert.match(renderer, /Most open slots/);
-  assert.match(renderer, /Game passes/);
   assert.match(renderer, /data-action=\"join-server\"/);
   assert.match(renderer, /function joinGameServer\(placeId, gameInstanceId\)/);
   assert.match(renderer, /Roblox-reported ping/);
   assert.match(renderer, /function sortedGameServers\(\)/);
   assert.match(preload, /roblox:game-details/);
-  assert.match(preload, /roblox:game-passes/);
   assert.match(preload, /roblox:game-servers/);
   assert.match(preload, /roblox:launch-server/);
   assert.match(main, /ipcMain\.handle\('roblox:game-details'/);
-  assert.match(main, /ipcMain\.handle\('roblox:game-passes'/);
   assert.match(main, /ipcMain\.handle\('roblox:game-servers'/);
   assert.match(main, /ipcMain\.handle\('roblox:launch-server'/);
   assert.match(main, /normalizeGameInstanceId/);
   assert.match(server, /\/api\/roblox\/game-details/);
-  assert.match(server, /\/api\/roblox\/game-passes/);
   assert.match(server, /\/api\/roblox\/game-servers/);
   assert.match(styles, /\.game-details-page/);
   assert.match(styles, /\.server-list/);
+  for (const source of [renderer, preload, main, server, styles]) assert.doesNotMatch(source, new RegExp('game' + '.?' + 'pass', 'i'));
 });
 
 test('provides a safe Windows optimization workspace without driver downloads or live Player cleanup', () => {
@@ -255,13 +249,19 @@ test('keeps local discovery, library, history, backup, and update workflows boun
   assert.match(renderer, /function editLibraryTags\(universeId\)/);
   assert.match(renderer, /function editLibraryNotes\(universeId\)/);
   assert.match(renderer, /function normalizeGameNotes\(value\)/);
+  assert.match(renderer, /function libraryGameCard\(game\)/);
+  assert.match(renderer, /data-action=\"edit-library-tags\"/);
   assert.match(renderer, /data-action=\"edit-library-notes\"/);
+  assert.match(renderer, /window\.prompt\(`Local tags/);
+  assert.match(renderer, /window\.prompt\(`Private note/);
+  assert.match(renderer, /writeStored\(storageKeys\.library, state\.library\)/);
+  assert.match(renderer, /if \(action === 'edit-library-tags'\) editLibraryTags/);
+  assert.match(renderer, /if \(action === 'edit-library-notes'\) editLibraryNotes/);
   assert.match(renderer, /function pinGameInLibrary\(game\)/);
   assert.match(renderer, /data-action=\"history-pin-game\"/);
   assert.match(renderer, /function renderHistory\(\)/);
   assert.match(renderer, /eclipse-local-backup\/v1/);
   assert.match(renderer, /function importEclipseBackup\(file\)/);
-  assert.match(renderer, /data-action="open-game-pass"/);
   assert.match(renderer, /Refresh & re-sort/);
   assert.match(renderer, /data-game-server-filter/);
   assert.match(renderer, /state\.settings\.serverSort/);
@@ -270,10 +270,6 @@ test('keeps local discovery, library, history, backup, and update workflows boun
   assert.match(styles, /\.library-controls/);
   assert.match(styles, /\.history-list/);
   assert.match(styles, /\.server-ping-filter/);
-  assert.match(main, /function gamePassPageUrl/);
-  assert.match(main, /https:\/\/www\.roblox\.com\/game-pass\/\$\{passId\}/);
-  assert.match(main, /action === 'game-pass'/);
-  assert.match(main, /const validPassId = normalizePlaceId\(placeId\)/);
   assert.doesNotMatch(main, /openOfficialUrl\(placeId\)/);
   assert.match(main, /system:check-for-updates/);
   assert.match(main, /void updateChecker\.check\(\)/);

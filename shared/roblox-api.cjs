@@ -6,7 +6,6 @@ const MAX_GAMES = 24;
 const MAX_EXPLORE_COLLECTIONS = 6;
 const MAX_GAMES_PER_COLLECTION = 12;
 const MAX_ICON_IDS = 100;
-const MAX_GAME_PASSES = 24;
 const MAX_SERVER_PAGE = 100;
 const cache = new Map();
 
@@ -229,22 +228,6 @@ function normalizeDetailGame(item) {
   };
 }
 
-function normalizeGamePass(item) {
-  const id = readNumber(item?.id ?? item?.gamePassId);
-  const name = typeof item?.name === 'string' ? item.name.trim().slice(0, 120) : '';
-  if (!id || !name) return null;
-  const priceValue = item?.priceInformation?.priceInRobux ?? item?.price ?? item?.priceInRobux;
-  const price = Number.isFinite(Number(priceValue)) && Number(priceValue) >= 0 ? Math.floor(Number(priceValue)) : null;
-  const isForSale = item?.priceInformation?.isForSale !== false && item?.isForSale !== false;
-  return {
-    id,
-    name,
-    description: typeof item?.description === 'string' ? item.description.trim().slice(0, 280) : '',
-    price,
-    isForSale
-  };
-}
-
 function normalizeServer(item) {
   const id = normalizeGameInstanceId(item?.id);
   const playing = Number.isFinite(Number(item?.playing)) && Number(item.playing) >= 0 ? Math.floor(Number(item.playing)) : 0;
@@ -274,18 +257,6 @@ async function getGameDetails(universeId) {
   });
 }
 
-async function listGamePasses(universeId) {
-  const id = readNumber(universeId);
-  if (!id) throw new Error('A valid Roblox universe ID is required.');
-  return cacheResult(`passes:${id}`, CACHE_TTL_MS, async () => {
-    const url = new URL(`https://apis.roblox.com/game-passes/v1/universes/${id}/game-passes`);
-    url.searchParams.set('sortOrder', 'Asc');
-    url.searchParams.set('limit', String(MAX_GAME_PASSES));
-    const payload = await fetchJson(url);
-    return (Array.isArray(payload?.data) ? payload.data : []).map(normalizeGamePass).filter(Boolean).slice(0, MAX_GAME_PASSES);
-  });
-}
-
 async function listGameServers(placeId, cursor = '') {
   const id = normalizePlaceId(placeId);
   if (!id) throw new Error('A valid Roblox place ID is required.');
@@ -304,4 +275,4 @@ async function listGameServers(placeId, cursor = '') {
   });
 }
 
-module.exports = { getGameDetails, listGamePasses, listGameServers, listGames, normalizeGameInstanceId, normalizePlaceId };
+module.exports = { getGameDetails, listGameServers, listGames, normalizeGameInstanceId, normalizePlaceId };

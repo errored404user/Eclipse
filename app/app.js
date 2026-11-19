@@ -29,7 +29,7 @@ const state = {
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
   libraryView: { query: '', tag: 'all', sort: 'pinned' },
   discover: { games: cachedDiscover.games, collections: cachedDiscover.collections, collectionId: cachedDiscover.collections[0]?.id || '', query: '', cursor: cachedDiscover.cursor, loading: false, error: '', sort: 'featured', filter: 'all', cachedAt: cachedDiscover.savedAt, cacheRefreshStarted: false },
-  gameDetails: { universeId: 0, placeId: 0, game: null, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: normalizeSettings(readStored(storageKeys.settings, {})).serverSort, serverFilter: 'all', serverRequirePing: false, serverLimit: SERVER_RENDER_BATCH_SIZE, origin: 'discover' },
+  gameDetails: { universeId: 0, placeId: 0, game: null, servers: [], serversCursor: '', loading: false, serversLoading: false, error: '', serversError: '', tab: 'about', serverSort: normalizeSettings(readStored(storageKeys.settings, {})).serverSort, serverFilter: 'all', serverRequirePing: false, serverLimit: SERVER_RENDER_BATCH_SIZE, origin: 'discover' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
   mods: { status: null, targets: null, targetsLoading: false, targetError: '', busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
   startup: { status: null, busy: false },
@@ -55,12 +55,6 @@ const browserRoblox = {
     if (!response.ok) throw new Error(result.error || 'Roblox game details are unavailable.');
     return result;
   },
-  async gamePasses(universeId) {
-    const response = await fetch(`/api/roblox/game-passes?universeId=${encodeURIComponent(universeId)}`);
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Roblox game passes are unavailable.');
-    return Array.isArray(result.passes) ? result.passes : [];
-  },
   async gameServers(placeId, cursor = '') {
     const params = new URLSearchParams({ placeId: String(placeId) });
     if (cursor) params.set('cursor', cursor);
@@ -79,8 +73,7 @@ const browserRoblox = {
   },
   async openOfficial(action, placeId) {
     const urls = {
-      game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`,
-      'game-pass': `https://www.roblox.com/game-pass/${encodeURIComponent(placeId)}`
+      game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`
     };
     const url = urls[action];
     if (!url) throw new Error('Unsupported Roblox action.');
@@ -650,17 +643,6 @@ function normalizeGameDetails(value, fallback = null) {
   };
 }
 
-function normalizeGamePasses(value) {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((pass) => {
-    const id = Number(pass?.id);
-    const name = String(pass?.name || '').trim().slice(0, 120);
-    if (!Number.isSafeInteger(id) || id <= 0 || !name) return [];
-    const price = Number(pass?.price);
-    return [{ id, name, description: String(pass?.description || '').trim().slice(0, 280), price: Number.isFinite(price) && price >= 0 ? Math.floor(price) : null, isForSale: pass?.isForSale !== false }];
-  }).slice(0, 24);
-}
-
 function normalizeGameServers(value) {
   if (!Array.isArray(value)) return [];
   return value.flatMap((server) => {
@@ -679,7 +661,7 @@ function gameDetailsSeed(universeId, placeId) {
 }
 
 function gameDetailsDefaults({ universeId = 0, placeId = 0, origin = 'discover', game = null } = {}) {
-  return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: state.settings.serverSort, serverFilter: 'all', serverRequirePing: false, serverLimit: SERVER_RENDER_BATCH_SIZE, origin };
+  return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, servers: [], serversCursor: '', loading: false, serversLoading: false, error: '', serversError: '', tab: 'about', serverSort: state.settings.serverSort, serverFilter: 'all', serverRequirePing: false, serverLimit: SERVER_RENDER_BATCH_SIZE, origin };
 }
 
 function openGameDetails(universeId, placeId, requestedTab = 'about') {
@@ -691,7 +673,7 @@ function openGameDetails(universeId, placeId, requestedTab = 'about') {
   }
   const origin = ['home', 'discover', 'library'].includes(state.page) ? state.page : 'discover';
   state.gameDetails = gameDetailsDefaults({ universeId: safeUniverseId, placeId: safePlaceId, origin, game: gameDetailsSeed(safeUniverseId, safePlaceId) });
-  state.gameDetails.tab = ['about', 'servers', 'passes'].includes(requestedTab) ? requestedTab : 'about';
+  state.gameDetails.tab = ['about', 'servers'].includes(requestedTab) ? requestedTab : 'about';
   state.page = 'game-details';
   document.querySelectorAll('[data-page]').forEach((button) => {
     button.classList.remove('active');
@@ -729,15 +711,12 @@ async function loadGameDetails() {
   const detail = state.gameDetails;
   if (detail.loading || !detail.universeId || !detail.placeId) return;
   detail.loading = true;
-  detail.passesLoading = true;
   detail.serversLoading = true;
   detail.error = '';
-  detail.passesError = '';
   detail.serversError = '';
   if (state.page === 'game-details') renderGameDetails();
-  const [gameResult, passesResult, serversResult] = await Promise.allSettled([
+  const [gameResult, serversResult] = await Promise.allSettled([
     roblox.gameDetails(detail.universeId),
-    roblox.gamePasses(detail.universeId),
     roblox.gameServers(detail.placeId)
   ]);
   if (gameResult.status === 'fulfilled') {
@@ -749,15 +728,12 @@ async function loadGameDetails() {
   } else if (!detail.game) {
     detail.error = gameResult.reason instanceof Error ? gameResult.reason.message : 'Roblox game details are unavailable.';
   }
-  if (passesResult.status === 'fulfilled') detail.passes = normalizeGamePasses(passesResult.value);
-  else detail.passesError = passesResult.reason instanceof Error ? passesResult.reason.message : 'Roblox game passes are unavailable.';
   if (serversResult.status === 'fulfilled') {
     detail.servers = normalizeGameServers(serversResult.value?.servers);
     detail.serverLimit = SERVER_RENDER_BATCH_SIZE;
     detail.serversCursor = typeof serversResult.value?.nextCursor === 'string' ? serversResult.value.nextCursor : '';
   } else detail.serversError = serversResult.reason instanceof Error ? serversResult.reason.message : 'Roblox servers are unavailable.';
   detail.loading = false;
-  detail.passesLoading = false;
   detail.serversLoading = false;
   if (state.page === 'game-details') renderGameDetails();
 }
@@ -917,7 +893,7 @@ function gameCard(game, options = {}) {
       <h3 title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</h3>
       <p>${escapeHtml(game.creator || 'Roblox creator')}</p>
       <div class="game-meta"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span>${rating}</div>
-      <div class="game-details-actions"><button class="game-details-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details <span>→</span></button><button class="game-details-button game-passes-button" type="button" data-action="game-passes" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">Game passes</button></div>
+      <div class="game-details-actions"><button class="game-details-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details <span>→</span></button></div>
     </div>
   </article>`;
 }
@@ -938,7 +914,6 @@ function featuredGame(game) {
       <div class="featured-actions">
         <button class="play-button" type="button" data-action="launch-game" data-place-id="${game.placeId}"><span class="play-icon"></span> Play in Roblox</button>
         <button class="quiet-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details</button>
-        <button class="quiet-button" type="button" data-action="game-passes" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">Game passes</button>
         <button class="quiet-button" type="button" data-action="open-game" data-place-id="${game.placeId}">Official page</button>
       </div>
     </div>
@@ -992,7 +967,7 @@ function renderGameDetails() {
   const detail = state.gameDetails;
   const game = detail.game;
   if (!game && detail.loading) {
-    pageContent.innerHTML = `<div class="page-shell game-details-page">${pageHeader('Official Roblox experience', 'Loading experience…', 'Retrieving official game information, public servers, and available game passes.', '<button class="quiet-button" type="button" data-action="game-details-back">Back</button>')}<section class="game-details-loading panel"><span></span><span></span><span></span></section></div>`;
+    pageContent.innerHTML = `<div class="page-shell game-details-page">${pageHeader('Official Roblox experience', 'Loading experience…', 'Retrieving official game information and public servers.', '<button class="quiet-button" type="button" data-action="game-details-back">Back</button>')}<section class="game-details-loading panel"><span></span><span></span><span></span></section></div>`;
     return;
   }
   if (!game) {
@@ -1004,14 +979,8 @@ function renderGameDetails() {
   const genres = Array.isArray(game.genres) ? game.genres : [];
   const about = `<section class="game-detail-about"><article class="game-detail-description panel"><p class="section-kicker"><i></i> About this experience</p><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description || 'Roblox has not provided a description for this experience.')}</p>${genres.length ? `<div class="game-detail-tags">${genres.map((genre) => `<span>${escapeHtml(genre)}</span>`).join('')}</div>` : ''}</article><aside class="game-detail-facts panel"><p class="section-kicker">Official snapshot</p><div><span>Creator</span><strong>${escapeHtml(game.creator || 'Roblox creator')}</strong></div><div><span>Visits</span><strong>${formatCount(game.visits)}</strong></div><div><span>Favorites</span><strong>${formatCount(game.favorites)}</strong></div><div><span>Updated</span><strong>${escapeHtml(game.updated ? formatDate(game.updated) : 'Unavailable')}</strong></div></aside></section>`;
   const serversPanel = gameServersPanel();
-  const passRows = detail.passesLoading
-    ? Array.from({ length: 4 }, () => '<article class="game-pass-card panel skeleton"><span></span><span></span></article>').join('')
-    : detail.passes.length
-      ? detail.passes.map((pass) => `<article class="game-pass-card panel"><div><p class="section-kicker">Official game pass</p><h3>${escapeHtml(pass.name)}</h3><p>${escapeHtml(pass.description || 'No description provided by the experience creator.')}</p><button class="text-button game-pass-open" type="button" data-action="open-game-pass" data-pass-id="${pass.id}">Open on Roblox <span>↗</span></button></div><strong>${pass.isForSale ? pass.price === null ? 'Price unavailable' : pass.price === 0 ? 'Free' : `${formatCount(pass.price)} Robux` : 'Off sale'}</strong></article>`).join('')
-      : emptyState('◇', 'No game passes listed.', detail.passesError || 'Roblox did not return public game-pass information for this experience.', '');
-  const passesPanel = `<section class="game-detail-section"><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Experience extras</p><h2>Official game passes.</h2><p>Prices and availability come from Roblox. Eclipse does not handle purchases or Roblox account details.</p></div></div><div class="game-pass-grid">${passRows}</div></section>`;
-  const tabContent = detail.tab === 'servers' ? serversPanel : detail.tab === 'passes' ? passesPanel : about;
-  pageContent.innerHTML = `<div class="page-shell game-details-page">${pageHeader('Official Roblox experience', game.name, 'Explore official experience information, public server availability, and game passes without leaving Eclipse.', '<button class="quiet-button" type="button" data-action="game-details-back">← Back</button>')}<section class="game-detail-hero panel"><div class="game-detail-art" style="--cover-hue:${Number(game.universeId) % 280}">${image ? `<img src="${escapeHtml(image)}" alt="" decoding="async" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}<div></div></div><div class="game-detail-hero-copy"><p class="section-kicker"><i></i> ${escapeHtml(game.creator || 'Roblox creator')}</p><h2>${escapeHtml(game.name)}</h2><div class="game-detail-live"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span><span>${escapeHtml(rating)}</span>${game.maxPlayers ? `<span>${formatCount(game.maxPlayers)} max / server</span>` : ''}</div><div class="featured-actions"><button class="play-button" type="button" data-action="launch-game" data-place-id="${game.placeId}"><span class="play-icon"></span> Play in Roblox</button><button class="quiet-button" type="button" data-action="open-game" data-place-id="${game.placeId}">Official page</button></div></div></section><nav class="game-details-tabs" aria-label="${escapeHtml(game.name)} details">${gameDetailsTabButton('about', 'About')}${gameDetailsTabButton('servers', `Servers${detail.servers.length ? ` · ${detail.servers.length}` : ''}`)}${gameDetailsTabButton('passes', `Game passes${detail.passes.length ? ` · ${detail.passes.length}` : ''}`)}</nav>${tabContent}</div>`;
+  const tabContent = detail.tab === 'servers' ? serversPanel : about;
+  pageContent.innerHTML = `<div class="page-shell game-details-page">${pageHeader('Official Roblox experience', game.name, 'Explore official experience information and public server availability without leaving Eclipse.', '<button class="quiet-button" type="button" data-action="game-details-back">← Back</button>')}<section class="game-detail-hero panel"><div class="game-detail-art" style="--cover-hue:${Number(game.universeId) % 280}">${image ? `<img src="${escapeHtml(image)}" alt="" decoding="async" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}<div></div></div><div class="game-detail-hero-copy"><p class="section-kicker"><i></i> ${escapeHtml(game.creator || 'Roblox creator')}</p><h2>${escapeHtml(game.name)}</h2><div class="game-detail-live"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span><span>${escapeHtml(rating)}</span>${game.maxPlayers ? `<span>${formatCount(game.maxPlayers)} max / server</span>` : ''}</div><div class="featured-actions"><button class="play-button" type="button" data-action="launch-game" data-place-id="${game.placeId}"><span class="play-icon"></span> Play in Roblox</button><button class="quiet-button" type="button" data-action="open-game" data-place-id="${game.placeId}">Official page</button></div></div></section><nav class="game-details-tabs" aria-label="${escapeHtml(game.name)} details">${gameDetailsTabButton('about', 'About')}${gameDetailsTabButton('servers', `Servers${detail.servers.length ? ` · ${detail.servers.length}` : ''}`)}</nav>${tabContent}</div>`;
 }
 
 function renderHome() {
@@ -1205,11 +1174,29 @@ function editLibraryNotes(universeId) {
 }
 
 function libraryGameCard(game) {
+  const image = safeImageUrl(game.imageUrl);
+  const hue = Number(game.universeId) % 280;
+  const rating = game.rating === null || game.rating === undefined ? '' : `<span>${game.rating}% liked</span>`;
   const tags = Array.isArray(game.tags) && game.tags.length ? `<div class="library-card-tags">${game.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : '<p class="library-no-tags">No local tags yet</p>';
   const note = game.notes ? `<p class="library-note" title="${escapeHtml(game.notes)}"><strong>Note</strong> ${escapeHtml(game.notes)}</p>` : '';
   const noteLabel = game.notes ? 'Edit note' : 'Add note';
-  const card = gameCard(game, { library: true });
-  return card.replace('</div>\n  </article>', `${tags}${note}<div class="library-card-actions"><button class="text-button library-tag-button" type="button" data-action="edit-library-tags" data-universe-id="${game.universeId}">Edit tags <span>→</span></button><button class="text-button library-tag-button" type="button" data-action="edit-library-notes" data-universe-id="${game.universeId}">${noteLabel} <span>→</span></button></div></div>\n  </article>`);
+  const pinLabel = game.pinned ? 'Unpin' : 'Pin';
+  return `<article class="game-card panel" data-game-place="${game.placeId}">
+    <div class="game-cover" style="--cover-hue:${hue}">
+      ${image ? `<img src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : '<span class="cover-orbit" aria-hidden="true"></span>'}
+      <div class="game-cover-shade"></div>
+      <div class="game-cover-actions"><button class="card-icon-button ${game.pinned ? 'saved' : ''}" type="button" data-action="pin-game" data-universe-id="${game.universeId}" aria-label="${pinLabel} ${escapeHtml(game.name)}">${game.pinned ? '★' : '☆'}</button><button class="card-icon-button" type="button" data-action="remove-game" data-universe-id="${game.universeId}" aria-label="Remove ${escapeHtml(game.name)} from library">×</button></div>
+      <button class="card-play" type="button" data-action="launch-game" data-place-id="${game.placeId}" aria-label="Play ${escapeHtml(game.name)}"><span class="play-icon"></span></button>
+    </div>
+    <div class="game-copy">
+      <h3 title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</h3>
+      <p>${escapeHtml(game.creator || 'Roblox creator')}</p>
+      <div class="game-meta"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span>${rating}</div>
+      ${tags}${note}
+      <div class="library-card-actions"><button class="text-button library-tag-button" type="button" data-action="edit-library-tags" data-universe-id="${game.universeId}">Edit tags <span>→</span></button><button class="text-button library-tag-button" type="button" data-action="edit-library-notes" data-universe-id="${game.universeId}">${noteLabel} <span>→</span></button></div>
+      <div class="game-details-actions"><button class="game-details-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details <span>→</span></button></div>
+    </div>
+  </article>`;
 }
 
 function renderLibrary() {
@@ -2150,7 +2137,7 @@ async function joinGameServer(placeId, gameInstanceId) {
 async function openOfficial(action, placeId) {
   try {
     await roblox.openOfficial(action, placeId);
-    const messages = { game: 'Opening the official Roblox game page.', 'game-pass': 'Opening the official Roblox game pass page.' };
+    const messages = { game: 'Opening the official Roblox game page.' };
     showToast(messages[action] || 'Opening Roblox.');
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Roblox could not be opened.');
@@ -2235,15 +2222,13 @@ document.addEventListener('click', async (event) => {
   if (action === 'import-eclipse-backup') pageContent.querySelector('[data-eclipse-backup-import]')?.click();
   if (action === 'launch-game' || action === 'relaunch-place') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
-  if (action === 'open-game-pass') await openOfficial('game-pass', button.dataset.passId);
   if (action === 'game-details') openGameDetails(button.dataset.universeId, button.dataset.placeId);
-  if (action === 'game-passes') openGameDetails(button.dataset.universeId, button.dataset.placeId, 'passes');
   if (action === 'join-server') await joinGameServer(button.dataset.placeId, button.dataset.gameInstanceId);
   if (action === 'game-details-back') backFromGameDetails();
   if (action === 'game-details-retry') void loadGameDetails();
   if (action === 'game-details-tab') {
     const tab = button.dataset.gameDetailsTab;
-    if (['about', 'servers', 'passes'].includes(tab)) {
+    if (['about', 'servers'].includes(tab)) {
       state.gameDetails.tab = tab;
       if (state.page === 'game-details') renderGameDetails();
     }
