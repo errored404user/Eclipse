@@ -187,9 +187,12 @@ function createMainWindow() {
   });
   mainWindow = window;
   let startupFallbackTimer;
+  let startupRecoveryTimer;
   const clearStartupFallback = () => {
     if (startupFallbackTimer) clearTimeout(startupFallbackTimer);
+    if (startupRecoveryTimer) clearTimeout(startupRecoveryTimer);
     startupFallbackTimer = undefined;
+    startupRecoveryTimer = undefined;
   };
   const showStartupFailure = () => {
     if (startupErrorShown) return;
@@ -215,6 +218,14 @@ function createMainWindow() {
     if (isUsableWindow(window) && !window.isVisible()) revealMainWindow(window);
   }, 4_000);
   startupFallbackTimer.unref?.();
+  // Never let an invisible startup process keep the single-instance lock forever.
+  startupRecoveryTimer = setTimeout(() => {
+    if (isUsableWindow(window) && !window.isVisible()) {
+      window.destroy();
+      app.exit(1);
+    }
+  }, 12_000);
+  startupRecoveryTimer.unref?.();
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('did-fail-load', (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
@@ -232,6 +243,8 @@ function createMainWindow() {
 }
 // Eclipse is primarily a desktop control surface; software rendering avoids driver-specific
 // Chromium startup failures that otherwise leave a background-only portable process.
+// Keep the command-line switch as well: it matches the Windows recovery launch exactly.
+app.commandLine.appendSwitch('disable-gpu');
 app.disableHardwareAcceleration();
 app.setAppUserModelId('app.eclipse.client');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -372,6 +385,9 @@ app.whenReady().then(async () => {
   refreshJumpList();
   createMainWindow();
   app.on('activate', () => recoverMainWindow());
+}).catch((error) => {
+  console.error('Eclipse could not initialize its main process.', error);
+  app.exit(1);
 });
 }
 

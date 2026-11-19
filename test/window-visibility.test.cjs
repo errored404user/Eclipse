@@ -35,7 +35,9 @@ test('main process recovers a hidden single-instance window and has a visible fa
   const fs = require('node:fs');
   const path = require('node:path');
   const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+  assert.match(main, /app\.commandLine\.appendSwitch\('disable-gpu'\)/);
   assert.match(main, /app\.disableHardwareAcceleration\(\)/);
+  assert.match(main, /Never let an invisible startup process keep the single-instance lock forever/);
   assert.match(main, /function recoverMainWindow\(\)/);
   assert.match(main, /else recoverMainWindow\(\);/);
   assert.match(main, /window\.isVisible\(\).*revealMainWindow\(window\)/);
