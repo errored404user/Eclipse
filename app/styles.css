@@ -314,3 +314,57 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 @media (max-width: 760px) { .history-row { align-items: flex-start; flex-direction: column; }.history-actions, .settings-actions { justify-content: flex-start; }.game-detail-actions { flex-wrap: wrap; }.server-ping-filter { min-height: 31px; } }
 @media (max-width: 520px) { .library-search { flex-direction: column; }.library-search button { width: 100%; }.history-actions, .settings-actions { width: 100%; }.history-actions button, .settings-actions button { flex: 1; justify-content: center; } }
 .library-card-actions { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 7px; }.library-note { display: -webkit-box; overflow: hidden; margin: 9px 0 0 !important; color: #b7acbf !important; font-size: 9px !important; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 3; white-space: pre-line; }.library-note strong { color: #d5cae7; font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace; font-size: 8px; text-transform: uppercase; }
+
+/* Preview motion refresh: deeper staged arrivals while keeping the software-rendered path light. */
+.page-shell { animation: eclipse-page-arrive 520ms cubic-bezier(.16, .86, .28, 1) both; }
+.page-shell > * { animation: eclipse-section-arrive 620ms cubic-bezier(.16, .86, .28, 1) both; }
+.page-shell > :nth-child(1) { animation-delay: 35ms; }
+.page-shell > :nth-child(2) { animation-delay: 105ms; }
+.page-shell > :nth-child(3) { animation-delay: 175ms; }
+.page-shell > :nth-child(4) { animation-delay: 245ms; }
+.page-shell > :nth-child(5) { animation-delay: 315ms; }
+.page-shell > :nth-child(n + 6) { animation-delay: 385ms; }
+.game-grid .game-card { animation: eclipse-card-arrive 560ms cubic-bezier(.16, .86, .28, 1) both; }
+.game-grid .game-card:nth-child(1) { animation-delay: 45ms; }
+.game-grid .game-card:nth-child(2) { animation-delay: 90ms; }
+.game-grid .game-card:nth-child(3) { animation-delay: 135ms; }
+.game-grid .game-card:nth-child(4) { animation-delay: 180ms; }
+.game-grid .game-card:nth-child(5) { animation-delay: 225ms; }
+.game-grid .game-card:nth-child(6) { animation-delay: 270ms; }
+.game-grid .game-card:nth-child(7) { animation-delay: 315ms; }
+.game-grid .game-card:nth-child(8) { animation-delay: 360ms; }
+.game-grid .game-card:nth-child(9) { animation-delay: 405ms; }
+.game-grid .game-card:nth-child(10) { animation-delay: 450ms; }
+.game-grid .game-card:nth-child(11) { animation-delay: 495ms; }
+.game-grid .game-card:nth-child(12) { animation-delay: 540ms; }
+.game-grid .game-card:nth-child(n + 13) { animation-delay: 585ms; }
+.history-list .history-row, .settings-list .setting-row, .server-list .server-row:nth-child(-n + 8) { animation: eclipse-row-arrive 500ms cubic-bezier(.16, .86, .28, 1) both; }
+.history-list .history-row:nth-child(2), .settings-list .setting-row:nth-child(2), .server-list .server-row:nth-child(2) { animation-delay: 55ms; }
+.history-list .history-row:nth-child(3), .settings-list .setting-row:nth-child(3), .server-list .server-row:nth-child(3) { animation-delay: 110ms; }
+.history-list .history-row:nth-child(4), .settings-list .setting-row:nth-child(4), .server-list .server-row:nth-child(4) { animation-delay: 165ms; }
+.history-list .history-row:nth-child(5), .settings-list .setting-row:nth-child(5), .server-list .server-row:nth-child(5) { animation-delay: 220ms; }
+.history-list .history-row:nth-child(n + 6), .settings-list .setting-row:nth-child(n + 6), .server-list .server-row:nth-child(n + 6) { animation-delay: 275ms; }
+.history-row, .server-row { transition: background 220ms ease, border-color 220ms ease, transform 220ms cubic-bezier(.2, .8, .2, 1); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .page-shell :is(.utility-panel, .tool-panel, .quick-card, .optimization-panel, .discord-presence-preview) { transition: transform 260ms cubic-bezier(.2, .8, .2, 1), border-color 260ms ease, box-shadow 260ms ease, background 260ms ease; }
+  .page-shell :is(.utility-panel, .tool-panel, .quick-card, .optimization-panel, .discord-presence-preview):hover { border-color: rgba(201,181,255,.26); box-shadow: 0 15px 34px rgba(0,0,0,.18); transform: translateY(-3px); }
+  .history-row:hover, .server-row:hover { transform: translateX(3px); }
+  .discovery-collection-chip:hover { transform: translateY(-1px); }
+}
+@keyframes eclipse-page-arrive { from { opacity: 0; transform: translate3d(0, 13px, 0) scale(.992); } 62% { opacity: 1; } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+@keyframes eclipse-section-arrive { from { opacity: 0; transform: translate3d(0, 18px, 0); } 72% { opacity: 1; transform: translate3d(0, -1px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes eclipse-card-arrive { from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.968); } 70% { opacity: 1; transform: translate3d(0, -2px, 0) scale(1.005); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+@keyframes eclipse-row-arrive { from { opacity: 0; transform: translate3d(-7px, 10px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes eclipse-page-efficient { from { opacity: 0; transform: translate3d(0, 6px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes eclipse-section-efficient { from { opacity: 0; transform: translate3d(0, 7px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+.performance-mode .page-shell { animation: eclipse-page-efficient 220ms ease-out both !important; }
+.performance-mode .page-shell > * { animation: eclipse-section-efficient 280ms ease-out both !important; }
+.performance-mode .page-shell > :nth-child(1) { animation-delay: 20ms !important; }
+.performance-mode .page-shell > :nth-child(2) { animation-delay: 55ms !important; }
+.performance-mode .page-shell > :nth-child(3) { animation-delay: 90ms !important; }
+.performance-mode .page-shell > :nth-child(n + 4) { animation-delay: 125ms !important; }
+.reduce-motion .page-shell, .reduce-motion .page-shell > *, .reduce-motion .game-grid .game-card, .reduce-motion .history-list .history-row, .reduce-motion .settings-list .setting-row, .reduce-motion .server-list .server-row { animation: none !important; transform: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .page-shell, .page-shell > *, .game-grid .game-card, .history-list .history-row, .settings-list .setting-row, .server-list .server-row,
+  .performance-mode .page-shell, .performance-mode .page-shell > * { animation: none !important; transform: none !important; }
+}

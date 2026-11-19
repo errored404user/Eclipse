@@ -434,6 +434,11 @@ test('uses smooth, reduced-motion-aware Eclipse interface animation', () => {
   assert.match(styles, /@keyframes eclipse-orbit-turn/);
   assert.match(styles, /@keyframes eclipse-button-sheen/);
   assert.match(styles, /@keyframes eclipse-presence-pulse/);
+  assert.match(styles, /eclipse-page-arrive 520ms/);
+  assert.match(styles, /eclipse-card-arrive 560ms/);
+  assert.match(styles, /@keyframes eclipse-row-arrive/);
+  assert.match(styles, /\.performance-mode \.page-shell > \*/);
+  assert.match(styles, /@keyframes eclipse-section-efficient/);
   assert.match(styles, /\.reduce-motion \*, \.reduce-motion \*::before, \.reduce-motion \*::after/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
