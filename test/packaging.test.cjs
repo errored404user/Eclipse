@@ -23,4 +23,7 @@ test('builds an NSIS Eclipse installer that launches the installed app after set
   assert.match(workflow, /Build Windows installer/);
   assert.match(workflow, /name: Eclipse-Windows-Installer/);
   assert.match(workflow, /path: release\/\*-Setup-\*\.exe/);
+  assert.match(workflow, /contents: write/);
+  assert.match(workflow, /Publish Windows installer to GitHub release/);
+  assert.match(workflow, /gh release (create|upload)/);
 });

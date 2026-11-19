@@ -8,7 +8,7 @@ on:
 
 permissions:
   checks: write
-  contents: read
+  contents: write
 
 jobs:
   package:
@@ -76,3 +76,19 @@ jobs:
           path: release/*-Setup-*.exe
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish Windows installer to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          $installer = Get-ChildItem -Path release -Filter "*-Setup-$version-x64.exe" | Select-Object -First 1
+          if ($null -eq $installer) { throw "The expected Windows installer was not produced." }
+          gh release view $tag --repo "$env:GITHUB_REPOSITORY" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag $installer.FullName --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Eclipse v$version" --prerelease --generate-notes
+          } else {
+            gh release upload $tag $installer.FullName --repo "$env:GITHUB_REPOSITORY" --clobber
+          }
