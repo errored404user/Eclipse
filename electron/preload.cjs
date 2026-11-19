@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('eclipseRoblox', {
   gamePasses: (universeId) => ipcRenderer.invoke('roblox:game-passes', universeId),
   gameServers: (placeId, cursor = '') => ipcRenderer.invoke('roblox:game-servers', placeId, typeof cursor === 'string' ? cursor : ''),
   launchPlace: (placeId) => ipcRenderer.invoke('roblox:launch-place', placeId),
+  launchServer: (placeId, gameInstanceId) => ipcRenderer.invoke('roblox:launch-server', placeId, typeof gameInstanceId === 'string' ? gameInstanceId : ''),
   openOfficial: (action, placeId) => ipcRenderer.invoke('roblox:open-official', action, placeId)
 });
 

@@ -106,7 +106,7 @@ test('maps official Roblox game details, game passes, and public server telemetr
     } else if (value.includes('game-passes/v1/universes/4242/game-passes')) {
       body = { data: [{ id: 6, name: 'Official Pass', description: 'A pass.', priceInformation: { priceInRobux: 99, isForSale: true } }] };
     } else if (value.includes('games.roblox.com/v1/games/2424/servers/Public')) {
-      body = { data: [{ id: 'public-server', playing: 2, maxPlayers: 24, ping: 42, fps: 60 }], nextPageCursor: 'next-server-page' };
+      body = { data: [{ id: '9c6b852e-8f41-4b0e-9b39-29e5cc201cb3', playing: 2, maxPlayers: 24, ping: 42, fps: 60 }], nextPageCursor: 'next-server-page' };
     } else {
       throw new Error(`Unexpected official endpoint: ${value}`);
     }
@@ -121,7 +121,7 @@ test('maps official Roblox game details, game passes, and public server telemetr
     assert.equal(detail.maxPlayers, 24);
     assert.deepEqual(detail.genres, ['Adventure']);
     assert.deepEqual(passes, [{ id: 6, name: 'Official Pass', description: 'A pass.', price: 99, isForSale: true }]);
-    assert.deepEqual(servers, { servers: [{ id: 'public-server', playing: 2, maxPlayers: 24, ping: 42, fps: 60 }], nextCursor: 'next-server-page' });
+    assert.deepEqual(servers, { servers: [{ id: '9c6b852e-8f41-4b0e-9b39-29e5cc201cb3', playing: 2, maxPlayers: 24, ping: 42, fps: 60 }], nextCursor: 'next-server-page' });
   } finally {
     global.fetch = originalFetch;
   }
@@ -156,14 +156,22 @@ test('opens official game detail, server, and pass views through bounded desktop
   assert.match(renderer, /data-action=\"game-details\"/);
   assert.match(renderer, /Best ping/);
   assert.match(renderer, /Low players/);
+  assert.match(renderer, /High players/);
+  assert.match(renderer, /Most open slots/);
+  assert.match(renderer, /Game passes/);
+  assert.match(renderer, /data-action=\"join-server\"/);
+  assert.match(renderer, /function joinGameServer\(placeId, gameInstanceId\)/);
   assert.match(renderer, /Roblox-reported ping/);
   assert.match(renderer, /function sortedGameServers\(\)/);
   assert.match(preload, /roblox:game-details/);
   assert.match(preload, /roblox:game-passes/);
   assert.match(preload, /roblox:game-servers/);
+  assert.match(preload, /roblox:launch-server/);
   assert.match(main, /ipcMain\.handle\('roblox:game-details'/);
   assert.match(main, /ipcMain\.handle\('roblox:game-passes'/);
   assert.match(main, /ipcMain\.handle\('roblox:game-servers'/);
+  assert.match(main, /ipcMain\.handle\('roblox:launch-server'/);
+  assert.match(main, /normalizeGameInstanceId/);
   assert.match(server, /\/api\/roblox\/game-details/);
   assert.match(server, /\/api\/roblox\/game-passes/);
   assert.match(server, /\/api\/roblox\/game-servers/);
@@ -213,12 +221,14 @@ test('uses a reduced-motion-aware renderer splash before the Eclipse workspace a
 });
 
 test('accepts only safe numeric Roblox place IDs', () => {
-  const { normalizePlaceId } = require('../shared/roblox-api.cjs');
+  const { normalizeGameInstanceId, normalizePlaceId } = require('../shared/roblox-api.cjs');
   assert.equal(normalizePlaceId('1818'), 1818);
   assert.equal(normalizePlaceId(' 1818 '), 1818);
   for (const value of ['0', '-1', '1e4', '1818&other=value', 'https://example.com', '9007199254740992']) {
     assert.equal(normalizePlaceId(value), null);
   }
+  assert.equal(normalizeGameInstanceId('9C6B852E-8F41-4B0E-9B39-29E5CC201CB3'), '9c6b852e-8f41-4b0e-9b39-29e5cc201cb3');
+  assert.equal(normalizeGameInstanceId('roblox://experiences/start?placeId=1'), '');
 });
 
 test('builds and resets only the safe managed Fast Flag keys', () => {

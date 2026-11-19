@@ -23,6 +23,11 @@ function normalizePlaceId(value) {
   return Number.isSafeInteger(placeId) && placeId > 0 ? placeId : null;
 }
 
+function normalizeGameInstanceId(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text) ? text.toLowerCase() : '';
+}
+
 function normalizeGame(item) {
   const universeId = readNumber(item.universeId ?? item.id);
   const placeId = readNumber(item.rootPlaceId ?? item.placeId);
@@ -241,7 +246,7 @@ function normalizeGamePass(item) {
 }
 
 function normalizeServer(item) {
-  const id = typeof item?.id === 'string' ? item.id.trim().slice(0, 200) : '';
+  const id = normalizeGameInstanceId(item?.id);
   const playing = Number.isFinite(Number(item?.playing)) && Number(item.playing) >= 0 ? Math.floor(Number(item.playing)) : 0;
   const maxPlayers = Number.isFinite(Number(item?.maxPlayers)) && Number(item.maxPlayers) > 0 ? Math.floor(Number(item.maxPlayers)) : 0;
   if (!id || !maxPlayers) return null;
@@ -299,4 +304,4 @@ async function listGameServers(placeId, cursor = '') {
   });
 }
 
-module.exports = { getGameDetails, listGamePasses, listGameServers, listGames, normalizePlaceId };
+module.exports = { getGameDetails, listGamePasses, listGameServers, listGames, normalizeGameInstanceId, normalizePlaceId };

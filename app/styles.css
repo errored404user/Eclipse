@@ -278,3 +278,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 @keyframes eclipse-splash-progress { from { transform: translateX(-110%); } to { transform: translateX(310%); } }
 @keyframes eclipse-splash-failsafe { to { visibility: hidden; opacity: 0; pointer-events: none; } }
 @media (prefers-reduced-motion: reduce) { .app-splash, .app-splash-core, .app-splash-progress i { animation: none; }.app-splash-core { transform: translate(-50%, -59%); }.app-splash-progress i { width: 68%; margin-left: 16%; } }
+
+/* Discovery quick actions and direct public-server handoff. */
+.game-details-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }.game-details-actions .game-details-button { margin-top: 0; }.game-passes-button { color: #aabde8; }.game-passes-button::before { color: #d3c2ff; content: '◇'; }.server-row { grid-template-columns: 42px minmax(0, 1fr) minmax(155px, .65fr) auto; }.server-join-button { min-width: 88px; padding: 7px 10px; color: #ded2fb; font-size: 9px; white-space: nowrap; }.server-join-note { margin: -3px 0 0; color: #958b9f; font-size: 9px; line-height: 1.5; text-align: center; }
+@media (max-width: 760px) { .server-row { grid-template-columns: 34px minmax(0, 1fr) auto; }.server-signal { grid-column: 2; }.server-join-button { grid-column: 3; grid-row: 1 / span 2; align-self: center; } }
+@media (max-width: 440px) { .game-details-actions { gap: 8px; }.server-row { grid-template-columns: 29px minmax(0, 1fr); }.server-join-button { grid-column: 2; grid-row: auto; justify-self: start; margin-top: 3px; }.server-signal { grid-column: 2; } }

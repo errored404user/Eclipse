@@ -66,6 +66,10 @@ const browserRoblox = {
     window.location.assign(`roblox://experiences/start?placeId=${encodeURIComponent(placeId)}`);
     return { opened: true };
   },
+  async launchServer(placeId, gameInstanceId) {
+    window.location.assign(`roblox://experiences/start?placeId=${encodeURIComponent(placeId)}&gameInstanceId=${encodeURIComponent(gameInstanceId)}`);
+    return { opened: true };
+  },
   async openOfficial(action, placeId) {
     const urls = {
       game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`
@@ -607,7 +611,7 @@ function gameDetailsDefaults({ universeId = 0, placeId = 0, origin = 'discover',
   return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', origin };
 }
 
-function openGameDetails(universeId, placeId) {
+function openGameDetails(universeId, placeId, requestedTab = 'about') {
   const safeUniverseId = Number(universeId);
   const safePlaceId = Number(placeId);
   if (!Number.isSafeInteger(safeUniverseId) || safeUniverseId <= 0 || !Number.isSafeInteger(safePlaceId) || safePlaceId <= 0) {
@@ -616,6 +620,7 @@ function openGameDetails(universeId, placeId) {
   }
   const origin = ['home', 'discover', 'library'].includes(state.page) ? state.page : 'discover';
   state.gameDetails = gameDetailsDefaults({ universeId: safeUniverseId, placeId: safePlaceId, origin, game: gameDetailsSeed(safeUniverseId, safePlaceId) });
+  state.gameDetails.tab = ['about', 'servers', 'passes'].includes(requestedTab) ? requestedTab : 'about';
   state.page = 'game-details';
   document.querySelectorAll('[data-page]').forEach((button) => {
     button.classList.remove('active');
@@ -634,6 +639,12 @@ function sortedGameServers() {
   const servers = [...state.gameDetails.servers];
   if (state.gameDetails.serverSort === 'players') {
     return servers.sort((left, right) => left.playing - right.playing || (right.maxPlayers - right.playing) - (left.maxPlayers - left.playing) || (left.ping ?? Infinity) - (right.ping ?? Infinity));
+  }
+  if (state.gameDetails.serverSort === 'high-players') {
+    return servers.sort((left, right) => right.playing - left.playing || (left.ping ?? Infinity) - (right.ping ?? Infinity));
+  }
+  if (state.gameDetails.serverSort === 'open-slots') {
+    return servers.sort((left, right) => (right.maxPlayers - right.playing) - (left.maxPlayers - left.playing) || (left.ping ?? Infinity) - (right.ping ?? Infinity));
   }
   return servers.sort((left, right) => (left.ping ?? Infinity) - (right.ping ?? Infinity) || left.playing - right.playing);
 }
@@ -800,7 +811,7 @@ function gameCard(game, options = {}) {
       <h3 title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</h3>
       <p>${escapeHtml(game.creator || 'Roblox creator')}</p>
       <div class="game-meta"><span><i class="player-dot"></i>${formatCount(game.playing)} playing</span>${rating}</div>
-      <button class="game-details-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details <span>→</span></button>
+      <div class="game-details-actions"><button class="game-details-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details <span>→</span></button><button class="game-details-button game-passes-button" type="button" data-action="game-passes" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">Game passes</button></div>
     </div>
   </article>`;
 }
@@ -821,6 +832,7 @@ function featuredGame(game) {
       <div class="featured-actions">
         <button class="play-button" type="button" data-action="launch-game" data-place-id="${game.placeId}"><span class="play-icon"></span> Play in Roblox</button>
         <button class="quiet-button" type="button" data-action="game-details" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">View details</button>
+        <button class="quiet-button" type="button" data-action="game-passes" data-universe-id="${game.universeId}" data-place-id="${game.placeId}">Game passes</button>
         <button class="quiet-button" type="button" data-action="open-game" data-place-id="${game.placeId}">Official page</button>
       </div>
     </div>
@@ -850,9 +862,16 @@ function renderGameDetails() {
   const serverRows = detail.serversLoading && !servers.length
     ? Array.from({ length: 6 }, () => '<li class="server-row skeleton"><span></span><span></span><span></span></li>').join('')
     : servers.length
-      ? servers.map((server, index) => `<li class="server-row"><span class="server-index">${String(index + 1).padStart(2, '0')}</span><div><strong>${formatCount(server.playing)} <small>/ ${formatCount(server.maxPlayers)} players</small></strong><span>${formatCount(Math.max(0, server.maxPlayers - server.playing))} open slot${server.maxPlayers - server.playing === 1 ? '' : 's'}</span></div><div class="server-signal"><strong>${server.ping === null ? '—' : `${server.ping} ms`}</strong><span>${server.ping === null ? 'Ping unavailable' : 'Roblox-reported ping'}${server.fps === null ? '' : ` · ${server.fps} FPS`}</span></div></li>`).join('')
+      ? servers.map((server, index) => `<li class="server-row"><span class="server-index">${String(index + 1).padStart(2, '0')}</span><div><strong>${formatCount(server.playing)} <small>/ ${formatCount(server.maxPlayers)} players</small></strong><span>${formatCount(Math.max(0, server.maxPlayers - server.playing))} open slot${server.maxPlayers - server.playing === 1 ? '' : 's'}</span></div><div class="server-signal"><strong>${server.ping === null ? '—' : `${server.ping} ms`}</strong><span>${server.ping === null ? 'Ping unavailable' : 'Roblox-reported ping'}${server.fps === null ? '' : ` · ${server.fps} FPS`}</span></div><button class="quiet-button compact-button server-join-button" type="button" data-action="join-server" data-place-id="${detail.placeId}" data-game-instance-id="${escapeHtml(server.id)}">Join server</button></li>`).join('')
       : `<li class="server-empty">${escapeHtml(detail.serversError || 'No non-full public servers were returned by Roblox right now.')}</li>`;
-  const serversPanel = `<section class="game-detail-section"><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Public servers</p><h2>Find a better room.</h2><p>Sorting uses the current public-server page returned by Roblox. Ping is only shown when Roblox reports a value; Eclipse does not measure your gameplay latency.</p></div><div class="game-detail-actions"><label class="game-server-sort"><span class="sr-only">Sort public servers</span><select data-game-server-sort><option value="ping" ${detail.serverSort === 'ping' ? 'selected' : ''}>Best ping</option><option value="players" ${detail.serverSort === 'players' ? 'selected' : ''}>Low players</option></select></label><button class="quiet-button compact-button" type="button" data-action="game-servers-refresh" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Refreshing…' : 'Refresh'}</button></div></div><div class="server-sort-note"><i></i>${detail.serverSort === 'ping' ? 'Best ping puts the lowest Roblox-reported ping first; servers without a reported ping appear afterward.' : 'Low players puts the least occupied non-full public servers first.'}</div><ul class="server-list panel">${serverRows}</ul>${detail.serversCursor ? `<div class="game-detail-load-more"><button class="quiet-button" type="button" data-action="game-servers-more" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Loading servers…' : 'Load more servers'}</button></div>` : ''}</section>`;
+  const serverSortDescription = detail.serverSort === 'ping'
+    ? 'Best ping puts the lowest Roblox-reported ping first; servers without a reported ping appear afterward.'
+    : detail.serverSort === 'players'
+      ? 'Low players puts the least occupied non-full public servers first.'
+      : detail.serverSort === 'high-players'
+        ? 'High players puts the busiest non-full public servers first.'
+        : 'Most open slots puts public servers with the largest remaining capacity first.';
+  const serversPanel = `<section class="game-detail-section"><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Public servers</p><h2>Find a better room.</h2><p>Sorting uses the current public-server page returned by Roblox. Ping is only shown when Roblox reports a value; Eclipse does not measure your gameplay latency.</p></div><div class="game-detail-actions"><label class="game-server-sort"><span class="sr-only">Sort public servers</span><select data-game-server-sort><option value="ping" ${detail.serverSort === 'ping' ? 'selected' : ''}>Best ping</option><option value="players" ${detail.serverSort === 'players' ? 'selected' : ''}>Low players</option><option value="high-players" ${detail.serverSort === 'high-players' ? 'selected' : ''}>High players</option><option value="open-slots" ${detail.serverSort === 'open-slots' ? 'selected' : ''}>Most open slots</option></select></label><button class="quiet-button compact-button" type="button" data-action="game-servers-refresh" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Refreshing…' : 'Refresh'}</button></div></div><div class="server-sort-note"><i></i>${serverSortDescription}</div><ul class="server-list panel">${serverRows}</ul><p class="server-join-note">Joining sends the selected public-server ID to Roblox Player. Roblox may place you elsewhere if the server fills or closes.</p>${detail.serversCursor ? `<div class="game-detail-load-more"><button class="quiet-button" type="button" data-action="game-servers-more" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Loading servers…' : 'Load more servers'}</button></div>` : ''}</section>`;
   const passRows = detail.passesLoading
     ? Array.from({ length: 4 }, () => '<article class="game-pass-card panel skeleton"><span></span><span></span></article>').join('')
     : detail.passes.length
@@ -1800,6 +1819,24 @@ async function launchGame(placeId) {
   }
 }
 
+async function joinGameServer(placeId, gameInstanceId) {
+  const numericId = Number(placeId);
+  const instanceId = String(gameInstanceId || '').trim();
+  if (!Number.isSafeInteger(numericId) || numericId <= 0 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(instanceId)) {
+    showToast('That public Roblox server is no longer available. Refresh the server list and try again.');
+    return;
+  }
+  try {
+    await roblox.launchServer(numericId, instanceId);
+    const game = gameForPlace(numericId) || state.gameDetails.game;
+    addLaunchHistory(numericId, game);
+    if (game) addRecent(game);
+    showToast('Eclipse requested the selected public server from Roblox Player. Roblox may choose another server if this one filled or closed.');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Roblox Player could not join that server.');
+  }
+}
+
 async function openOfficial(action, placeId) {
   try {
     await roblox.openOfficial(action, placeId);
@@ -1885,6 +1922,8 @@ document.addEventListener('click', async (event) => {
   if (action === 'launch-game' || action === 'relaunch-place') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'game-details') openGameDetails(button.dataset.universeId, button.dataset.placeId);
+  if (action === 'game-passes') openGameDetails(button.dataset.universeId, button.dataset.placeId, 'passes');
+  if (action === 'join-server') await joinGameServer(button.dataset.placeId, button.dataset.gameInstanceId);
   if (action === 'game-details-back') backFromGameDetails();
   if (action === 'game-details-retry') void loadGameDetails();
   if (action === 'game-details-tab') {
@@ -2090,7 +2129,7 @@ document.addEventListener('input', (event) => {
 document.addEventListener('change', async (event) => {
   const serverSort = event.target.closest('[data-game-server-sort]');
   if (serverSort) {
-    state.gameDetails.serverSort = serverSort.value === 'players' ? 'players' : 'ping';
+    state.gameDetails.serverSort = ['ping', 'players', 'high-players', 'open-slots'].includes(serverSort.value) ? serverSort.value : 'ping';
     if (state.page === 'game-details') renderGameDetails();
     return;
   }

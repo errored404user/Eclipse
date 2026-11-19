@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
-const { getGameDetails, listGamePasses, listGameServers, listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
+const { getGameDetails, listGamePasses, listGameServers, listGames, normalizeGameInstanceId, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
 const { createDiscordPresence } = require('./discord-presence.cjs');
 const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
@@ -95,14 +95,17 @@ function showPlayerLaunchWindow() {
   return launch;
 }
 
-async function launchRobloxPlayer(placeId) {
+async function launchRobloxPlayer(placeId, gameInstanceId = '') {
   const launch = showPlayerLaunchWindow();
   await launch.ready;
   sendLaunchState(launch.window, 'starting');
   try {
     await robloxBootstrapper.ensureReady();
     sendLaunchState(launch.window, 'starting');
-    const result = await openOfficialUrl(`roblox://experiences/start?placeId=${placeId}`);
+    const launchUrl = new URL('roblox://experiences/start');
+    launchUrl.searchParams.set('placeId', String(placeId));
+    if (gameInstanceId) launchUrl.searchParams.set('gameInstanceId', gameInstanceId);
+    const result = await openOfficialUrl(launchUrl.toString());
     rememberRecentLaunch(placeId);
     sendLaunchState(launch.window, 'connecting');
     setTimeout(() => {
@@ -405,6 +408,12 @@ app.whenReady().then(async () => {
     const validPlaceId = normalizePlaceId(placeId);
     if (!validPlaceId) throw new Error('A valid Roblox place ID is required.');
     return launchRobloxPlayer(validPlaceId);
+  });
+  ipcMain.handle('roblox:launch-server', async (_event, placeId, gameInstanceId) => {
+    const validPlaceId = normalizePlaceId(placeId);
+    const validGameInstanceId = normalizeGameInstanceId(gameInstanceId);
+    if (!validPlaceId || !validGameInstanceId) throw new Error('A valid public Roblox server is required.');
+    return launchRobloxPlayer(validPlaceId, validGameInstanceId);
   });
   ipcMain.handle('roblox:open-official', async (_event, action, placeId) => {
     if (action === 'game') {
