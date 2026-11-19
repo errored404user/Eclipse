@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('eclipseFastFlags', {
 
 contextBridge.exposeInMainWorld('eclipseMods', {
   status: () => ipcRenderer.invoke('mods:status'),
+  targets: () => ipcRenderer.invoke('mods:targets'),
   importPackage: () => ipcRenderer.invoke('mods:import-package'),
   importFolder: () => ipcRenderer.invoke('mods:import-folder'),
   pickCreatorAsset: (kind) => ipcRenderer.invoke('mods:pick-creator-asset', typeof kind === 'string' ? kind : ''),

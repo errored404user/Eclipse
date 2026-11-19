@@ -22,7 +22,7 @@ const state = {
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '', sort: 'featured', filter: 'all' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
-  mods: { status: null, busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
+  mods: { status: null, targets: null, targetsLoading: false, targetError: '', busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
   startup: { status: null, busy: false },
   fastFlags: { ...defaultFastFlagSelection(), status: null, profileId: '', busy: false, message: '' },
   fastFlagProfiles: normalizeSavedFastFlagProfiles(readStored(storageKeys.fastFlagProfiles, []))
@@ -92,6 +92,7 @@ const fastFlags = window.eclipseFastFlags || browserFastFlags;
 
 const browserMods = {
   async status() { return { supported: false, installed: false, playerRunning: false, packs: [], reason: 'Player packs are available in the Windows Eclipse desktop app only.' }; },
+  async targets() { throw new Error('Player target scanning is available in the Windows Eclipse desktop app only.'); },
   async importPackage() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
   async importFolder() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
   async pickCreatorAsset() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
@@ -1230,16 +1231,33 @@ function creatorAssetSource(fileName) {
 }
 
 function modsTutorial(canCreate) {
-  return `<section class="mods-tutorial panel"><div class="mods-tutorial-heading"><div><p class="section-kicker"><i></i> New to Player Packs?</p><h2>A safe three-step workflow.</h2><p>Make or import a local visual/audio pack, inspect its declared paths, then apply it only when Roblox Player is closed.</p></div><button class="primary-button" type="button" data-action="mod-creator-open" ${canCreate ? '' : 'disabled'}>Create a Player Pack</button></div><ol class="mods-tutorial-steps"><li><span>01</span><div><strong>Choose an asset</strong><p>Add a PNG, JPEG, WebP, OGG, MP3, or WAV file from your device. Eclipse never uploads it.</p></div></li><li><span>02</span><div><strong>Declare its Player target</strong><p>Enter the exact existing file below <code>content/textures</code> or <code>content/sounds</code> that the asset replaces.</p></div></li><li><span>03</span><div><strong>Build, review, enable</strong><p>Eclipse saves a shareable <code>.eclipsepack</code>, imports it locally, then takes a versioned backup before applying it.</p></div></li></ol></section>`;
+  return `<section class="mods-tutorial panel"><div class="mods-tutorial-heading"><div><p class="section-kicker"><i></i> New to Player Packs?</p><h2>A safe three-step workflow.</h2><p>Make or import a local visual/audio pack, inspect its declared paths, then apply it only when Roblox Player is closed.</p></div><button class="primary-button" type="button" data-action="mod-creator-open" ${canCreate ? '' : 'disabled'}>Create a Player Pack</button></div><ol class="mods-tutorial-steps"><li><span>01</span><div><strong>Choose an asset</strong><p>Add a PNG, JPEG, WebP, OGG, MP3, or WAV file from your device. Eclipse never uploads it.</p></div></li><li><span>02</span><div><strong>Choose a verified target</strong><p>The creator scans eligible existing files below <code>content/textures</code> and <code>content/sounds</code>, so you do not have to guess a path.</p></div></li><li><span>03</span><div><strong>Build, review, enable</strong><p>Eclipse saves a shareable <code>.eclipsepack</code>, imports it locally, then takes a versioned backup before applying it.</p></div></li></ol></section>`;
+}
+
+function creatorTargetOptions(kind) {
+  const targets = kind === 'texture' ? state.mods.targets?.textures : state.mods.targets?.sounds;
+  return Array.isArray(targets) ? targets : [];
 }
 
 function modsCreator(canCreate) {
   const creator = state.mods.creator;
   if (!creator.open) return '';
-  const assets = creator.assets.map((asset, index) => `<li class="mods-creator-asset"><div class="mods-creator-asset-head"><span class="mods-creator-kind ${asset.kind}">${asset.kind === 'texture' ? 'Texture / UI' : 'Sound'}</span><strong>${escapeHtml(asset.fileName)}</strong><button class="text-button" type="button" data-action="mod-creator-remove-asset" data-mod-creator-asset-index="${index}" ${state.mods.busy ? 'disabled' : ''}>Remove</button></div><label>Existing Roblox Player target<input type="text" value="${escapeHtml(asset.target)}" data-mod-creator-target="${index}" maxlength="220" spellcheck="false" placeholder="content/${asset.kind === 'texture' ? 'textures' : 'sounds'}/file.${asset.kind === 'texture' ? 'png' : 'ogg'}" required /></label><small>Package source · ${escapeHtml(asset.source)}</small></li>`).join('');
-  return `<section class="mods-creator panel"><div class="mods-creator-heading"><div><p class="section-kicker"><i></i> Pack creator</p><h2>Build a local, shareable Player Pack.</h2><p>Use only files you have permission to use. The creator saves a validated <code>.eclipsepack</code> and adds it to this device’s local vault.</p></div><button class="quiet-button" type="button" data-action="mod-creator-cancel" ${state.mods.busy ? 'disabled' : ''}>Close creator</button></div><form class="mods-creator-form" data-mod-creator-form><div class="mods-creator-fields"><label>Pack name<input name="name" value="${escapeHtml(creator.name)}" data-mod-creator-field="name" maxlength="60" placeholder="Violet Interface" required /></label><label>Pack ID<input name="id" value="${escapeHtml(creator.id)}" data-mod-creator-field="id" maxlength="64" pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="violet-interface" required /></label><label>Version<input name="version" value="${escapeHtml(creator.version)}" data-mod-creator-field="version" maxlength="32" placeholder="1.0.0" required /></label><label class="mods-creator-description">Description <span>optional</span><textarea name="description" data-mod-creator-field="description" maxlength="320" placeholder="A local visual pack">${escapeHtml(creator.description)}</textarea></label></div><div class="mods-creator-assets"><div><p class="section-kicker">Pack assets</p><h3>Add only supported local media.</h3></div><div class="mods-creator-add"><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="texture" ${canCreate ? '' : 'disabled'}>+ Texture / UI</button><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="sound" ${canCreate ? '' : 'disabled'}>+ Sound</button></div></div>${assets ? `<ul class="mods-creator-asset-list">${assets}</ul>` : '<p class="mods-creator-empty">Add at least one local texture/UI or sound asset to start.</p>'}<div class="mods-creator-footer"><p><strong>Before you build:</strong> each target must be an existing regular Player file. Eclipse checks every selected file’s signature, path, and size before it writes the archive.</p><button class="primary-button" type="submit" ${canCreate && creator.assets.length ? '' : 'disabled'}>${state.mods.busy ? 'Building…' : 'Build & add .eclipsepack'}</button></div></form></section>`;
+  if (!state.mods.targets && !state.mods.targetsLoading && !state.mods.targetError && canCreate) Promise.resolve().then(() => refreshModsTargets());
+  const textureOptions = creatorTargetOptions('texture').map((target) => `<option value="${escapeHtml(target)}"></option>`).join('');
+  const soundOptions = creatorTargetOptions('sound').map((target) => `<option value="${escapeHtml(target)}"></option>`).join('');
+  const targetCount = creatorTargetOptions('texture').length + creatorTargetOptions('sound').length;
+  const targetStatus = state.mods.targetsLoading
+    ? 'Scanning the installed Player for eligible media targets…'
+    : state.mods.targetError
+      ? state.mods.targetError
+      : state.mods.targets
+        ? `${targetCount} verified target${targetCount === 1 ? '' : 's'} found for ${escapeHtml(state.mods.targets.versionGuid || 'this Player version')}${state.mods.targets.truncated ? ' · showing a bounded catalog' : ''}.`
+        : 'Open the creator on Windows to scan the installed Player for eligible targets.';
+  const assets = creator.assets.map((asset, index) => `<li class="mods-creator-asset"><div class="mods-creator-asset-head"><span class="mods-creator-kind ${asset.kind}">${asset.kind === 'texture' ? 'Texture / UI' : 'Sound'}</span><strong>${escapeHtml(asset.fileName)}</strong><button class="text-button" type="button" data-action="mod-creator-remove-asset" data-mod-creator-asset-index="${index}" ${state.mods.busy ? 'disabled' : ''}>Remove</button></div><label>Verified Roblox Player target<input type="text" list="mod-creator-${asset.kind}-targets" value="${escapeHtml(asset.target)}" data-mod-creator-target="${index}" maxlength="220" spellcheck="false" placeholder="Choose or type an existing content/${asset.kind === 'texture' ? 'textures' : 'sounds'} path" required /></label><small>Package source · ${escapeHtml(asset.source)}</small></li>`).join('');
+  const targetsReady = Boolean(state.mods.targets) && !state.mods.targetsLoading;
+  const canBuild = canCreate && creator.assets.length && creator.assets.every((asset) => String(asset.target || '').trim()) && !state.mods.busy;
+  return `<section class="mods-creator panel"><div class="mods-creator-heading"><div><p class="section-kicker"><i></i> Pack creator</p><h2>Build a local, shareable Player Pack.</h2><p>Use only files you have permission to use. The creator saves a validated <code>.eclipsepack</code> and adds it to this device’s local vault.</p></div><button class="quiet-button" type="button" data-action="mod-creator-cancel" ${state.mods.busy ? 'disabled' : ''}>Close creator</button></div><div class="mods-target-catalog"><div><span class="mods-target-catalog-signal ${state.mods.targetError ? 'warning' : targetsReady ? 'ready' : ''}"><i></i>${state.mods.targetsLoading ? 'Scanning Player targets' : targetsReady ? 'Verified target catalog ready' : 'Target catalog unavailable'}</span><p>${escapeHtml(targetStatus)}</p></div><button class="quiet-button compact-button" type="button" data-action="mod-creator-refresh-targets" ${canCreate && !state.mods.targetsLoading ? '' : 'disabled'}>${state.mods.targetsLoading ? 'Scanning…' : 'Refresh targets'}</button></div><form class="mods-creator-form" data-mod-creator-form><datalist id="mod-creator-texture-targets">${textureOptions}</datalist><datalist id="mod-creator-sound-targets">${soundOptions}</datalist><div class="mods-creator-fields"><label>Pack name<input name="name" value="${escapeHtml(creator.name)}" data-mod-creator-field="name" maxlength="60" placeholder="Violet Interface" required /></label><label>Pack ID<input name="id" value="${escapeHtml(creator.id)}" data-mod-creator-field="id" maxlength="64" pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="violet-interface" required /></label><label>Version<input name="version" value="${escapeHtml(creator.version)}" data-mod-creator-field="version" maxlength="32" placeholder="1.0.0" required /></label><label class="mods-creator-description">Description <span>optional</span><textarea name="description" data-mod-creator-field="description" maxlength="320" placeholder="A local visual pack">${escapeHtml(creator.description)}</textarea></label></div><div class="mods-creator-assets"><div><p class="section-kicker">Pack assets</p><h3>Add only supported local media.</h3></div><div class="mods-creator-add"><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="texture" ${canCreate ? '' : 'disabled'}>+ Texture / UI</button><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="sound" ${canCreate ? '' : 'disabled'}>+ Sound</button></div></div>${assets ? `<ul class="mods-creator-asset-list">${assets}</ul>` : '<p class="mods-creator-empty">Add at least one local texture/UI or sound asset to start.</p>'}<div class="mods-creator-footer"><p><strong>Preflight:</strong> ${targetsReady ? 'choose a suggestion from the verified target catalog, or enter another exact existing Player file.' : 'scan the installed Player, then choose an exact existing target for every asset.'} Eclipse checks every selected file’s signature, target, and size before it writes the archive.</p><button class="primary-button" type="submit" ${canBuild ? '' : 'disabled'}>${state.mods.busy ? 'Building…' : 'Build & add .eclipsepack'}</button></div></form></section>`;
 }
-
 async function addModsCreatorAsset(kind) {
   if (state.mods.busy) return;
   try {
@@ -1250,7 +1268,7 @@ async function addModsCreatorAsset(kind) {
     const token = String(selected?.token || '').trim();
     if (!safeKind || !fileName || !token) throw new Error('Eclipse could not keep the selected creator asset. Choose it again.');
     const source = creatorAssetSource(fileName);
-    state.mods.creator.assets.push({ token, fileName, source, kind: safeKind, target: `content/${safeKind === 'texture' ? 'textures' : 'sounds'}/${fileName}` });
+    state.mods.creator.assets.push({ token, fileName, source, kind: safeKind, target: '' });
     if (state.page === 'mods') renderMods();
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Eclipse could not choose the creator asset.');
@@ -1281,14 +1299,33 @@ function renderMods() {
 }
 
 async function refreshModsStatus({ render = true } = {}) {
+  const previousVersion = state.mods.status?.versionGuid || '';
   try {
     state.mods.status = await mods.status();
+    if (previousVersion && previousVersion !== state.mods.status?.versionGuid) state.mods.targets = null;
     if (!state.mods.busy) state.mods.message = '';
   } catch (error) {
     state.mods.status = { supported: Boolean(window.eclipseMods), installed: false, playerRunning: false, packs: [], reason: error instanceof Error ? error.message : 'Player pack status is unavailable.' };
   }
   if (render && state.page === 'mods') renderMods();
   return state.mods.status;
+}
+
+async function refreshModsTargets({ render = true } = {}) {
+  if (state.mods.targetsLoading) return state.mods.targets;
+  state.mods.targetsLoading = true;
+  state.mods.targetError = '';
+  if (render && state.page === 'mods') renderMods();
+  try {
+    state.mods.targets = await mods.targets();
+  } catch (error) {
+    state.mods.targets = null;
+    state.mods.targetError = error instanceof Error ? error.message : 'Eclipse could not scan Player asset targets.';
+  } finally {
+    state.mods.targetsLoading = false;
+    if (render && state.page === 'mods') renderMods();
+  }
+  return state.mods.targets;
 }
 
 async function runModsOperation(operation, successMessage) {
@@ -1587,6 +1624,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'fastflag-reset') await resetFastFlags();
   if (action === 'refresh-mods') await refreshModsStatus();
   if (action === 'mod-creator-open') {
+    if (!state.mods.targets) state.mods.targetError = '';
     state.mods.creator.open = true;
     if (state.page === 'mods') renderMods();
   }
@@ -1594,6 +1632,7 @@ document.addEventListener('click', async (event) => {
     state.mods.creator = defaultModsCreator();
     if (state.page === 'mods') renderMods();
   }
+  if (action === 'mod-creator-refresh-targets') await refreshModsTargets();
   if (action === 'mod-creator-add-asset') await addModsCreatorAsset(button.dataset.modCreatorKind);
   if (action === 'mod-creator-remove-asset') {
     const index = Number(button.dataset.modCreatorAssetIndex);

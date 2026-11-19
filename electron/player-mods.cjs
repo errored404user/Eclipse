@@ -17,6 +17,8 @@ const MAX_BACKUP_FILES = MAX_PACKS * MAX_ASSETS;
 const PACK_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,63}$/;
 const PACK_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/;
 const ASSET_KINDS = Object.freeze(['texture', 'sound']);
+const TEXTURE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+const SOUND_EXTENSIONS = new Set(['.ogg', '.mp3', '.wav']);
 
 class PlayerModsError extends Error {
   constructor(message, code = 'PLAYER_MODS_ERROR') {
@@ -339,6 +341,65 @@ function resolvePlayerTarget(playerDirectory, target) {
   return destination;
 }
 
+async function listPlayerAssetTargets(player) {
+  const realRoot = await fs.realpath(player.directory);
+  const groups = [
+    { kind: 'texture', root: 'content/textures', extensions: TEXTURE_EXTENSIONS },
+    { kind: 'sound', root: 'content/sounds', extensions: SOUND_EXTENSIONS }
+  ];
+  const result = { textures: [], sounds: [], truncated: false };
+  const limitPerKind = 480;
+  for (const group of groups) {
+    const output = group.kind === 'texture' ? result.textures : result.sounds;
+    const baseDirectory = resolvePlayerTarget(player.directory, group.root);
+    async function walk(directory, relative, depth) {
+      if (depth > 8 || output.length >= limitPerKind) {
+        if (output.length >= limitPerKind) result.truncated = true;
+        return;
+      }
+      let entries;
+      try {
+        entries = await fs.readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if (error?.code === 'ENOENT') return;
+        throw error;
+      }
+      for (const entry of entries) {
+        if (output.length >= limitPerKind) {
+          result.truncated = true;
+          return;
+        }
+        if (entry.isSymbolicLink()) continue;
+        const target = `${relative}/${entry.name}`;
+        const candidate = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          let realDirectory;
+          try {
+            realDirectory = await fs.realpath(candidate);
+          } catch {
+            continue;
+          }
+          if (isPathInside(realRoot, realDirectory)) await walk(candidate, target, depth + 1);
+          continue;
+        }
+        if (!entry.isFile() || !group.extensions.has(path.extname(entry.name).toLowerCase())) continue;
+        let info;
+        let realFile;
+        try {
+          [info, realFile] = await Promise.all([fs.lstat(candidate), fs.realpath(candidate)]);
+        } catch {
+          continue;
+        }
+        if (info.isSymbolicLink() || !info.isFile() || !isPathInside(realRoot, realFile)) continue;
+        output.push(target);
+      }
+    }
+    await walk(baseDirectory, group.root, 0);
+    output.sort((left, right) => left.localeCompare(right));
+  }
+  return result;
+}
+
 function normalizeStoredPack(value) {
   const manifest = normalizeManifest(value);
   const enabled = value?.enabled === true;
@@ -484,6 +545,14 @@ class PlayerMods {
         assets: pack.assets.map(({ source, target, kind, mime, size }) => ({ source, target, kind, mime, size }))
       }))
     };
+  }
+
+  async availableTargets() {
+    if (!this.supported()) throw new PlayerModsError('Player targets are available in the Windows Eclipse desktop app only.', 'UNSUPPORTED_PLATFORM');
+    const player = await this.locatePlayer();
+    if (!player) throw new PlayerModsError('Install Roblox Player through Player Health before scanning available asset targets.', 'PLAYER_NOT_INSTALLED');
+    const targets = await listPlayerAssetTargets(player);
+    return { versionGuid: player.versionGuid, ...targets };
   }
 
   async importPackage(filePath) {
@@ -849,6 +918,7 @@ module.exports = {
   createPlayerMods,
   detectAsset,
   isRobloxPlayerRunning,
+  listPlayerAssetTargets,
   normalizeManifest,
   normalizeTarget,
   readZipEntries,

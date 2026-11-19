@@ -288,6 +288,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('fastflags:reset', () => fastFlags.reset());
 
   ipcMain.handle('mods:status', () => playerMods.status());
+  ipcMain.handle('mods:targets', () => playerMods.availableTargets());
   ipcMain.handle('mods:import-package', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Import Eclipse Player Pack',

@@ -90,6 +90,21 @@ async function createFolderPack(root, id = 'violet-interface') {
   return folder;
 }
 
+test('scans only existing safe texture and sound targets for the Pack Creator', async () => {
+  const { root, player, mods } = await fixture();
+  try {
+    await fs.mkdir(path.join(player.directory, 'content', 'textures', 'nested'), { recursive: true });
+    await fs.writeFile(path.join(player.directory, 'content', 'textures', 'nested', 'accent.webp'), Buffer.from('RIFFxxxxWEBP', 'ascii'));
+    await fs.writeFile(path.join(player.directory, 'content', 'textures', 'ignore.txt'), 'not a target');
+    const targets = await mods.availableTargets();
+    assert.equal(targets.versionGuid, versionGuid);
+    assert.deepEqual(targets.textures, ['content/textures/interface.png', 'content/textures/nested/accent.webp']);
+    assert.deepEqual(targets.sounds, ['content/sounds/launch.ogg']);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('imports a manifest folder, applies declared visual/audio assets, and restores versioned backups', async () => {
   const { root, player, mods } = await fixture();
   try {
