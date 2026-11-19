@@ -240,6 +240,46 @@ test('uses a bounded renderer performance path without changing the safe startup
   assert.match(main, /app\.disableHardwareAcceleration\(\)/);
 });
 
+test('keeps local discovery, library, history, backup, and update workflows bounded', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  const main = fs.readFileSync(path.join(root, 'electron', 'main.cjs'), 'utf8');
+  const preload = fs.readFileSync(path.join(root, 'electron', 'preload.cjs'), 'utf8');
+  assert.match(shell, /data-page="history"/);
+  assert.match(renderer, /function saveDiscoverCache\(\)/);
+  assert.match(renderer, /local cache/);
+  assert.match(renderer, /function editLibraryTags\(universeId\)/);
+  assert.match(renderer, /function editLibraryNotes\(universeId\)/);
+  assert.match(renderer, /function normalizeGameNotes\(value\)/);
+  assert.match(renderer, /data-action=\"edit-library-notes\"/);
+  assert.match(renderer, /function pinGameInLibrary\(game\)/);
+  assert.match(renderer, /data-action=\"history-pin-game\"/);
+  assert.match(renderer, /function renderHistory\(\)/);
+  assert.match(renderer, /eclipse-local-backup\/v1/);
+  assert.match(renderer, /function importEclipseBackup\(file\)/);
+  assert.match(renderer, /data-action="open-game-pass"/);
+  assert.match(renderer, /Refresh & re-sort/);
+  assert.match(renderer, /data-game-server-filter/);
+  assert.match(renderer, /state\.settings\.serverSort/);
+  assert.match(renderer, /function refreshUpdateStatus/);
+  assert.match(styles, /\.library-controls/);
+  assert.match(styles, /\.history-list/);
+  assert.match(styles, /\.server-ping-filter/);
+  assert.match(main, /function gamePassPageUrl/);
+  assert.match(main, /https:\/\/www\.roblox\.com\/game-pass\/\$\{passId\}/);
+  assert.match(main, /action === 'game-pass'/);
+  assert.match(main, /const validPassId = normalizePlaceId\(placeId\)/);
+  assert.doesNotMatch(main, /openOfficialUrl\(placeId\)/);
+  assert.match(main, /system:check-for-updates/);
+  assert.match(main, /void updateChecker\.check\(\)/);
+  assert.match(preload, /system:open-update-page/);
+  assert.match(preload, /system:update-status/);
+});
+
 test('accepts only safe numeric Roblox place IDs', () => {
   const { normalizeGameInstanceId, normalizePlaceId } = require('../shared/roblox-api.cjs');
   assert.equal(normalizePlaceId('1818'), 1818);

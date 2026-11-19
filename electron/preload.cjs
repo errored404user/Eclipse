@@ -33,6 +33,15 @@ contextBridge.exposeInMainWorld('eclipseSystem', {
   clearEclipseCache: () => ipcRenderer.invoke('system:clear-eclipse-cache'),
   clearRobloxCache: () => ipcRenderer.invoke('system:clear-roblox-cache'),
   openWindowsUpdate: () => ipcRenderer.invoke('system:open-windows-update'),
+  updateStatus: () => ipcRenderer.invoke('system:update-status'),
+  checkForUpdates: () => ipcRenderer.invoke('system:check-for-updates'),
+  openUpdatePage: () => ipcRenderer.invoke('system:open-update-page'),
+  onUpdateStatus: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, status) => callback(status && typeof status === 'object' ? status : {});
+    ipcRenderer.on('system:update-status', listener);
+    return () => ipcRenderer.removeListener('system:update-status', listener);
+  },
   onNavigate: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, page) => callback(typeof page === 'string' ? page : '');

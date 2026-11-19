@@ -13,8 +13,11 @@ const storageKeys = {
   integrations: 'eclipse.integrations.v1',
   profile: 'eclipse.profile.v1',
   fastFlagProfiles: 'eclipse.fastflag-profiles.v1',
-  launchHistory: 'eclipse.launch-history.v1'
+  launchHistory: 'eclipse.launch-history.v1',
+  discoveryCache: 'eclipse.roblox.discovery-cache.v1'
 };
+
+const cachedDiscover = normalizeDiscoveryCache(readStored(storageKeys.discoveryCache, {}));
 
 const state = {
   page: 'home',
@@ -24,11 +27,13 @@ const state = {
   integrations: normalizeIntegrations(readStored(storageKeys.integrations, {})),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
-  discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '', sort: 'featured', filter: 'all' },
-  gameDetails: { universeId: 0, placeId: 0, game: null, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', serverLimit: SERVER_RENDER_BATCH_SIZE, origin: 'discover' },
+  libraryView: { query: '', tag: 'all', sort: 'pinned' },
+  discover: { games: cachedDiscover.games, collections: cachedDiscover.collections, collectionId: cachedDiscover.collections[0]?.id || '', query: '', cursor: cachedDiscover.cursor, loading: false, error: '', sort: 'featured', filter: 'all', cachedAt: cachedDiscover.savedAt, cacheRefreshStarted: false },
+  gameDetails: { universeId: 0, placeId: 0, game: null, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: normalizeSettings(readStored(storageKeys.settings, {})).serverSort, serverFilter: 'all', serverRequirePing: false, serverLimit: SERVER_RENDER_BATCH_SIZE, origin: 'discover' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
   mods: { status: null, targets: null, targetsLoading: false, targetError: '', busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
   startup: { status: null, busy: false },
+  update: { status: null, busy: false },
   optimization: { status: null, busy: '', message: '' },
   fastFlags: { ...defaultFastFlagSelection(), status: null, profileId: '', busy: false, message: '' },
   fastFlagProfiles: normalizeSavedFastFlagProfiles(readStored(storageKeys.fastFlagProfiles, []))
@@ -74,7 +79,8 @@ const browserRoblox = {
   },
   async openOfficial(action, placeId) {
     const urls = {
-      game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`
+      game: `https://www.roblox.com/games/${encodeURIComponent(placeId)}`,
+      'game-pass': `https://www.roblox.com/game-pass/${encodeURIComponent(placeId)}`
     };
     const url = urls[action];
     if (!url) throw new Error('Unsupported Roblox action.');
@@ -108,12 +114,21 @@ const browserSystem = {
   async clearEclipseCache() { throw new Error('Eclipse cache cleanup is available in the Windows desktop app only.'); },
   async clearRobloxCache() { throw new Error('Roblox cache cleanup is available in the Windows desktop app only.'); },
   async openWindowsUpdate() { throw new Error('Windows Update can be opened from the Windows Eclipse desktop app only.'); },
+  async updateStatus() { return { supported: false, updateAvailable: false, reason: 'Update checks are available in the packaged Windows Eclipse app.' }; },
+  async checkForUpdates() { return this.updateStatus(); },
+  async openUpdatePage() { window.open('https://github.com/errored404user/Eclipse/releases', '_blank', 'noopener,noreferrer'); return { opened: true }; },
+  onUpdateStatus() { return () => {}; },
   onNavigate() { return () => {}; }
 };
 
 const system = window.eclipseSystem || browserSystem;
 if (window.eclipseSystem) {
   window.eclipseSystem.onNavigate((page) => setPage(page));
+  window.eclipseSystem.onUpdateStatus((status) => {
+    state.update.status = status && typeof status === 'object' ? status : null;
+    state.update.busy = false;
+    if (state.page === 'settings') renderSettings();
+  });
 }
 
 const browserFastFlags = {
@@ -230,6 +245,7 @@ function normalizeSettings(value) {
     compactCards: value?.compactCards === true,
     highContrast: value?.highContrast === true,
     performanceMode: value?.performanceMode !== false,
+    serverSort: ['ping', 'players', 'high-players', 'open-slots'].includes(value?.serverSort) ? value.serverSort : 'ping',
     uiScale: [1, 1.1, 1.2, 1.3].includes(scale) ? scale : 1,
     clock24Hour: value?.clock24Hour === true
   };
@@ -277,8 +293,10 @@ function normalizeLaunchHistory(value) {
   return value.flatMap((item) => {
     const placeId = Number(item?.placeId);
     if (!Number.isSafeInteger(placeId) || placeId <= 0) return [];
+    const game = normalizeGame(item?.game);
+    const name = String(item.name || game?.name || '').trim().slice(0, 160);
     const launchedAt = validLocalTimestamp(item.launchedAt);
-    return [{ placeId, name: String(item.name || '').trim().slice(0, 160), launchedAt }];
+    return [{ placeId, name, game, launchedAt }];
   }).slice(0, 30);
 }
 
@@ -524,6 +542,22 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4300);
 }
 
+function normalizeGameTags(value) {
+  if (!Array.isArray(value)) return [];
+  const used = new Set();
+  return value.flatMap((tag) => {
+    const normalized = String(tag || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    const key = normalized.toLocaleLowerCase();
+    if (!normalized || used.has(key)) return [];
+    used.add(key);
+    return [normalized];
+  }).slice(0, 6);
+}
+
+function normalizeGameNotes(value) {
+  return String(value || '').replace(/\r\n?/g, '\n').trim().slice(0, 1_000);
+}
+
 function normalizeGame(game) {
   if (!game || !Number.isSafeInteger(Number(game.placeId)) || !Number.isSafeInteger(Number(game.universeId))) return null;
   const name = String(game.name || '').trim();
@@ -538,6 +572,8 @@ function normalizeGame(game) {
     rating: Number.isFinite(Number(game.rating)) ? Number(game.rating) : null,
     imageUrl: safeImageUrl(game.imageUrl),
     pinned: game.pinned === true,
+    tags: normalizeGameTags(game.tags),
+    notes: normalizeGameNotes(game.notes),
     launchedAt: game.launchedAt ? validLocalTimestamp(game.launchedAt) : ''
   };
 }
@@ -553,6 +589,33 @@ function normalizeDiscoverCollections(value) {
     usedIds.add(id);
     return [{ id, title, games }];
   }).slice(0, 6);
+}
+
+function normalizeDiscoveryCache(value) {
+  const savedAt = typeof value?.savedAt === 'string' && !Number.isNaN(new Date(value.savedAt).getTime()) ? value.savedAt : '';
+  const games = Array.isArray(value?.games) ? value.games.map(normalizeGame).filter(Boolean).slice(0, 24) : [];
+  const collections = normalizeDiscoverCollections(value?.collections);
+  const cursor = typeof value?.cursor === 'string' ? value.cursor.slice(0, 500) : '';
+  return { savedAt, games, collections, cursor };
+}
+
+function saveDiscoverCache() {
+  if (state.discover.query || !state.discover.games.length) return;
+  const snapshot = {
+    savedAt: new Date().toISOString(),
+    games: state.discover.games.slice(0, 24),
+    collections: state.discover.collections.slice(0, 6),
+    cursor: state.discover.cursor
+  };
+  state.discover.cachedAt = snapshot.savedAt;
+  writeStored(storageKeys.discoveryCache, snapshot);
+}
+
+function discoverCacheAge(value) {
+  const timestamp = new Date(value).getTime();
+  if (!timestamp || Number.isNaN(timestamp)) return '';
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+  return minutes < 1 ? 'updated just now' : `updated ${minutes} min ago`;
 }
 
 function activeDiscoverCollection() {
@@ -616,7 +679,7 @@ function gameDetailsSeed(universeId, placeId) {
 }
 
 function gameDetailsDefaults({ universeId = 0, placeId = 0, origin = 'discover', game = null } = {}) {
-  return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: 'ping', serverLimit: SERVER_RENDER_BATCH_SIZE, origin };
+  return { universeId: Number(universeId) || 0, placeId: Number(placeId) || 0, game, passes: [], servers: [], serversCursor: '', loading: false, passesLoading: false, serversLoading: false, error: '', passesError: '', serversError: '', tab: 'about', serverSort: state.settings.serverSort, serverFilter: 'all', serverRequirePing: false, serverLimit: SERVER_RENDER_BATCH_SIZE, origin };
 }
 
 function openGameDetails(universeId, placeId, requestedTab = 'about') {
@@ -644,8 +707,13 @@ function backFromGameDetails() {
 }
 
 function sortedGameServers() {
-  const servers = [...state.gameDetails.servers];
-  if (state.gameDetails.serverSort === 'players') {
+  const detail = state.gameDetails;
+  const requiredOpenSlots = { all: 0, open2: 2, open5: 5, open10: 10 }[detail.serverFilter] || 0;
+  const servers = detail.servers.filter((server) => {
+    const openSlots = Math.max(0, server.maxPlayers - server.playing);
+    return openSlots >= requiredOpenSlots && (!detail.serverRequirePing || server.ping !== null);
+  });
+  if (detail.serverSort === 'players') {
     return servers.sort((left, right) => left.playing - right.playing || (right.maxPlayers - right.playing) - (left.maxPlayers - left.playing) || (left.ping ?? Infinity) - (right.ping ?? Infinity));
   }
   if (state.gameDetails.serverSort === 'high-players') {
@@ -755,11 +823,37 @@ function togglePinnedGame(universeId) {
   writeStored(storageKeys.library, state.library);
 }
 
+function pinGameInLibrary(game) {
+  const safeGame = normalizeGame(game);
+  if (!safeGame) return false;
+  const existing = state.library.find((item) => item.universeId === safeGame.universeId);
+  if (existing?.pinned) return false;
+  state.library = existing
+    ? state.library.map((item) => item.universeId === safeGame.universeId ? { ...item, pinned: true } : item)
+    : [{ ...safeGame, pinned: true }, ...state.library].slice(0, 120);
+  state.library.sort((left, right) => Number(right.pinned) - Number(left.pinned));
+  writeStored(storageKeys.library, state.library);
+  return true;
+}
+
+function markLibraryLaunched(placeId) {
+  const numericId = Number(placeId);
+  const launchedAt = new Date().toISOString();
+  let changed = false;
+  state.library = state.library.map((game) => {
+    if (game.placeId !== numericId) return game;
+    changed = true;
+    return { ...game, launchedAt };
+  });
+  if (changed) writeStored(storageKeys.library, state.library);
+}
+
 function addLaunchHistory(placeId, game) {
   if (!state.integrations.activityTracking) return;
   const numericId = Number(placeId);
   if (!Number.isSafeInteger(numericId) || numericId <= 0) return;
-  const entry = { placeId: numericId, name: String(game?.name || '').slice(0, 160), launchedAt: new Date().toISOString() };
+  const snapshot = normalizeGame(game);
+  const entry = { placeId: numericId, name: String(snapshot?.name || game?.name || '').slice(0, 160), game: snapshot, launchedAt: new Date().toISOString() };
   state.launchHistory = [entry, ...state.launchHistory.filter((item) => item.placeId !== numericId)].slice(0, 30);
   writeStored(storageKeys.launchHistory, state.launchHistory);
 }
@@ -880,7 +974,7 @@ function gameServersPanel() {
   const loadMore = detail.serversCursor
     ? `<button class="quiet-button" type="button" data-action="game-servers-more" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Loading servers…' : 'Load more from Roblox'}</button>`
     : '';
-  return `<section class="game-detail-section" data-game-servers-panel><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Public servers</p><h2>Find a better room.</h2><p>Sorting uses the current public-server page returned by Roblox. Ping is only shown when Roblox reports a value; Eclipse does not measure your gameplay latency.</p></div><div class="game-detail-actions"><label class="game-server-sort"><span class="sr-only">Sort public servers</span><select data-game-server-sort><option value="ping" ${detail.serverSort === 'ping' ? 'selected' : ''}>Best ping</option><option value="players" ${detail.serverSort === 'players' ? 'selected' : ''}>Low players</option><option value="high-players" ${detail.serverSort === 'high-players' ? 'selected' : ''}>High players</option><option value="open-slots" ${detail.serverSort === 'open-slots' ? 'selected' : ''}>Most open slots</option></select></label><button class="quiet-button compact-button" type="button" data-action="game-servers-refresh" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Refreshing…' : 'Refresh'}</button></div></div><div class="server-sort-note"><i></i>${serverSortDescription(detail.serverSort)}</div><ul class="server-list panel">${serverRows}</ul><p class="server-join-note">Joining sends the selected public-server ID to Roblox Player. Roblox may place you elsewhere if the server fills or closes.</p>${showMore || loadMore ? `<div class="game-detail-load-more">${showMore}${loadMore}</div>` : ''}</section>`;
+  return `<section class="game-detail-section" data-game-servers-panel><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Public servers</p><h2>Find a better room.</h2><p>Sorting uses the current public-server page returned by Roblox. Ping is only shown when Roblox reports a value; Eclipse does not measure your gameplay latency.</p></div><div class="game-detail-actions"><label class="game-server-sort"><span class="sr-only">Sort public servers</span><select data-game-server-sort><option value="ping" ${detail.serverSort === 'ping' ? 'selected' : ''}>Best ping</option><option value="players" ${detail.serverSort === 'players' ? 'selected' : ''}>Low players</option><option value="high-players" ${detail.serverSort === 'high-players' ? 'selected' : ''}>High players</option><option value="open-slots" ${detail.serverSort === 'open-slots' ? 'selected' : ''}>Most open slots</option></select></label><label class="game-server-sort"><span class="sr-only">Filter public servers</span><select data-game-server-filter><option value="all" ${detail.serverFilter === 'all' ? 'selected' : ''}>Any availability</option><option value="open2" ${detail.serverFilter === 'open2' ? 'selected' : ''}>2+ open slots</option><option value="open5" ${detail.serverFilter === 'open5' ? 'selected' : ''}>5+ open slots</option><option value="open10" ${detail.serverFilter === 'open10' ? 'selected' : ''}>10+ open slots</option></select></label><label class="server-ping-filter"><input type="checkbox" data-game-server-ping ${detail.serverRequirePing ? 'checked' : ''}/><span>Ping reported</span></label><button class="quiet-button compact-button" type="button" data-action="game-servers-refresh" ${detail.serversLoading ? 'disabled' : ''}>${detail.serversLoading ? 'Refreshing…' : 'Refresh & re-sort'}</button></div></div><div class="server-sort-note"><i></i>${serverSortDescription(detail.serverSort)} Showing ${servers.length} matching server${servers.length === 1 ? '' : 's'}.</div><ul class="server-list panel">${serverRows}</ul><p class="server-join-note">Joining sends the selected public-server ID to Roblox Player. Roblox may place you elsewhere if the server fills or closes.</p>${showMore || loadMore ? `<div class="game-detail-load-more">${showMore}${loadMore}</div>` : ''}</section>`;
 }
 
 function renderGameServersPanel() {
@@ -913,7 +1007,7 @@ function renderGameDetails() {
   const passRows = detail.passesLoading
     ? Array.from({ length: 4 }, () => '<article class="game-pass-card panel skeleton"><span></span><span></span></article>').join('')
     : detail.passes.length
-      ? detail.passes.map((pass) => `<article class="game-pass-card panel"><div><p class="section-kicker">Official game pass</p><h3>${escapeHtml(pass.name)}</h3><p>${escapeHtml(pass.description || 'No description provided by the experience creator.')}</p></div><strong>${pass.isForSale ? pass.price === null ? 'Price unavailable' : pass.price === 0 ? 'Free' : `${formatCount(pass.price)} Robux` : 'Off sale'}</strong></article>`).join('')
+      ? detail.passes.map((pass) => `<article class="game-pass-card panel"><div><p class="section-kicker">Official game pass</p><h3>${escapeHtml(pass.name)}</h3><p>${escapeHtml(pass.description || 'No description provided by the experience creator.')}</p><button class="text-button game-pass-open" type="button" data-action="open-game-pass" data-pass-id="${pass.id}">Open on Roblox <span>↗</span></button></div><strong>${pass.isForSale ? pass.price === null ? 'Price unavailable' : pass.price === 0 ? 'Free' : `${formatCount(pass.price)} Robux` : 'Off sale'}</strong></article>`).join('')
       : emptyState('◇', 'No game passes listed.', detail.passesError || 'Roblox did not return public game-pass information for this experience.', '');
   const passesPanel = `<section class="game-detail-section"><div class="game-detail-section-head"><div><p class="section-kicker"><i></i> Experience extras</p><h2>Official game passes.</h2><p>Prices and availability come from Roblox. Eclipse does not handle purchases or Roblox account details.</p></div></div><div class="game-pass-grid">${passRows}</div></section>`;
   const tabContent = detail.tab === 'servers' ? serversPanel : detail.tab === 'passes' ? passesPanel : about;
@@ -930,7 +1024,7 @@ function renderHome() {
     ${pageHeader('Your Roblox orbit', `${greeting}.`, 'Launch an official Roblox experience, keep your own library, and explore what is live now.', '<button class="primary-button" type="button" data-page-link="discover"><span class="play-icon"></span> Discover Roblox</button>')}
     ${primary ? featuredGame(primary) : emptyState('◌', 'Your library starts with Roblox.', 'Save official Roblox experiences from Discover. Eclipse keeps the list on this device and never creates custom games.', '<button class="primary-button" type="button" data-page-link="discover">Browse live Roblox games</button>')}
     <section class="content-section">
-      <div class="section-heading"><div><p class="section-kicker">Recent launches</p><h2>Continue playing</h2></div>${recent.length ? '<button class="text-button" type="button" data-page-link="library">Open library <span>→</span></button>' : ''}</div>
+      <div class="section-heading"><div><p class="section-kicker">Recent launches</p><h2>Continue playing</h2></div>${recent.length ? '<button class="text-button" type="button" data-page-link="history">View history <span>→</span></button>' : ''}</div>
       ${recent.length ? `<div class="game-grid home-game-grid">${recent.map((game) => gameCard(game)).join('')}</div><p class="section-note">Last Eclipse handoff: ${escapeHtml(formatLocalLaunchTime(recent[0].launchedAt))}. This records only Eclipse’s request to Roblox Player, not game or server state.</p>` : '<p class="section-note">Games you start through Eclipse appear here. Roblox Player handles your account session.</p>'}
     </section>
     <section class="home-utility-grid">
@@ -957,7 +1051,11 @@ function renderDiscover() {
     <section class="content-section"><div class="section-heading"><div><p class="section-kicker" data-discovery-kicker>${state.discover.query ? 'Search results' : 'Explore Roblox'}</p><h2 data-discovery-title>${state.discover.query ? 'Official matches' : 'More ways to play'}</h2></div></div><div class="game-grid" data-game-grid></div><div class="discover-footer" data-discover-footer></div></section>
   </div>`;
   updateDiscoverView();
-  if (!state.discover.games.length) loadDiscover();
+  if (!state.discover.games.length) void loadDiscover();
+  else if (state.discover.cachedAt && !state.discover.cacheRefreshStarted && !state.discover.loading) {
+    state.discover.cacheRefreshStarted = true;
+    void loadDiscover();
+  }
 }
 
 function discoveryCollectionChips() {
@@ -992,7 +1090,8 @@ function updateDiscoverView() {
   const rawVisibleGames = state.discover.query ? state.discover.games : activeCollection?.games || state.discover.games;
   const visibleGames = displayDiscoverGames(rawVisibleGames);
   const collectionTitle = activeCollection?.title || 'Popular on Roblox';
-  context.textContent = state.discover.query ? `Official Roblox search · “${state.discover.query}”` : `${collectionTitle} · official Roblox Explore`;
+  const cacheNote = !state.discover.query && state.discover.cachedAt ? ` · local cache ${discoverCacheAge(state.discover.cachedAt)}` : '';
+  context.textContent = state.discover.query ? `Official Roblox search · “${state.discover.query}”` : `${collectionTitle} · official Roblox Explore${cacheNote}`;
   collections.innerHTML = discoveryCollectionChips();
   kicker.textContent = state.discover.query ? 'Search results' : 'Official Roblox collection';
   title.textContent = state.discover.query ? 'Official matches' : collectionTitle;
@@ -1003,7 +1102,7 @@ function updateDiscoverView() {
     footer.innerHTML = '<p class="section-note">Loading live Roblox collections…</p>';
     return;
   }
-  if (state.discover.error) {
+  if (state.discover.error && !visibleGames.length) {
     feature.innerHTML = '';
     grid.innerHTML = '';
     footer.innerHTML = emptyState('!', 'Roblox discovery is unavailable.', state.discover.error, '<button class="primary-button" type="button" data-action="refresh-discover">Try again</button>');
@@ -1022,7 +1121,9 @@ function updateDiscoverView() {
   feature.innerHTML = state.discover.query ? '' : featuredGame(visibleGames[0]);
   const listedGames = state.discover.query ? visibleGames : visibleGames.slice(1);
   grid.innerHTML = listedGames.map((game) => gameCard(game)).join('');
-  footer.innerHTML = state.discover.nextCursor
+  footer.innerHTML = state.discover.error && visibleGames.length
+    ? `<p class="section-note">Showing your saved local snapshot. ${escapeHtml(state.discover.error)}</p><button class="quiet-button" type="button" data-action="refresh-discover">Try again</button>`
+    : state.discover.nextCursor
     ? `<button class="quiet-button" type="button" data-action="load-more" ${state.discover.loading ? 'disabled' : ''}>${state.discover.loading ? 'Loading…' : 'Load more results'}</button>`
     : state.discover.query
       ? '<p class="section-note">Discovery data is supplied by Roblox. Availability and rankings can change at any time.</p>'
@@ -1034,8 +1135,6 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
   if (resetToPopular) {
     state.discover.query = '';
     state.discover.cursor = '';
-    state.discover.games = [];
-    state.discover.collections = [];
     state.discover.collectionId = '';
   }
   state.discover.loading = true;
@@ -1053,6 +1152,7 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
       state.discover.collectionId = loadedCollections[0]?.id || '';
     }
     state.discover.cursor = typeof result.nextCursor === 'string' ? result.nextCursor : '';
+    if (!append && !state.discover.query) saveDiscoverCache();
   } catch (error) {
     state.discover.error = error instanceof Error ? error.message : 'Roblox discovery could not be loaded. Please try again.';
   } finally {
@@ -1061,12 +1161,94 @@ async function loadDiscover({ append = false, resetToPopular = false } = {}) {
   }
 }
 
+function knownLibraryTags() {
+  return [...new Set(state.library.flatMap((game) => game.tags || []).map((tag) => tag.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right)).slice(0, 30);
+}
+
+function visibleLibraryGames() {
+  const view = state.libraryView;
+  const query = String(view.query || '').trim().toLocaleLowerCase();
+  const tag = String(view.tag || 'all').toLocaleLowerCase();
+  const games = state.library.filter((game) => {
+    const tags = game.tags || [];
+    const searchText = `${game.name} ${game.creator} ${tags.join(' ')} ${game.notes || ''}`.toLocaleLowerCase();
+    return (!query || searchText.includes(query)) && (tag === 'all' || tags.some((item) => item.toLocaleLowerCase() === tag));
+  });
+  if (view.sort === 'recent') return [...games].sort((left, right) => String(right.launchedAt || '').localeCompare(String(left.launchedAt || '')) || left.name.localeCompare(right.name));
+  if (view.sort === 'name') return [...games].sort((left, right) => left.name.localeCompare(right.name));
+  if (view.sort === 'players') return [...games].sort((left, right) => right.playing - left.playing || left.name.localeCompare(right.name));
+  return [...games].sort((left, right) => Number(right.pinned) - Number(left.pinned) || String(right.launchedAt || '').localeCompare(String(left.launchedAt || '')) || left.name.localeCompare(right.name));
+}
+
+function editLibraryTags(universeId) {
+  const game = state.library.find((item) => item.universeId === Number(universeId));
+  if (!game) return;
+  const supplied = window.prompt(`Local tags for “${game.name}” — separate up to 6 tags with commas:`, (game.tags || []).join(', '));
+  if (supplied === null) return;
+  const tags = normalizeGameTags(supplied.split(','));
+  state.library = state.library.map((item) => item.universeId === game.universeId ? { ...item, tags } : item);
+  writeStored(storageKeys.library, state.library);
+  renderLibrary();
+  showToast(tags.length ? `Saved ${tags.length} local tag${tags.length === 1 ? '' : 's'}.` : 'Local tags cleared.');
+}
+
+function editLibraryNotes(universeId) {
+  const game = state.library.find((item) => item.universeId === Number(universeId));
+  if (!game) return;
+  const supplied = window.prompt(`Private note for “${game.name}” — stored only in this Eclipse library (up to 1,000 characters):`, game.notes || '');
+  if (supplied === null) return;
+  const notes = normalizeGameNotes(supplied);
+  state.library = state.library.map((item) => item.universeId === game.universeId ? { ...item, notes } : item);
+  writeStored(storageKeys.library, state.library);
+  renderLibrary();
+  showToast(notes ? 'Private library note saved.' : 'Private library note cleared.');
+}
+
+function libraryGameCard(game) {
+  const tags = Array.isArray(game.tags) && game.tags.length ? `<div class="library-card-tags">${game.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : '<p class="library-no-tags">No local tags yet</p>';
+  const note = game.notes ? `<p class="library-note" title="${escapeHtml(game.notes)}"><strong>Note</strong> ${escapeHtml(game.notes)}</p>` : '';
+  const noteLabel = game.notes ? 'Edit note' : 'Add note';
+  const card = gameCard(game, { library: true });
+  return card.replace('</div>\n  </article>', `${tags}${note}<div class="library-card-actions"><button class="text-button library-tag-button" type="button" data-action="edit-library-tags" data-universe-id="${game.universeId}">Edit tags <span>→</span></button><button class="text-button library-tag-button" type="button" data-action="edit-library-notes" data-universe-id="${game.universeId}">${noteLabel} <span>→</span></button></div></div>\n  </article>`);
+}
+
 function renderLibrary() {
+  const tags = knownLibraryTags();
+  const games = visibleLibraryGames();
+  const view = state.libraryView;
   pageContent.innerHTML = `<div class="page-shell library-page">
-    ${pageHeader('Your library', 'Saved Roblox experiences.', 'Library items are official Roblox places you saved in Eclipse. Pin favorites to keep them first; the list stays only on this device.', '<button class="primary-button" type="button" data-page-link="discover">Discover games</button>')}
-    <section class="content-section"><div class="section-heading"><div><p class="section-kicker">Saved locally</p><h2>${state.library.length ? `${state.library.length} saved ${state.library.length === 1 ? 'experience' : 'experiences'}` : 'Nothing saved yet'}</h2></div></div>
-    ${state.library.length ? `<div class="game-grid">${state.library.map((game) => gameCard(game, { library: true })).join('')}</div>` : emptyState('◇', 'Save official games you want to revisit.', 'Open Discover to browse live Roblox experiences, then use the plus button on a game card to add it here.', '<button class="primary-button" type="button" data-page-link="discover">Open Discover</button>')}</section>
+    ${pageHeader('Your library', 'Saved Roblox experiences.', 'Organize saved places with pins, private tags, and private notes. Eclipse stores this library only on this device.', '<button class="primary-button" type="button" data-page-link="discover">Discover games</button>')}
+    <section class="library-controls panel"><form class="library-search" data-library-search-form><label class="sr-only" for="library-search">Search your local library</label><input id="library-search" name="query" maxlength="100" value="${escapeHtml(view.query)}" placeholder="Search your library" autocomplete="off" /><button class="quiet-button compact-button" type="submit">Search</button></form><div class="library-control-row"><label><span>Tag</span><select data-library-tag><option value="all">All tags</option>${tags.map((tag) => `<option value="${escapeHtml(tag)}" ${view.tag === tag ? 'selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select></label><label><span>Sort</span><select data-library-sort><option value="pinned" ${view.sort === 'pinned' ? 'selected' : ''}>Pinned first</option><option value="recent" ${view.sort === 'recent' ? 'selected' : ''}>Recently launched</option><option value="players" ${view.sort === 'players' ? 'selected' : ''}>Most playing</option><option value="name" ${view.sort === 'name' ? 'selected' : ''}>Name</option></select></label>${view.query || view.tag !== 'all' ? '<button class="text-button" type="button" data-action="clear-library-filters">Clear filters</button>' : ''}</div>${tags.length ? `<div class="library-tag-chips">${tags.map((tag) => `<button type="button" class="${view.tag === tag ? 'active' : ''}" data-action="library-tag" data-library-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('')}</div>` : ''}</section>
+    <section class="content-section"><div class="section-heading"><div><p class="section-kicker">Saved locally</p><h2>${state.library.length ? `${games.length} of ${state.library.length} saved ${state.library.length === 1 ? 'experience' : 'experiences'}` : 'Nothing saved yet'}</h2></div></div>
+    ${state.library.length ? (games.length ? `<div class="game-grid">${games.map(libraryGameCard).join('')}</div>` : emptyState('○', 'No saved experiences match this view.', 'Try another search term or clear the selected local tag.', '<button class="primary-button" type="button" data-action="clear-library-filters">Clear filters</button>')) : emptyState('◇', 'Save official games you want to revisit.', 'Open Discover to browse live Roblox experiences, then use the plus button on a game card to add it here.', '<button class="primary-button" type="button" data-page-link="discover">Open Discover</button>')}</section>
   </div>`;
+}
+
+function historyGame(item) {
+  return normalizeGame(item.game) || gameForPlace(item.placeId);
+}
+
+function exportLocalJson(fileName, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function clearLaunchHistory() {
+  if (!state.launchHistory.length || !window.confirm('Clear Eclipse’s local launch history on this device?')) return;
+  state.launchHistory = [];
+  writeStored(storageKeys.launchHistory, state.launchHistory);
+  renderHistory();
+  showToast('Local Eclipse launch history cleared.');
+}
+
+function renderHistory() {
+  const entries = state.launchHistory;
+  pageContent.innerHTML = `<div class="page-shell history-page">${pageHeader('Local activity', 'Launch history.', 'This records only requests Eclipse handed to Roblox Player. It does not know whether Roblox connected or what happened in-game.', entries.length ? '<button class="quiet-button" type="button" data-action="export-launch-history">Export JSON</button><button class="quiet-button" type="button" data-action="clear-launch-history">Clear history</button>' : '')}<section class="history-list panel">${entries.length ? entries.map((entry) => { const game = historyGame(entry); const saved = game && state.library.find((item) => item.universeId === game.universeId); const pinLabel = saved?.pinned ? 'Pinned in library' : 'Pin to library'; return `<article class="history-row"><div><p class="section-kicker">${escapeHtml(formatLocalLaunchTime(entry.launchedAt))}</p><h2>${escapeHtml(entry.name || game?.name || `Place ${entry.placeId}`)}</h2><p>Roblox place ${entry.placeId}</p></div><div class="history-actions"><button class="quiet-button compact-button" type="button" data-action="relaunch-place" data-place-id="${entry.placeId}">Launch again</button>${game ? `<button class="quiet-button compact-button" type="button" data-action="history-pin-game" data-history-place-id="${entry.placeId}" ${saved?.pinned ? 'disabled' : ''}>${pinLabel}</button>` : ''}</div></article>`; }).join('') : emptyState('◌', 'No Eclipse launch history yet.', 'Experiences launched through Eclipse can appear here when local activity tracking is enabled.', '<button class="primary-button" type="button" data-page-link="discover">Discover games</button>')}</section></div>`;
 }
 
 const fastFlagProfiles = {
@@ -1793,17 +1975,103 @@ async function updateStartup(enabled) {
   }
 }
 
+function eclipseBackupPayload() {
+  return {
+    schema: 'eclipse-local-backup/v1',
+    exportedAt: new Date().toISOString(),
+    library: state.library,
+    recent: state.recent,
+    launchHistory: state.launchHistory,
+    settings: state.settings,
+    profile: state.profile,
+    fastFlagProfiles: state.fastFlagProfiles
+  };
+}
+
+function exportEclipseBackup() {
+  exportLocalJson('eclipse-local-backup.json', eclipseBackupPayload());
+  showToast('Eclipse local backup exported.');
+}
+
+async function importEclipseBackup(file) {
+  if (!file || file.size > 2_000_000 || !/\.json$/i.test(file.name || '')) throw new Error('Choose an Eclipse local backup JSON file smaller than 2 MB.');
+  const backup = JSON.parse(await file.text());
+  if (!backup || backup.schema !== 'eclipse-local-backup/v1') throw new Error('This is not an Eclipse local backup export.');
+  const library = Array.isArray(backup.library) ? backup.library.map(normalizeGame).filter(Boolean).slice(0, 120) : [];
+  const recent = Array.isArray(backup.recent) ? backup.recent.map(normalizeGame).filter(Boolean).slice(0, 16) : [];
+  const launchHistory = normalizeLaunchHistory(backup.launchHistory);
+  const settings = normalizeSettings(backup.settings);
+  const profile = normalizeProfile(backup.profile);
+  const fastFlagProfiles = normalizeSavedFastFlagProfiles(backup.fastFlagProfiles);
+  if (!window.confirm('Replace this device’s Eclipse library, recent list, launch history, interface settings, profile, and saved Fast Flag profiles with this backup?')) return;
+  state.library = library;
+  state.recent = recent;
+  state.launchHistory = launchHistory;
+  state.settings = settings;
+  state.profile = profile;
+  state.fastFlagProfiles = fastFlagProfiles;
+  writeStored(storageKeys.library, state.library);
+  writeStored(storageKeys.recent, state.recent);
+  writeStored(storageKeys.launchHistory, state.launchHistory);
+  writeStored(storageKeys.profile, state.profile);
+  writeStored(storageKeys.fastFlagProfiles, state.fastFlagProfiles);
+  setSettings();
+  updateProfileSurface();
+  renderCurrentPage();
+  showToast('Eclipse local backup imported.');
+}
+
+async function refreshUpdateStatus({ check = false, render = true } = {}) {
+  state.update.busy = true;
+  if (render && state.page === 'settings') renderSettings();
+  try {
+    state.update.status = check ? await system.checkForUpdates() : await system.updateStatus();
+  } catch (error) {
+    state.update.status = { supported: false, updateAvailable: false, reason: error instanceof Error ? error.message : 'Eclipse update status is unavailable.' };
+  } finally {
+    state.update.busy = false;
+    if (render && state.page === 'settings') renderSettings();
+  }
+  return state.update.status;
+}
+
+async function openEclipseUpdatePage() {
+  try {
+    await system.openUpdatePage();
+    showToast('Opening the published Eclipse release page on GitHub.');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'The Eclipse release page could not be opened.');
+  }
+}
+
 function renderSettings() {
   if (!state.startup.status && !state.startup.busy) Promise.resolve().then(() => refreshStartupStatus());
+  if (!state.update.status && !state.update.busy) Promise.resolve().then(() => refreshUpdateStatus({ render: false }));
   const startup = state.startup.status || { supported: false, enabled: false, reason: 'Checking Windows integration…' };
+  const update = state.update.status || { supported: false, updateAvailable: false, reason: 'Checking published Eclipse releases…' };
+  const updateTitle = state.update.busy ? 'Checking GitHub releases…' : !update.supported ? 'Update checks unavailable' : update.updateAvailable ? `${update.latestVersion || 'A newer build'} is available` : update.checkedAt ? 'Eclipse is up to date' : 'Checking published releases…';
+  const updateDescription = update.reason || 'Update checks never download or install anything automatically.';
   pageContent.innerHTML = `<div class="page-shell settings-page">
     ${pageHeader('Settings', 'Make Eclipse yours.', 'Interface and Windows preferences remain local to this device. Eclipse never requests Roblox account credentials.', '')}
-    <section class="settings-list panel"><div class="setting-row"><div><p class="section-kicker">Accessibility</p><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions. Eclipse also honors your system reduced-motion preference.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><p class="section-kicker">Performance</p><h2>Eclipse performance mode</h2><p>Reduce blur, glow, shadows, and decorative animation so the portable software-rendered workspace stays responsive. Enabled by default.</p></div><label class="toggle"><input type="checkbox" data-setting="performanceMode" ${state.settings.performanceMode ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>High contrast surfaces</h2><p>Increase boundaries and text separation across Eclipse panels.</p></div><label class="toggle"><input type="checkbox" data-setting="highContrast" ${state.settings.highContrast ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Interface scale</h2><p>Use a larger text and control scale without changing Windows settings.</p></div><label class="settings-select"><span class="sr-only">Interface scale</span><select data-setting-select="uiScale"><option value="1" ${state.settings.uiScale === 1 ? 'selected' : ''}>Default</option><option value="1.1" ${state.settings.uiScale === 1.1 ? 'selected' : ''}>Large 110%</option><option value="1.2" ${state.settings.uiScale === 1.2 ? 'selected' : ''}>Larger 120%</option><option value="1.3" ${state.settings.uiScale === 1.3 ? 'selected' : ''}>Largest 130%</option></select></label></div><div class="setting-row"><div><p class="section-kicker">Layout & locale</p><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><h2>Use a 24-hour clock</h2><p>Format local Eclipse launch times using your locale with 24-hour time.</p></div><label class="toggle"><input type="checkbox" data-setting="clock24Hour" ${state.settings.clock24Hour ? 'checked' : ''}/><span></span></label></div><div class="setting-row"><div><p class="section-kicker">Windows integration</p><h2>Launch Eclipse at sign-in</h2><p>${escapeHtml(startup.supported ? 'Optional. Eclipse adds no Roblox protocol ownership and retains only its own Windows startup preference.' : startup.reason || 'Available in the packaged Windows app.')}</p></div><label class="toggle ${!startup.supported || state.startup.busy ? 'is-disabled' : ''}"><input type="checkbox" data-startup-setting ${startup.enabled ? 'checked' : ''} ${!startup.supported || state.startup.busy ? 'disabled' : ''}/><span></span></label></div><div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div></section>
+    <section class="settings-list panel">
+      <div class="setting-row"><div><p class="section-kicker">Accessibility</p><h2>Reduce interface motion</h2><p>Minimize hover movement and visual transitions. Eclipse also honors your system reduced-motion preference.</p></div><label class="toggle"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion ? 'checked' : ''}/><span></span></label></div>
+      <div class="setting-row"><div><p class="section-kicker">Performance</p><h2>Eclipse performance mode</h2><p>Reduce blur, glow, shadows, and decorative animation so the portable software-rendered workspace stays responsive. Enabled by default.</p></div><label class="toggle"><input type="checkbox" data-setting="performanceMode" ${state.settings.performanceMode ? 'checked' : ''}/><span></span></label></div>
+      <div class="setting-row"><div><h2>High contrast surfaces</h2><p>Increase boundaries and text separation across Eclipse panels.</p></div><label class="toggle"><input type="checkbox" data-setting="highContrast" ${state.settings.highContrast ? 'checked' : ''}/><span></span></label></div>
+      <div class="setting-row"><div><h2>Interface scale</h2><p>Use a larger text and control scale without changing Windows settings.</p></div><label class="settings-select"><span class="sr-only">Interface scale</span><select data-setting-select="uiScale"><option value="1" ${state.settings.uiScale === 1 ? 'selected' : ''}>Default</option><option value="1.1" ${state.settings.uiScale === 1.1 ? 'selected' : ''}>Large 110%</option><option value="1.2" ${state.settings.uiScale === 1.2 ? 'selected' : ''}>Larger 120%</option><option value="1.3" ${state.settings.uiScale === 1.3 ? 'selected' : ''}>Largest 130%</option></select></label></div>
+      <div class="setting-row"><div><p class="section-kicker">Layout & locale</p><h2>Compact game cards</h2><p>Fit more official Roblox experiences on Discover and Library.</p></div><label class="toggle"><input type="checkbox" data-setting="compactCards" ${state.settings.compactCards ? 'checked' : ''}/><span></span></label></div>
+      <div class="setting-row"><div><h2>Use a 24-hour clock</h2><p>Format local Eclipse launch times using your locale with 24-hour time.</p></div><label class="toggle"><input type="checkbox" data-setting="clock24Hour" ${state.settings.clock24Hour ? 'checked' : ''}/><span></span></label></div>
+      <div class="setting-row"><div><p class="section-kicker">Windows integration</p><h2>Launch Eclipse at sign-in</h2><p>${escapeHtml(startup.supported ? 'Optional. Eclipse adds no Roblox protocol ownership and retains only its own Windows startup preference.' : startup.reason || 'Available in the packaged Windows app.')}</p></div><label class="toggle ${!startup.supported || state.startup.busy ? 'is-disabled' : ''}"><input type="checkbox" data-startup-setting ${startup.enabled ? 'checked' : ''} ${!startup.supported || state.startup.busy ? 'disabled' : ''}/><span></span></label></div>
+      <div class="setting-row account-setting"><div><p class="section-kicker">Local identity</p><h2>${escapeHtml(state.profile.created ? state.profile.displayName : 'No Eclipse profile yet')}</h2><p>${state.profile.created ? 'This profile is stored locally in Eclipse. It is not connected to Roblox or an online account.' : 'Create a local Eclipse profile without an email, password, or Roblox account.'}</p></div><button class="quiet-button" type="button" data-profile-action="open">${state.profile.created ? 'Edit profile' : 'Create profile'}</button></div>
+    </section>
+    <section class="settings-list panel settings-extra-list">
+      <div class="setting-row"><div><p class="section-kicker">Portable updates</p><h2>${escapeHtml(updateTitle)}</h2><p>${escapeHtml(updateDescription)}</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="check-updates" ${state.update.busy ? 'disabled' : ''}>${state.update.busy ? 'Checking…' : 'Check for updates'}</button>${update.updateAvailable ? '<button class="primary-button" type="button" data-action="open-update-page">Open release</button>' : ''}</div></div>
+      <div class="setting-row"><div><p class="section-kicker">Local backup</p><h2>Export or restore Eclipse data</h2><p>Back up local Library, recent games, launch history, interface settings, profile, and saved Fast Flag profiles. Roblox credentials and Player files are never included.</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="export-eclipse-backup">Export backup</button><button class="quiet-button" type="button" data-action="import-eclipse-backup">Import backup</button><input type="file" data-eclipse-backup-import accept="application/json,.json" hidden /></div></div>
+    </section>
   </div>`;
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', 'game-details': 'Game details', tools: 'Tools', optimization: 'Optimization', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', history: 'History', 'game-details': 'Game details', tools: 'Tools', optimization: 'Optimization', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -1816,6 +2084,7 @@ function renderCurrentPage() {
   updateWindowTab();
   if (state.page === 'discover') renderDiscover();
   else if (state.page === 'library') renderLibrary();
+  else if (state.page === 'history') renderHistory();
   else if (state.page === 'game-details') renderGameDetails();
   else if (state.page === 'tools') renderTools();
   else if (state.page === 'optimization') renderOptimization();
@@ -1828,7 +2097,7 @@ function renderCurrentPage() {
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'history', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
@@ -1850,6 +2119,7 @@ async function launchGame(placeId) {
   try {
     await roblox.launchPlace(numericId);
     addLaunchHistory(numericId, game);
+    markLibraryLaunched(numericId);
     if (game) addRecent(game);
     showToast('Eclipse handed the place to Roblox Player. Eclipse cannot confirm Roblox connection or gameplay state.');
   } catch (error) {
@@ -1868,6 +2138,7 @@ async function joinGameServer(placeId, gameInstanceId) {
     await roblox.launchServer(numericId, instanceId);
     const game = gameForPlace(numericId) || state.gameDetails.game;
     addLaunchHistory(numericId, game);
+    markLibraryLaunched(numericId);
     if (game) addRecent(game);
     showToast('Eclipse requested the selected public server from Roblox Player. Roblox may choose another server if this one filled or closed.');
   } catch (error) {
@@ -1878,7 +2149,7 @@ async function joinGameServer(placeId, gameInstanceId) {
 async function openOfficial(action, placeId) {
   try {
     await roblox.openOfficial(action, placeId);
-    const messages = { game: 'Opening the official Roblox game page.' };
+    const messages = { game: 'Opening the official Roblox game page.', 'game-pass': 'Opening the official Roblox game pass page.' };
     showToast(messages[action] || 'Opening Roblox.');
   } catch (error) {
     showToast(error instanceof Error ? error.message : 'Roblox could not be opened.');
@@ -1957,8 +2228,13 @@ document.addEventListener('click', async (event) => {
   if (action === 'optimization-windows-update') await runOptimization('windows-update', () => system.openWindowsUpdate(), 'Windows Update opened for official driver and system updates.');
   if (action === 'optimization-clear-eclipse-cache') await runOptimization('eclipse-cache', () => system.clearEclipseCache(), 'Eclipse browser cache cleared.');
   if (action === 'optimization-clear-roblox-cache') await runOptimization('roblox-cache', () => system.clearRobloxCache(), 'Roblox local cache and logs cleared.');
+  if (action === 'check-updates') await refreshUpdateStatus({ check: true });
+  if (action === 'open-update-page') await openEclipseUpdatePage();
+  if (action === 'export-eclipse-backup') exportEclipseBackup();
+  if (action === 'import-eclipse-backup') pageContent.querySelector('[data-eclipse-backup-import]')?.click();
   if (action === 'launch-game' || action === 'relaunch-place') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
+  if (action === 'open-game-pass') await openOfficial('game-pass', button.dataset.passId);
   if (action === 'game-details') openGameDetails(button.dataset.universeId, button.dataset.placeId);
   if (action === 'game-passes') openGameDetails(button.dataset.universeId, button.dataset.placeId, 'passes');
   if (action === 'join-server') await joinGameServer(button.dataset.placeId, button.dataset.gameInstanceId);
@@ -1993,6 +2269,32 @@ document.addEventListener('click', async (event) => {
     removeGame(button.dataset.universeId);
     renderLibrary();
     showToast('Removed from your local Eclipse library.');
+  }
+  if (action === 'edit-library-tags') editLibraryTags(button.dataset.universeId);
+  if (action === 'edit-library-notes') editLibraryNotes(button.dataset.universeId);
+  if (action === 'clear-library-filters') {
+    state.libraryView = { query: '', tag: 'all', sort: state.libraryView.sort || 'pinned' };
+    renderLibrary();
+  }
+  if (action === 'library-tag') {
+    const tag = String(button.dataset.libraryTag || '');
+    state.libraryView.tag = knownLibraryTags().includes(tag) ? tag : 'all';
+    renderLibrary();
+  }
+  if (action === 'clear-launch-history') clearLaunchHistory();
+  if (action === 'export-launch-history') {
+    exportLocalJson('eclipse-launch-history.json', { schema: 'eclipse-launch-history/v1', exportedAt: new Date().toISOString(), history: state.launchHistory });
+    showToast('Local Eclipse launch history exported.');
+  }
+  if (action === 'history-pin-game') {
+    const entry = state.launchHistory.find((item) => item.placeId === Number(button.dataset.historyPlaceId));
+    const game = entry ? historyGame(entry) : null;
+    if (!game) showToast('This local history entry has no saved experience details to pin.');
+    else if (!pinGameInLibrary(game)) showToast('That experience is already pinned in your library.');
+    else {
+      renderHistory();
+      showToast(`${game.name} was pinned in your library.`);
+    }
   }
   if (action === 'refresh-discover') await loadDiscover({ resetToPopular: !state.discover.query });
   if (action === 'clear-discover-filters') {
@@ -2108,6 +2410,11 @@ document.addEventListener('submit', async (event) => {
     updateDiscoverView();
     await loadDiscover();
   }
+  if (event.target.matches('[data-library-search-form]')) {
+    event.preventDefault();
+    state.libraryView.query = String(new FormData(event.target).get('query') || '').trim().slice(0, 100);
+    renderLibrary();
+  }
   if (event.target.matches('[data-place-form]')) {
     event.preventDefault();
     const placeId = String(new FormData(event.target).get('placeId') || '');
@@ -2169,7 +2476,32 @@ document.addEventListener('change', async (event) => {
   const serverSort = event.target.closest('[data-game-server-sort]');
   if (serverSort) {
     state.gameDetails.serverSort = ['ping', 'players', 'high-players', 'open-slots'].includes(serverSort.value) ? serverSort.value : 'ping';
+    state.settings.serverSort = state.gameDetails.serverSort;
+    setSettings();
     if (state.page === 'game-details') renderGameServersPanel();
+    return;
+  }
+  const serverFilter = event.target.closest('[data-game-server-filter]');
+  if (serverFilter) {
+    state.gameDetails.serverFilter = ['all', 'open2', 'open5', 'open10'].includes(serverFilter.value) ? serverFilter.value : 'all';
+    if (state.page === 'game-details') renderGameServersPanel();
+    return;
+  }
+  const serverPing = event.target.closest('[data-game-server-ping]');
+  if (serverPing) {
+    state.gameDetails.serverRequirePing = serverPing.checked === true;
+    if (state.page === 'game-details') renderGameServersPanel();
+    return;
+  }
+  const eclipseBackupImport = event.target.closest('[data-eclipse-backup-import]');
+  if (eclipseBackupImport) {
+    try {
+      await importEclipseBackup(eclipseBackupImport.files?.[0]);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Eclipse local backup could not be imported.');
+    } finally {
+      eclipseBackupImport.value = '';
+    }
     return;
   }
   const fastFlagImport = event.target.closest('[data-fastflag-import]');
@@ -2193,6 +2525,17 @@ document.addEventListener('change', async (event) => {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : fastFlagInput.dataset.fastflagType === 'string' ? fastFlagInput.value : Number(fastFlagInput.value);
     persistActiveFastFlagProfile();
     updateFastFlagsPanel();
+    return;
+  }
+  const libraryViewControl = event.target.closest('[data-library-tag], [data-library-sort]');
+  if (libraryViewControl) {
+    if (libraryViewControl.matches('[data-library-tag]')) {
+      state.libraryView.tag = knownLibraryTags().includes(libraryViewControl.value) ? libraryViewControl.value : 'all';
+    }
+    if (libraryViewControl.matches('[data-library-sort]')) {
+      state.libraryView.sort = ['pinned', 'recent', 'players', 'name'].includes(libraryViewControl.value) ? libraryViewControl.value : 'pinned';
+    }
+    renderLibrary();
     return;
   }
   const discoverySort = event.target.closest('[data-discovery-sort], [data-discovery-filter]');

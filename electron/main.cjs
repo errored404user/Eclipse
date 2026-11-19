@@ -10,6 +10,7 @@ const { navigationPageFromArguments, placeIdFromArguments, startupStatus, taskba
 const { readRecentPlaceIds, writeRecentPlaceIds } = require('./taskbar-recents.cjs');
 const { createPlayerMods, isRobloxPlayerRunning } = require('./player-mods.cjs');
 const { createOptimization } = require('./optimization.cjs');
+const { createUpdateChecker } = require('./update-checker.cjs');
 const { isUsableWindow, revealWindow } = require('./window-visibility.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
@@ -42,12 +43,16 @@ let pendingNavigationPage = navigationPageFromArguments(process.argv);
 let pendingLaunchPlaceId = placeIdFromArguments(process.argv);
 let playerMods;
 let optimization;
+const updateChecker = createUpdateChecker({ currentVersion: app.getVersion() });
 const robloxBootstrapper = createRobloxBootstrapper({
   beforeInstall: async (context) => playerMods?.prepareForPlayerUpdate(context)
 });
 const discordPresence = createDiscordPresence({ applicationId: process.env.ECLIPSE_DISCORD_CLIENT_ID });
 discordPresence.on('status', (status) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('discord:status', status);
+});
+updateChecker.on('status', (status) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('system:update-status', status);
 });
 robloxBootstrapper.on('progress', (progress) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('roblox-bootstrapper:progress', progress);
@@ -56,6 +61,10 @@ robloxBootstrapper.on('progress', (progress) => {
 
 function gamePageUrl(placeId) {
   return `https://www.roblox.com/games/${placeId}`;
+}
+
+function gamePassPageUrl(passId) {
+  return `https://www.roblox.com/game-pass/${passId}`;
 }
 
 async function openOfficialUrl(url) {
@@ -399,6 +408,13 @@ app.whenReady().then(async () => {
     await shell.openExternal('ms-settings:windowsupdate');
     return { opened: true };
   });
+  ipcMain.handle('system:update-status', () => updateChecker.getStatus());
+  ipcMain.handle('system:check-for-updates', () => updateChecker.check());
+  ipcMain.handle('system:open-update-page', async () => {
+    const status = updateChecker.getStatus();
+    await shell.openExternal(status.releaseUrl);
+    return { opened: true };
+  });
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
   ipcMain.handle('roblox:game-details', (_event, universeId) => getGameDetails(universeId));
@@ -421,12 +437,19 @@ app.whenReady().then(async () => {
       if (!validPlaceId) throw new Error('A valid Roblox place ID is required.');
       return openOfficialUrl(gamePageUrl(validPlaceId));
     }
+    if (action === 'game-pass') {
+      const validPassId = normalizePlaceId(placeId);
+      if (!validPassId) throw new Error('A valid Roblox game pass is required.');
+      return openOfficialUrl(gamePassPageUrl(validPassId));
+    }
     throw new Error('Unsupported official Roblox action.');
   });
 
   recentLaunchPlaceIds = await readRecentPlaceIds(taskbarRecentsPath());
   refreshJumpList();
   createMainWindow();
+  // GitHub release checks are non-blocking and never download or install an update.
+  void updateChecker.check();
   app.on('activate', () => recoverMainWindow());
 }).catch((error) => {
   const detail = error instanceof Error ? error.message : String(error || 'Unknown startup error.');
