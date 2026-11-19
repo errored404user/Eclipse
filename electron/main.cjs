@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
-const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
+const { getGameDetails, listGamePasses, listGameServers, listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
 const { createDiscordPresence } = require('./discord-presence.cjs');
 const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
@@ -381,6 +381,9 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));
+  ipcMain.handle('roblox:game-details', (_event, universeId) => getGameDetails(universeId));
+  ipcMain.handle('roblox:game-passes', (_event, universeId) => listGamePasses(universeId));
+  ipcMain.handle('roblox:game-servers', (_event, placeId, cursor) => listGameServers(placeId, typeof cursor === 'string' ? cursor : ''));
   ipcMain.handle('roblox:launch-place', async (_event, placeId) => {
     const validPlaceId = normalizePlaceId(placeId);
     if (!validPlaceId) throw new Error('A valid Roblox place ID is required.');

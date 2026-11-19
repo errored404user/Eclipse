@@ -6,6 +6,8 @@ const MAX_GAMES = 24;
 const MAX_EXPLORE_COLLECTIONS = 6;
 const MAX_GAMES_PER_COLLECTION = 12;
 const MAX_ICON_IDS = 100;
+const MAX_GAME_PASSES = 24;
+const MAX_SERVER_PAGE = 100;
 const cache = new Map();
 
 function readNumber(value) {
@@ -188,4 +190,113 @@ async function listGames(request = {}) {
   return value;
 }
 
-module.exports = { listGames, normalizePlaceId };
+function normalizeCursor(value) {
+  return typeof value === 'string' ? value.trim().slice(0, 500) : '';
+}
+
+function cacheResult(key, ttl, loader) {
+  const existing = cache.get(key);
+  if (existing && existing.expiresAt > Date.now()) return Promise.resolve(existing.value);
+  return Promise.resolve(loader()).then((value) => {
+    cache.set(key, { value, expiresAt: Date.now() + ttl });
+    return value;
+  });
+}
+
+function normalizeDetailGame(item) {
+  const game = normalizeGame(item);
+  if (!game) return null;
+  const numeric = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+  };
+  const creator = item?.creator && typeof item.creator === 'object' ? item.creator : {};
+  const genres = [item?.genre, item?.genreL1, item?.genreL2].filter((value, index, values) => typeof value === 'string' && value.trim() && values.indexOf(value) === index).map((value) => value.trim().slice(0, 60));
+  return {
+    ...game,
+    creator: game.creator || String(creator.name || '').trim().slice(0, 120),
+    visits: numeric(item?.visits),
+    favorites: numeric(item?.favoritedCount ?? item?.favorites),
+    maxPlayers: numeric(item?.maxPlayers),
+    created: typeof item?.created === 'string' ? item.created.slice(0, 64) : '',
+    updated: typeof item?.updated === 'string' ? item.updated.slice(0, 64) : '',
+    genres
+  };
+}
+
+function normalizeGamePass(item) {
+  const id = readNumber(item?.id ?? item?.gamePassId);
+  const name = typeof item?.name === 'string' ? item.name.trim().slice(0, 120) : '';
+  if (!id || !name) return null;
+  const priceValue = item?.priceInformation?.priceInRobux ?? item?.price ?? item?.priceInRobux;
+  const price = Number.isFinite(Number(priceValue)) && Number(priceValue) >= 0 ? Math.floor(Number(priceValue)) : null;
+  const isForSale = item?.priceInformation?.isForSale !== false && item?.isForSale !== false;
+  return {
+    id,
+    name,
+    description: typeof item?.description === 'string' ? item.description.trim().slice(0, 280) : '',
+    price,
+    isForSale
+  };
+}
+
+function normalizeServer(item) {
+  const id = typeof item?.id === 'string' ? item.id.trim().slice(0, 200) : '';
+  const playing = Number.isFinite(Number(item?.playing)) && Number(item.playing) >= 0 ? Math.floor(Number(item.playing)) : 0;
+  const maxPlayers = Number.isFinite(Number(item?.maxPlayers)) && Number(item.maxPlayers) > 0 ? Math.floor(Number(item.maxPlayers)) : 0;
+  if (!id || !maxPlayers) return null;
+  const pingValue = Number(item?.ping);
+  const fpsValue = Number(item?.fps);
+  return {
+    id,
+    playing: Math.min(playing, maxPlayers),
+    maxPlayers,
+    ping: Number.isFinite(pingValue) && pingValue >= 0 ? Math.round(pingValue) : null,
+    fps: Number.isFinite(fpsValue) && fpsValue >= 0 ? Math.round(fpsValue) : null
+  };
+}
+
+async function getGameDetails(universeId) {
+  const id = readNumber(universeId);
+  if (!id) throw new Error('A valid Roblox universe ID is required.');
+  return cacheResult(`detail:${id}`, CACHE_TTL_MS, async () => {
+    const url = new URL('https://games.roblox.com/v1/games');
+    url.searchParams.set('universeIds', String(id));
+    const payload = await fetchJson(url);
+    const game = normalizeDetailGame(Array.isArray(payload?.data) ? payload.data[0] : null);
+    if (!game) throw new Error('Roblox did not return details for this experience.');
+    return game;
+  });
+}
+
+async function listGamePasses(universeId) {
+  const id = readNumber(universeId);
+  if (!id) throw new Error('A valid Roblox universe ID is required.');
+  return cacheResult(`passes:${id}`, CACHE_TTL_MS, async () => {
+    const url = new URL(`https://apis.roblox.com/game-passes/v1/universes/${id}/game-passes`);
+    url.searchParams.set('sortOrder', 'Asc');
+    url.searchParams.set('limit', String(MAX_GAME_PASSES));
+    const payload = await fetchJson(url);
+    return (Array.isArray(payload?.data) ? payload.data : []).map(normalizeGamePass).filter(Boolean).slice(0, MAX_GAME_PASSES);
+  });
+}
+
+async function listGameServers(placeId, cursor = '') {
+  const id = normalizePlaceId(placeId);
+  if (!id) throw new Error('A valid Roblox place ID is required.');
+  const safeCursor = normalizeCursor(cursor);
+  return cacheResult(`servers:${id}:${safeCursor}`, 15_000, async () => {
+    const url = new URL(`https://games.roblox.com/v1/games/${id}/servers/Public`);
+    url.searchParams.set('sortOrder', 'Asc');
+    url.searchParams.set('limit', String(MAX_SERVER_PAGE));
+    url.searchParams.set('excludeFullGames', 'true');
+    if (safeCursor) url.searchParams.set('cursor', safeCursor);
+    const payload = await fetchJson(url);
+    return {
+      servers: (Array.isArray(payload?.data) ? payload.data : []).map(normalizeServer).filter(Boolean).slice(0, MAX_SERVER_PAGE),
+      nextCursor: normalizeCursor(payload?.nextPageCursor)
+    };
+  });
+}
+
+module.exports = { getGameDetails, listGamePasses, listGameServers, listGames, normalizePlaceId };

@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { listGames } = require('./shared/roblox-api.cjs');
+const { getGameDetails, listGamePasses, listGameServers, listGames } = require('./shared/roblox-api.cjs');
 
 const root = path.join(__dirname, 'app');
 const types = {
@@ -23,6 +23,45 @@ function sendJson(response, status, body) {
 
 http.createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
+
+  if (url.pathname === '/api/roblox/game-details') {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+    try {
+      sendJson(response, 200, await getGameDetails(url.searchParams.get('universeId') ?? ''));
+    } catch (error) {
+      sendJson(response, 502, { error: 'Roblox game details are unavailable. Please try again.' });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/roblox/game-passes') {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+    try {
+      sendJson(response, 200, { passes: await listGamePasses(url.searchParams.get('universeId') ?? '') });
+    } catch (error) {
+      sendJson(response, 502, { error: 'Roblox game passes are unavailable. Please try again.' });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/roblox/game-servers') {
+    if (request.method !== 'GET') {
+      sendJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+    try {
+      sendJson(response, 200, await listGameServers(url.searchParams.get('placeId') ?? '', url.searchParams.get('cursor') ?? ''));
+    } catch (error) {
+      sendJson(response, 502, { error: 'Roblox servers are unavailable. Please try again.' });
+    }
+    return;
+  }
 
   if (url.pathname === '/api/roblox/games') {
     if (request.method !== 'GET') {
