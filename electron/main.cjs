@@ -210,7 +210,8 @@ function createMainWindow() {
   };
 
   window.once('ready-to-show', () => {
-    clearStartupFallback();
+    if (startupFallbackTimer) clearTimeout(startupFallbackTimer);
+    startupFallbackTimer = undefined;
     revealMainWindow(window);
     sendPendingStartupRequest();
   });
@@ -218,14 +219,17 @@ function createMainWindow() {
     if (isUsableWindow(window) && !window.isVisible()) revealMainWindow(window);
   }, 4_000);
   startupFallbackTimer.unref?.();
-  // Never let an invisible startup process keep the single-instance lock forever.
+  // A hidden startup must remain diagnosable. Show a visible recovery screen rather than
+  // terminating the process and leaving the user with no taskbar or Task Manager evidence.
   startupRecoveryTimer = setTimeout(() => {
-    if (isUsableWindow(window) && !window.isVisible()) {
-      window.destroy();
-      app.exit(1);
-    }
+    if (!isUsableWindow(window) || startupErrorShown) return;
+    showStartupFailure();
   }, 12_000);
   startupRecoveryTimer.unref?.();
+
+  window.webContents.once('did-finish-load', () => {
+    if (!startupErrorShown) clearStartupFallback();
+  });
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('did-fail-load', (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
@@ -387,8 +391,15 @@ app.whenReady().then(async () => {
   createMainWindow();
   app.on('activate', () => recoverMainWindow());
 }).catch((error) => {
+  const detail = error instanceof Error ? error.message : String(error || 'Unknown startup error.');
   console.error('Eclipse could not initialize its main process.', error);
-  app.exit(1);
+  // Packaged portable builds have no terminal, so do not turn a main-process fault into a
+  // silent disappearance. This native message is intentionally available before any window.
+  try {
+    dialog.showErrorBox('Eclipse could not start', `Eclipse stopped during startup:\n\n${detail}\n\nTry launching Eclipse again. If this repeats, use the portable build from the latest Eclipse release and share this message.`);
+  } finally {
+    app.quit();
+  }
 });
 }
 
