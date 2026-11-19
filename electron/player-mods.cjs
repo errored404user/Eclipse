@@ -204,6 +204,66 @@ function parseManifestBuffer(buffer) {
   }
 }
 
+function crc32(buffer) {
+  let value = 0xffffffff;
+  for (const byte of buffer) {
+    value ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+function createStoredZip(entries) {
+  if (!Array.isArray(entries) || !entries.length || entries.length > MAX_ASSETS + 1) {
+    throw new PlayerModsError('Eclipse could not create the Player pack archive.', 'INVALID_PACKAGE');
+  }
+  const names = new Set();
+  const localEntries = [];
+  const centralEntries = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = safeRelativePath(entry?.name);
+    const content = Buffer.isBuffer(entry?.content) ? entry.content : null;
+    if (!name || name.endsWith('/') || !content || content.length > MAX_ASSET_BYTES || names.has(name.toLowerCase())) {
+      throw new PlayerModsError('Eclipse could not create the Player pack archive.', 'INVALID_PACKAGE');
+    }
+    names.add(name.toLowerCase());
+    const filename = Buffer.from(name, 'utf8');
+    const checksum = crc32(content);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(content.length, 18);
+    local.writeUInt32LE(content.length, 22);
+    local.writeUInt16LE(filename.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(0, 10);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(content.length, 20);
+    central.writeUInt32LE(content.length, 24);
+    central.writeUInt16LE(filename.length, 28);
+    central.writeUInt32LE(offset, 42);
+    localEntries.push(Buffer.concat([local, filename, content]));
+    centralEntries.push(Buffer.concat([central, filename]));
+    offset += local.length + filename.length + content.length;
+  }
+  const centralDirectory = Buffer.concat(centralEntries);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...localEntries, centralDirectory, end]);
+}
+
 async function readBoundedFile(filePath, maxBytes, message, code = 'INVALID_PACKAGE') {
   let handle;
   try {
@@ -495,6 +555,36 @@ class PlayerMods {
       content.set(asset.source, buffer);
     }
     return this.storePack(manifest, content);
+  }
+
+  async createPackage({ manifest, assetFiles, destination } = {}) {
+    if (!this.supported()) throw new PlayerModsError('Player packs are available in the Windows Eclipse desktop app only.', 'UNSUPPORTED_PLATFORM');
+    if (path.extname(String(destination || '')).toLowerCase() !== '.eclipsepack') {
+      throw new PlayerModsError('Choose a destination ending in .eclipsepack.', 'INVALID_PACKAGE');
+    }
+    const normalizedManifest = normalizeManifest(manifest);
+    if (!(assetFiles instanceof Map)) throw new PlayerModsError('The selected Player pack assets are invalid.', 'INVALID_PACKAGE');
+    const state = await this.readState();
+    if (state.packs.some((pack) => pack.id === normalizedManifest.id)) {
+      throw new PlayerModsError(`A local pack named ${normalizedManifest.id} already exists. Remove it before creating a replacement.`, 'DUPLICATE_PACK');
+    }
+    let totalBytes = 0;
+    const entries = [{ name: 'manifest.json', content: Buffer.from(`${JSON.stringify(normalizedManifest, null, 2)}\n`, 'utf8') }];
+    for (const asset of normalizedManifest.assets) {
+      const assetPath = assetFiles.get(asset.source);
+      if (typeof assetPath !== 'string' || !assetPath) {
+        throw new PlayerModsError(`Choose a source file for ${asset.source}.`, 'INVALID_PACKAGE');
+      }
+      const buffer = await readBoundedFile(assetPath, MAX_ASSET_BYTES, `Asset ${asset.source} is missing or too large.`, 'INVALID_ASSET');
+      const metadata = validateAssetBuffer(asset, buffer);
+      totalBytes += metadata.size;
+      if (totalBytes > MAX_TOTAL_ASSET_BYTES) throw new PlayerModsError('This Player pack exceeds Eclipse’s 28 MB asset limit.', 'INVALID_PACKAGE');
+      entries.push({ name: asset.source, content: buffer });
+    }
+    const archive = createStoredZip(entries);
+    if (archive.length > MAX_PACKAGE_BYTES) throw new PlayerModsError('This Player pack exceeds Eclipse’s 32 MB archive limit.', 'INVALID_PACKAGE');
+    await atomicWrite(destination, archive);
+    return { id: normalizedManifest.id, name: normalizedManifest.name, version: normalizedManifest.version, assets: normalizedManifest.assets.length };
   }
 
   async storePack(manifest, content) {

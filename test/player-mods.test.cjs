@@ -129,6 +129,29 @@ test('disables and restores local packs for review before an official Player upd
   }
 });
 
+test('builds a shareable .eclipsepack from selected creator assets and imports it locally', async () => {
+  const { root, mods } = await fixture();
+  try {
+    const folder = await createFolderPack(root, 'creator-pack');
+    const destination = path.join(root, 'creator-pack.eclipsepack');
+    const created = await mods.createPackage({
+      manifest: manifest('creator-pack'),
+      assetFiles: new Map([
+        ['assets/interface.png', path.join(folder, 'assets', 'interface.png')],
+        ['assets/launch.ogg', path.join(folder, 'assets', 'launch.ogg')]
+      ]),
+      destination
+    });
+    assert.deepEqual(created, { id: 'creator-pack', name: 'Violet Interface', version: '1.0.0', assets: 2 });
+    assert.equal(readZipEntries(await fs.readFile(destination)).size, 3);
+    const status = await mods.importPackage(destination);
+    assert.equal(status.packs[0].id, 'creator-pack');
+    assert.equal(status.packs[0].assets.length, 2);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('imports a bounded .eclipsepack archive and rejects non-allowlisted targets', async () => {
   const { root, mods } = await fixture();
   try {

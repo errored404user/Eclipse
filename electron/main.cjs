@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
 const fastFlags = require('./fast-flags.cjs');
@@ -11,6 +12,26 @@ const { createPlayerMods } = require('./player-mods.cjs');
 const { isUsableWindow, revealWindow } = require('./window-visibility.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
+const CREATOR_SELECTION_TTL_MS = 30 * 60 * 1000;
+const creatorAssetSelections = new Map();
+
+function creatorAssetKind(value) {
+  const kind = String(value || '').trim().toLowerCase();
+  return ['texture', 'sound'].includes(kind) ? kind : '';
+}
+
+function clearExpiredCreatorSelections() {
+  const now = Date.now();
+  for (const [token, selection] of creatorAssetSelections) {
+    if (!selection || selection.expiresAt <= now) creatorAssetSelections.delete(token);
+  }
+}
+
+function creatorAssetFilter(kind) {
+  return kind === 'texture'
+    ? [{ name: 'Texture assets', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+    : [{ name: 'Sound assets', extensions: ['ogg', 'mp3', 'wav'] }];
+}
 
 let mainWindow;
 let activeLaunchWindow;
@@ -270,6 +291,43 @@ app.whenReady().then(async () => {
     });
     if (result.canceled || !result.filePaths[0]) return { ...(await playerMods.status()), canceled: true };
     return { ...(await playerMods.importFolder(result.filePaths[0])), canceled: false };
+  });
+  ipcMain.handle('mods:pick-creator-asset', async (_event, value) => {
+    const kind = creatorAssetKind(value);
+    if (!kind) throw new Error('Choose whether the new asset is a texture or sound.');
+    clearExpiredCreatorSelections();
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: `Choose ${kind === 'texture' ? 'Texture or UI' : 'Sound'} Asset`,
+      properties: ['openFile'],
+      filters: creatorAssetFilter(kind)
+    });
+    if (result.canceled || !result.filePaths[0]) return { canceled: true };
+    const token = randomUUID();
+    creatorAssetSelections.set(token, { path: result.filePaths[0], kind, expiresAt: Date.now() + CREATOR_SELECTION_TTL_MS });
+    return { canceled: false, token, kind, fileName: path.basename(result.filePaths[0]).slice(0, 140) };
+  });
+  ipcMain.handle('mods:create-package', async (_event, request = {}) => {
+    clearExpiredCreatorSelections();
+    const requestedAssets = Array.isArray(request.assets) ? request.assets : [];
+    const assetFiles = new Map();
+    for (const asset of requestedAssets) {
+      const source = typeof asset?.source === 'string' ? asset.source : '';
+      const token = typeof asset?.token === 'string' ? asset.token : '';
+      const selection = creatorAssetSelections.get(token);
+      if (!source || !selection) throw new Error('Choose each creator asset again before building the package.');
+      assetFiles.set(source, selection.path);
+    }
+    const suggestedId = String(request?.manifest?.id || 'eclipse-player-pack').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'eclipse-player-pack';
+    const destination = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Eclipse Player Pack',
+      defaultPath: path.join(app.getPath('downloads'), `${suggestedId}.eclipsepack`),
+      filters: [{ name: 'Eclipse Player pack', extensions: ['eclipsepack'] }]
+    });
+    if (destination.canceled || !destination.filePath) return { ...(await playerMods.status()), canceled: true };
+    const createdPackage = await playerMods.createPackage({ manifest: request.manifest, assetFiles, destination: destination.filePath });
+    const status = await playerMods.importPackage(destination.filePath);
+    for (const asset of requestedAssets) creatorAssetSelections.delete(asset?.token);
+    return { ...status, canceled: false, createdPackage };
   });
   ipcMain.handle('mods:set-enabled', (_event, id, enabled) => playerMods.setEnabled(String(id || ''), enabled === true));
   ipcMain.handle('mods:restore', () => playerMods.restoreActive());

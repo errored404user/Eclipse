@@ -55,6 +55,14 @@ contextBridge.exposeInMainWorld('eclipseMods', {
   status: () => ipcRenderer.invoke('mods:status'),
   importPackage: () => ipcRenderer.invoke('mods:import-package'),
   importFolder: () => ipcRenderer.invoke('mods:import-folder'),
+  pickCreatorAsset: (kind) => ipcRenderer.invoke('mods:pick-creator-asset', typeof kind === 'string' ? kind : ''),
+  createPackage: (request = {}) => ipcRenderer.invoke('mods:create-package', {
+    manifest: request && typeof request.manifest === 'object' ? request.manifest : {},
+    assets: Array.isArray(request?.assets) ? request.assets.map((asset) => ({
+      source: typeof asset?.source === 'string' ? asset.source : '',
+      token: typeof asset?.token === 'string' ? asset.token : ''
+    })) : []
+  }),
   setEnabled: (id, enabled) => ipcRenderer.invoke('mods:set-enabled', typeof id === 'string' ? id : '', enabled === true),
   restore: () => ipcRenderer.invoke('mods:restore'),
   remove: (id) => ipcRenderer.invoke('mods:remove', typeof id === 'string' ? id : '')

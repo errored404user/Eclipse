@@ -22,7 +22,7 @@ const state = {
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
   discover: { games: [], collections: [], collectionId: '', query: '', cursor: '', loading: false, error: '', sort: 'featured', filter: 'all' },
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
-  mods: { status: null, busy: false, message: '' },
+  mods: { status: null, busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
   startup: { status: null, busy: false },
   fastFlags: { ...defaultFastFlagSelection(), status: null, profileId: '', busy: false, message: '' },
   fastFlagProfiles: normalizeSavedFastFlagProfiles(readStored(storageKeys.fastFlagProfiles, []))
@@ -94,6 +94,8 @@ const browserMods = {
   async status() { return { supported: false, installed: false, playerRunning: false, packs: [], reason: 'Player packs are available in the Windows Eclipse desktop app only.' }; },
   async importPackage() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
   async importFolder() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
+  async pickCreatorAsset() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
+  async createPackage() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
   async setEnabled() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
   async restore() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); },
   async remove() { throw new Error('Player packs are available in the Windows Eclipse desktop app only.'); }
@@ -1206,6 +1208,55 @@ function modsFormatGuide() {
   return `<details class="mods-format"><summary>Local pack format and safety rules</summary><p>Import a <code>.eclipsepack</code> ZIP containing <code>manifest.json</code>, or a developer folder with the same structure. Eclipse accepts only declared PNG/JPEG/WebP textures and OGG/MP3/WAV sounds under <code>content/textures</code> or <code>content/sounds</code>. It blocks code, DLLs, injectors, scripts, executables, network permissions, and every undeclared path.</p><pre>${escapeHtml(manifest)}</pre></details>`;
 }
 
+function defaultModsCreator() {
+  return { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] };
+}
+
+function creatorPackId(name) {
+  return String(name || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+}
+
+function creatorAssetSource(fileName) {
+  const leaf = String(fileName || 'asset').trim().replace(/[\\/:]/g, '-').replace(/\s+/g, '-').slice(0, 120) || 'asset';
+  const existing = new Set(state.mods.creator.assets.map((asset) => asset.source.toLowerCase()));
+  let source = `assets/${leaf}`;
+  let number = 2;
+  const extensionMatch = /^(.*?)(\.[^.]+)?$/.exec(leaf);
+  while (existing.has(source.toLowerCase())) {
+    source = `assets/${extensionMatch?.[1] || 'asset'}-${number}${extensionMatch?.[2] || ''}`;
+    number += 1;
+  }
+  return source;
+}
+
+function modsTutorial(canCreate) {
+  return `<section class="mods-tutorial panel"><div class="mods-tutorial-heading"><div><p class="section-kicker"><i></i> New to Player Packs?</p><h2>A safe three-step workflow.</h2><p>Make or import a local visual/audio pack, inspect its declared paths, then apply it only when Roblox Player is closed.</p></div><button class="primary-button" type="button" data-action="mod-creator-open" ${canCreate ? '' : 'disabled'}>Create a Player Pack</button></div><ol class="mods-tutorial-steps"><li><span>01</span><div><strong>Choose an asset</strong><p>Add a PNG, JPEG, WebP, OGG, MP3, or WAV file from your device. Eclipse never uploads it.</p></div></li><li><span>02</span><div><strong>Declare its Player target</strong><p>Enter the exact existing file below <code>content/textures</code> or <code>content/sounds</code> that the asset replaces.</p></div></li><li><span>03</span><div><strong>Build, review, enable</strong><p>Eclipse saves a shareable <code>.eclipsepack</code>, imports it locally, then takes a versioned backup before applying it.</p></div></li></ol></section>`;
+}
+
+function modsCreator(canCreate) {
+  const creator = state.mods.creator;
+  if (!creator.open) return '';
+  const assets = creator.assets.map((asset, index) => `<li class="mods-creator-asset"><div class="mods-creator-asset-head"><span class="mods-creator-kind ${asset.kind}">${asset.kind === 'texture' ? 'Texture / UI' : 'Sound'}</span><strong>${escapeHtml(asset.fileName)}</strong><button class="text-button" type="button" data-action="mod-creator-remove-asset" data-mod-creator-asset-index="${index}" ${state.mods.busy ? 'disabled' : ''}>Remove</button></div><label>Existing Roblox Player target<input type="text" value="${escapeHtml(asset.target)}" data-mod-creator-target="${index}" maxlength="220" spellcheck="false" placeholder="content/${asset.kind === 'texture' ? 'textures' : 'sounds'}/file.${asset.kind === 'texture' ? 'png' : 'ogg'}" required /></label><small>Package source · ${escapeHtml(asset.source)}</small></li>`).join('');
+  return `<section class="mods-creator panel"><div class="mods-creator-heading"><div><p class="section-kicker"><i></i> Pack creator</p><h2>Build a local, shareable Player Pack.</h2><p>Use only files you have permission to use. The creator saves a validated <code>.eclipsepack</code> and adds it to this device’s local vault.</p></div><button class="quiet-button" type="button" data-action="mod-creator-cancel" ${state.mods.busy ? 'disabled' : ''}>Close creator</button></div><form class="mods-creator-form" data-mod-creator-form><div class="mods-creator-fields"><label>Pack name<input name="name" value="${escapeHtml(creator.name)}" data-mod-creator-field="name" maxlength="60" placeholder="Violet Interface" required /></label><label>Pack ID<input name="id" value="${escapeHtml(creator.id)}" data-mod-creator-field="id" maxlength="64" pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="violet-interface" required /></label><label>Version<input name="version" value="${escapeHtml(creator.version)}" data-mod-creator-field="version" maxlength="32" placeholder="1.0.0" required /></label><label class="mods-creator-description">Description <span>optional</span><textarea name="description" data-mod-creator-field="description" maxlength="320" placeholder="A local visual pack">${escapeHtml(creator.description)}</textarea></label></div><div class="mods-creator-assets"><div><p class="section-kicker">Pack assets</p><h3>Add only supported local media.</h3></div><div class="mods-creator-add"><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="texture" ${canCreate ? '' : 'disabled'}>+ Texture / UI</button><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="sound" ${canCreate ? '' : 'disabled'}>+ Sound</button></div></div>${assets ? `<ul class="mods-creator-asset-list">${assets}</ul>` : '<p class="mods-creator-empty">Add at least one local texture/UI or sound asset to start.</p>'}<div class="mods-creator-footer"><p><strong>Before you build:</strong> each target must be an existing regular Player file. Eclipse checks every selected file’s signature, path, and size before it writes the archive.</p><button class="primary-button" type="submit" ${canCreate && creator.assets.length ? '' : 'disabled'}>${state.mods.busy ? 'Building…' : 'Build & add .eclipsepack'}</button></div></form></section>`;
+}
+
+async function addModsCreatorAsset(kind) {
+  if (state.mods.busy) return;
+  try {
+    const selected = await mods.pickCreatorAsset(kind);
+    if (selected?.canceled) return;
+    const safeKind = selected?.kind === 'sound' ? 'sound' : selected?.kind === 'texture' ? 'texture' : '';
+    const fileName = String(selected?.fileName || '').trim();
+    const token = String(selected?.token || '').trim();
+    if (!safeKind || !fileName || !token) throw new Error('Eclipse could not keep the selected creator asset. Choose it again.');
+    const source = creatorAssetSource(fileName);
+    state.mods.creator.assets.push({ token, fileName, source, kind: safeKind, target: `content/${safeKind === 'texture' ? 'textures' : 'sounds'}/${fileName}` });
+    if (state.page === 'mods') renderMods();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Eclipse could not choose the creator asset.');
+  }
+}
+
 function renderMods() {
   if (!state.mods.status && !state.mods.busy) Promise.resolve().then(() => refreshModsStatus());
   const status = state.mods.status;
@@ -1223,6 +1274,8 @@ function renderMods() {
       <article class="mods-panel panel"><p class="section-kicker"><i></i> Player pack control</p><h2>Local assets, not injected code.</h2><p>Enable or restore a pack only after Roblox Player is fully closed. Eclipse backs up original files per Player version before any declared texture or sound is replaced.</p><span class="mods-status ${presentation.className}"><i></i>${escapeHtml(presentation.label)}</span>${statusReason}<div class="mods-actions"><button class="primary-button" type="button" data-action="mod-import-package" ${canImport ? '' : 'disabled'}>Import .eclipsepack</button><button class="quiet-button" type="button" data-action="mod-import-folder" ${canImport ? '' : 'disabled'}>Import developer folder</button><button class="quiet-button" type="button" data-action="mod-restore" ${presentation.canApply && packs.some((pack) => pack.enabled) && !state.mods.busy ? '' : 'disabled'}>${state.mods.busy ? 'Working…' : 'Restore active version'}</button><button class="text-button" type="button" data-action="refresh-mods">Refresh status <span>→</span></button></div><p class="mods-safety"><i></i><span><strong>Advanced Local Mode.</strong> Packages must declare every asset and target. On an official Player update or repair, Eclipse restores originals, disables all packs, and marks them for review.</span></p></article>
       <aside class="mods-panel panel"><p class="section-kicker">Guardrails</p><h2>Designed to be recoverable.</h2><div class="mods-guardrails"><div><strong>Declared paths only</strong><span>Only existing files below content/textures and content/sounds are eligible.</span></div><div><strong>Versioned backups</strong><span>Original Player files are retained locally before a pack can replace them.</span></div><div><strong>Review after updates</strong><span>Official Player updates and repairs disable packs instead of carrying modifications forward.</span></div></div></aside>
     </section>
+    ${modsTutorial(canImport)}
+    ${modsCreator(canImport)}
     <section class="mods-library content-section"><div class="mods-library-heading"><div><p class="section-kicker">Local pack vault</p><h2>${packs.length ? `${packs.length} local Player pack${packs.length === 1 ? '' : 's'}` : 'No Player packs imported'}</h2></div><p class="section-note">${packs.filter((pack) => pack.enabled).length} enabled · ${packs.filter((pack) => pack.needsReview).length} need review</p></div>${packMarkup}${modsFormatGuide()}</section>
   </div>`;
 }
@@ -1533,6 +1586,22 @@ document.addEventListener('click', async (event) => {
   if (action === 'fastflag-profile-export') exportSavedFastFlagProfiles();
   if (action === 'fastflag-reset') await resetFastFlags();
   if (action === 'refresh-mods') await refreshModsStatus();
+  if (action === 'mod-creator-open') {
+    state.mods.creator.open = true;
+    if (state.page === 'mods') renderMods();
+  }
+  if (action === 'mod-creator-cancel') {
+    state.mods.creator = defaultModsCreator();
+    if (state.page === 'mods') renderMods();
+  }
+  if (action === 'mod-creator-add-asset') await addModsCreatorAsset(button.dataset.modCreatorKind);
+  if (action === 'mod-creator-remove-asset') {
+    const index = Number(button.dataset.modCreatorAssetIndex);
+    if (Number.isSafeInteger(index) && index >= 0) {
+      state.mods.creator.assets.splice(index, 1);
+      if (state.page === 'mods') renderMods();
+    }
+  }
   if (action === 'mod-import-package') await runModsOperation(() => mods.importPackage(), 'Local .eclipsepack imported to Eclipse. Review it before enabling.');
   if (action === 'mod-import-folder') await runModsOperation(() => mods.importFolder(), 'Local developer folder imported to Eclipse. Review it before enabling.');
   if (action === 'mod-restore') await runModsOperation(() => mods.restore(), 'Original files were restored and local Player packs were disabled.');
@@ -1544,6 +1613,32 @@ document.addEventListener('click', async (event) => {
 });
 
 document.addEventListener('submit', async (event) => {
+  if (event.target.matches('[data-mod-creator-form]')) {
+    event.preventDefault();
+    const creator = state.mods.creator;
+    const formData = new FormData(event.target);
+    const manifest = {
+      schema: 'eclipse-player-pack/v1',
+      id: String(formData.get('id') || '').trim(),
+      name: String(formData.get('name') || '').trim(),
+      version: String(formData.get('version') || '').trim(),
+      description: String(formData.get('description') || '').trim(),
+      assets: creator.assets.map((asset) => ({ source: asset.source, target: asset.target, kind: asset.kind }))
+    };
+    if (!manifest.assets.length) {
+      showToast('Add at least one texture/UI or sound asset before building a Player pack.');
+      return;
+    }
+    await runModsOperation(async () => {
+      const result = await mods.createPackage({
+        manifest,
+        assets: creator.assets.map((asset) => ({ source: asset.source, token: asset.token }))
+      });
+      if (!result?.canceled) state.mods.creator = defaultModsCreator();
+      return result;
+    }, 'Player pack built, saved, and added to your local Eclipse vault.');
+    return;
+  }
   if (event.target.matches('[data-profile-form]')) {
     event.preventDefault();
     saveEclipseProfile(event.target);
@@ -1573,6 +1668,30 @@ document.addEventListener('submit', async (event) => {
 });
 
 document.addEventListener('input', (event) => {
+  const creatorField = event.target.closest('[data-mod-creator-field]');
+  if (creatorField) {
+    const field = creatorField.dataset.modCreatorField;
+    const value = String(creatorField.value || '');
+    if (field === 'name') {
+      const previousName = state.mods.creator.name;
+      const idWasAutomatic = !state.mods.creator.id || state.mods.creator.id === creatorPackId(previousName);
+      state.mods.creator.name = value;
+      if (idWasAutomatic) {
+        state.mods.creator.id = creatorPackId(value);
+        const idInput = pageContent.querySelector('[data-mod-creator-field="id"]');
+        if (idInput) idInput.value = state.mods.creator.id;
+      }
+    } else if (['id', 'version', 'description'].includes(field)) {
+      state.mods.creator[field] = value;
+    }
+    return;
+  }
+  const creatorTarget = event.target.closest('[data-mod-creator-target]');
+  if (creatorTarget) {
+    const index = Number(creatorTarget.dataset.modCreatorTarget);
+    if (Number.isSafeInteger(index) && state.mods.creator.assets[index]) state.mods.creator.assets[index].target = String(creatorTarget.value || '');
+    return;
+  }
   const fastFlagInput = event.target.closest('input[type="range"][data-fastflag-field]');
   if (fastFlagInput) {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = Number(fastFlagInput.value);
