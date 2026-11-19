@@ -1239,6 +1239,28 @@ function creatorTargetOptions(kind) {
   return Array.isArray(targets) ? targets : [];
 }
 
+function verifiedCreatorTarget(asset) {
+  const target = String(asset?.target || '').trim();
+  if (!target) return '';
+  return creatorTargetOptions(asset?.kind).find((candidate) => candidate.toLowerCase() === target.toLowerCase()) || '';
+}
+
+function creatorTargetsAreVerified() {
+  return Boolean(state.mods.targets) && state.mods.creator.assets.every((asset) => Boolean(verifiedCreatorTarget(asset)));
+}
+
+function updateModsCreatorPreflight() {
+  const submit = pageContent.querySelector('[data-mod-creator-form] button[type="submit"]');
+  if (!submit) return;
+  const canBuild = Boolean(window.eclipseMods) && state.mods.creator.assets.length > 0 && creatorTargetsAreVerified() && !state.mods.busy;
+  submit.disabled = !canBuild;
+  pageContent.querySelectorAll('[data-mod-creator-target]').forEach((input) => {
+    const asset = state.mods.creator.assets[Number(input.dataset.modCreatorTarget)];
+    const invalid = Boolean(String(asset?.target || '').trim()) && !verifiedCreatorTarget(asset);
+    input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+  });
+}
+
 function modsCreator(canCreate) {
   const creator = state.mods.creator;
   if (!creator.open) return '';
@@ -1253,10 +1275,15 @@ function modsCreator(canCreate) {
       : state.mods.targets
         ? `${targetCount} verified target${targetCount === 1 ? '' : 's'} found for ${escapeHtml(state.mods.targets.versionGuid || 'this Player version')}${state.mods.targets.truncated ? ' · showing a bounded catalog' : ''}.`
         : 'Open the creator on Windows to scan the installed Player for eligible targets.';
-  const assets = creator.assets.map((asset, index) => `<li class="mods-creator-asset"><div class="mods-creator-asset-head"><span class="mods-creator-kind ${asset.kind}">${asset.kind === 'texture' ? 'Texture / UI' : 'Sound'}</span><strong>${escapeHtml(asset.fileName)}</strong><button class="text-button" type="button" data-action="mod-creator-remove-asset" data-mod-creator-asset-index="${index}" ${state.mods.busy ? 'disabled' : ''}>Remove</button></div><label>Verified Roblox Player target<input type="text" list="mod-creator-${asset.kind}-targets" value="${escapeHtml(asset.target)}" data-mod-creator-target="${index}" maxlength="220" spellcheck="false" placeholder="Choose or type an existing content/${asset.kind === 'texture' ? 'textures' : 'sounds'} path" required /></label><small>Package source · ${escapeHtml(asset.source)}</small></li>`).join('');
+  const assets = creator.assets.map((asset, index) => {
+    const hasTarget = Boolean(String(asset.target || '').trim());
+    const targetVerified = Boolean(verifiedCreatorTarget(asset));
+    return `<li class="mods-creator-asset"><div class="mods-creator-asset-head"><span class="mods-creator-kind ${asset.kind}">${asset.kind === 'texture' ? 'Texture / UI' : 'Sound'}</span><strong>${escapeHtml(asset.fileName)}</strong><button class="text-button" type="button" data-action="mod-creator-remove-asset" data-mod-creator-asset-index="${index}" ${state.mods.busy ? 'disabled' : ''}>Remove</button></div><label>Verified Roblox Player target<input type="text" list="mod-creator-${asset.kind}-targets" value="${escapeHtml(asset.target)}" data-mod-creator-target="${index}" maxlength="220" spellcheck="false" placeholder="Choose a path from the verified catalog" ${hasTarget && !targetVerified ? 'aria-invalid="true"' : ''} required /></label><small>${hasTarget && !targetVerified ? 'Select an exact suggestion from the verified catalog.' : `Package source · ${escapeHtml(asset.source)}`}</small></li>`;
+  }).join('');
   const targetsReady = Boolean(state.mods.targets) && !state.mods.targetsLoading;
-  const canBuild = canCreate && creator.assets.length && creator.assets.every((asset) => String(asset.target || '').trim()) && !state.mods.busy;
-  return `<section class="mods-creator panel"><div class="mods-creator-heading"><div><p class="section-kicker"><i></i> Pack creator</p><h2>Build a local, shareable Player Pack.</h2><p>Use only files you have permission to use. The creator saves a validated <code>.eclipsepack</code> and adds it to this device’s local vault.</p></div><button class="quiet-button" type="button" data-action="mod-creator-cancel" ${state.mods.busy ? 'disabled' : ''}>Close creator</button></div><div class="mods-target-catalog"><div><span class="mods-target-catalog-signal ${state.mods.targetError ? 'warning' : targetsReady ? 'ready' : ''}"><i></i>${state.mods.targetsLoading ? 'Scanning Player targets' : targetsReady ? 'Verified target catalog ready' : 'Target catalog unavailable'}</span><p>${escapeHtml(targetStatus)}</p></div><button class="quiet-button compact-button" type="button" data-action="mod-creator-refresh-targets" ${canCreate && !state.mods.targetsLoading ? '' : 'disabled'}>${state.mods.targetsLoading ? 'Scanning…' : 'Refresh targets'}</button></div><form class="mods-creator-form" data-mod-creator-form><datalist id="mod-creator-texture-targets">${textureOptions}</datalist><datalist id="mod-creator-sound-targets">${soundOptions}</datalist><div class="mods-creator-fields"><label>Pack name<input name="name" value="${escapeHtml(creator.name)}" data-mod-creator-field="name" maxlength="60" placeholder="Violet Interface" required /></label><label>Pack ID<input name="id" value="${escapeHtml(creator.id)}" data-mod-creator-field="id" maxlength="64" pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="violet-interface" required /></label><label>Version<input name="version" value="${escapeHtml(creator.version)}" data-mod-creator-field="version" maxlength="32" placeholder="1.0.0" required /></label><label class="mods-creator-description">Description <span>optional</span><textarea name="description" data-mod-creator-field="description" maxlength="320" placeholder="A local visual pack">${escapeHtml(creator.description)}</textarea></label></div><div class="mods-creator-assets"><div><p class="section-kicker">Pack assets</p><h3>Add only supported local media.</h3></div><div class="mods-creator-add"><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="texture" ${canCreate ? '' : 'disabled'}>+ Texture / UI</button><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="sound" ${canCreate ? '' : 'disabled'}>+ Sound</button></div></div>${assets ? `<ul class="mods-creator-asset-list">${assets}</ul>` : '<p class="mods-creator-empty">Add at least one local texture/UI or sound asset to start.</p>'}<div class="mods-creator-footer"><p><strong>Preflight:</strong> ${targetsReady ? 'choose a suggestion from the verified target catalog, or enter another exact existing Player file.' : 'scan the installed Player, then choose an exact existing target for every asset.'} Eclipse checks every selected file’s signature, target, and size before it writes the archive.</p><button class="primary-button" type="submit" ${canBuild ? '' : 'disabled'}>${state.mods.busy ? 'Building…' : 'Build & add .eclipsepack'}</button></div></form></section>`;
+  const targetsVerified = creatorTargetsAreVerified();
+  const canBuild = canCreate && creator.assets.length && targetsVerified && !state.mods.busy;
+  return `<section class="mods-creator panel"><div class="mods-creator-heading"><div><p class="section-kicker"><i></i> Pack creator</p><h2>Build a local, shareable Player Pack.</h2><p>Use only files you have permission to use. The creator saves a validated <code>.eclipsepack</code> and adds it to this device’s local vault.</p></div><button class="quiet-button" type="button" data-action="mod-creator-cancel" ${state.mods.busy ? 'disabled' : ''}>Close creator</button></div><div class="mods-target-catalog"><div><span class="mods-target-catalog-signal ${state.mods.targetError ? 'warning' : targetsReady ? 'ready' : ''}"><i></i>${state.mods.targetsLoading ? 'Scanning Player targets' : targetsReady ? 'Verified target catalog ready' : 'Target catalog unavailable'}</span><p>${escapeHtml(targetStatus)}</p></div><button class="quiet-button compact-button" type="button" data-action="mod-creator-refresh-targets" ${canCreate && !state.mods.targetsLoading ? '' : 'disabled'}>${state.mods.targetsLoading ? 'Scanning…' : 'Refresh targets'}</button></div><form class="mods-creator-form" data-mod-creator-form><datalist id="mod-creator-texture-targets">${textureOptions}</datalist><datalist id="mod-creator-sound-targets">${soundOptions}</datalist><div class="mods-creator-fields"><label>Pack name<input name="name" value="${escapeHtml(creator.name)}" data-mod-creator-field="name" maxlength="60" placeholder="Violet Interface" required /></label><label>Pack ID<input name="id" value="${escapeHtml(creator.id)}" data-mod-creator-field="id" maxlength="64" pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="violet-interface" required /></label><label>Version<input name="version" value="${escapeHtml(creator.version)}" data-mod-creator-field="version" maxlength="32" placeholder="1.0.0" required /></label><label class="mods-creator-description">Description <span>optional</span><textarea name="description" data-mod-creator-field="description" maxlength="320" placeholder="A local visual pack">${escapeHtml(creator.description)}</textarea></label></div><div class="mods-creator-assets"><div><p class="section-kicker">Pack assets</p><h3>Add only supported local media.</h3></div><div class="mods-creator-add"><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="texture" ${canCreate ? '' : 'disabled'}>+ Texture / UI</button><button class="quiet-button" type="button" data-action="mod-creator-add-asset" data-mod-creator-kind="sound" ${canCreate ? '' : 'disabled'}>+ Sound</button></div></div>${assets ? `<ul class="mods-creator-asset-list">${assets}</ul>` : '<p class="mods-creator-empty">Add at least one local texture/UI or sound asset to start.</p>'}<div class="mods-creator-footer"><p><strong>Preflight:</strong> ${targetsReady ? targetsVerified ? 'every target matches the verified catalog for this Player version.' : 'select an exact suggestion from the verified catalog for every asset.' : 'scan the installed Player, then choose an exact catalog target for every asset.'} Eclipse checks every selected file’s signature, target, and size before it writes the archive.</p><button class="primary-button" type="submit" ${canBuild ? '' : 'disabled'}>${state.mods.busy ? 'Building…' : 'Build & add .eclipsepack'}</button></div></form></section>`;
 }
 async function addModsCreatorAsset(kind) {
   if (state.mods.busy) return;
@@ -1668,6 +1695,11 @@ document.addEventListener('submit', async (event) => {
       showToast('Add at least one texture/UI or sound asset before building a Player pack.');
       return;
     }
+    if (!creatorTargetsAreVerified()) {
+      showToast('Choose a verified Player target from the catalog for every asset before building.');
+      updateModsCreatorPreflight();
+      return;
+    }
     await runModsOperation(async () => {
       const result = await mods.createPackage({
         manifest,
@@ -1728,7 +1760,12 @@ document.addEventListener('input', (event) => {
   const creatorTarget = event.target.closest('[data-mod-creator-target]');
   if (creatorTarget) {
     const index = Number(creatorTarget.dataset.modCreatorTarget);
-    if (Number.isSafeInteger(index) && state.mods.creator.assets[index]) state.mods.creator.assets[index].target = String(creatorTarget.value || '');
+    if (Number.isSafeInteger(index) && state.mods.creator.assets[index]) {
+      const asset = state.mods.creator.assets[index];
+      const value = String(creatorTarget.value || '').trim();
+      asset.target = creatorTargetOptions(asset.kind).find((candidate) => candidate.toLowerCase() === value.toLowerCase()) || value;
+      updateModsCreatorPreflight();
+    }
     return;
   }
   const fastFlagInput = event.target.closest('input[type="range"][data-fastflag-field]');

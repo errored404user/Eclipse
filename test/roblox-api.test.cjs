@@ -338,6 +338,8 @@ test('provides a guarded local Player Packs workspace without a code-mod bridge'
   assert.match(renderer, /function modsTutorial\(canCreate\)/);
   assert.match(renderer, /function modsCreator\(canCreate\)/);
   assert.match(renderer, /Verified target catalog ready/);
+  assert.match(renderer, /function verifiedCreatorTarget\(asset\)/);
+  assert.match(renderer, /function creatorTargetsAreVerified\(\)/);
   assert.match(renderer, /refreshModsTargets/);
   assert.match(renderer, /Build & add \.eclipsepack/);
   assert.match(renderer, /Advanced Local Mode/);
