@@ -266,6 +266,7 @@ test('keeps local discovery, library, history, backup, and update workflows boun
   assert.match(renderer, /data-game-server-filter/);
   assert.match(renderer, /state\.settings\.serverSort/);
   assert.match(renderer, /function refreshUpdateStatus/);
+  assert.match(renderer, /Update check unavailable/);
   assert.match(styles, /\.library-controls/);
   assert.match(styles, /\.history-list/);
   assert.match(styles, /\.server-ping-filter/);

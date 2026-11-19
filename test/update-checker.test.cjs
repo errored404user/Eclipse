@@ -38,6 +38,18 @@ test('checks published GitHub releases without downloading or installing an upda
   assert.equal(status.checkedAt, '2026-11-19T16:00:00.000Z');
 });
 
+
+test('explains when GitHub does not expose a public release feed', async () => {
+  const checker = createUpdateChecker({
+    currentVersion: '0.1.0-preview.27',
+    fetchImpl: async () => ({ ok: false, status: 404 })
+  });
+  const status = await checker.check();
+  assert.equal(status.updateAvailable, false);
+  assert.match(status.reason, /did not expose a public Eclipse release feed/);
+  assert.match(status.reason, /will not use an embedded account token/);
+});
+
 test('reports a release-check failure without throwing or claiming an update', async () => {
   const checker = createUpdateChecker({
     currentVersion: '0.1.0-preview.25',

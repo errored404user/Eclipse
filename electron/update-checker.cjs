@@ -91,7 +91,10 @@ class UpdateChecker extends EventEmitter {
           },
           signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined
         });
-        if (!response?.ok) throw new Error(`GitHub responded with ${response?.status || 'an unknown error'}.`);
+        if (!response?.ok) {
+          if (response?.status === 404) throw new Error('GitHub did not expose a public Eclipse release feed. Eclipse will not use an embedded account token.');
+          throw new Error(`GitHub responded with ${response?.status || 'an unknown error'}.`);
+        }
         const payload = await response.json();
         const latest = (Array.isArray(payload) ? payload : [])
           .map(normalizeRelease)
