@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { getGameDetails, listGamePasses, listGameServers, listGames, normalizePlaceId } = require('../shared/roblox-api.cjs');
@@ -8,7 +8,8 @@ const { createRobloxBootstrapper } = require('./roblox-bootstrapper.cjs');
 const { createPlayerLaunchWindow, launchStates, sendLaunchState } = require('./launch-window.cjs');
 const { navigationPageFromArguments, placeIdFromArguments, startupStatus, taskbarJumpList } = require('./system-integration.cjs');
 const { readRecentPlaceIds, writeRecentPlaceIds } = require('./taskbar-recents.cjs');
-const { createPlayerMods } = require('./player-mods.cjs');
+const { createPlayerMods, isRobloxPlayerRunning } = require('./player-mods.cjs');
+const { createOptimization } = require('./optimization.cjs');
 const { isUsableWindow, revealWindow } = require('./window-visibility.cjs');
 
 const appIconPath = path.join(__dirname, '..', 'app', 'assets', 'eclipse-icon.png');
@@ -40,6 +41,7 @@ let recentLaunchPlaceIds = [];
 let pendingNavigationPage = navigationPageFromArguments(process.argv);
 let pendingLaunchPlaceId = placeIdFromArguments(process.argv);
 let playerMods;
+let optimization;
 const robloxBootstrapper = createRobloxBootstrapper({
   beforeInstall: async (context) => playerMods?.prepareForPlayerUpdate(context)
 });
@@ -279,6 +281,10 @@ app.on('second-instance', (_event, commandLine) => {
 
 app.whenReady().then(async () => {
   playerMods = createPlayerMods({ storageRoot: path.join(app.getPath('userData'), 'PlayerMods') });
+  optimization = createOptimization({
+    userDataRoot: app.getPath('userData'),
+    isPlayerRunning: () => isRobloxPlayerRunning()
+  });
   ipcMain.handle('window:minimize', () => mainWindow?.minimize());
   ipcMain.handle('window:toggle-maximize', () => {
     if (!mainWindow) return false;
@@ -378,6 +384,17 @@ app.whenReady().then(async () => {
     if (!current.supported) return current;
     app.setLoginItemSettings({ openAtLogin: enabled === true, openAsHidden: false });
     return currentStartupStatus();
+  });
+  ipcMain.handle('system:optimization-status', () => optimization?.status() || { supported: false, reason: 'Optimization tools are still starting.' });
+  ipcMain.handle('system:clear-eclipse-cache', async () => {
+    if (process.platform !== 'win32') throw new Error('Eclipse cache cleanup is available in the Windows Eclipse desktop app only.');
+    await session.defaultSession.clearCache();
+    return optimization?.status() || { supported: true };
+  });
+  ipcMain.handle('system:clear-roblox-cache', () => optimization?.clearRobloxCache());
+  ipcMain.handle('system:open-windows-update', async () => {
+    await shell.openExternal('ms-settings:windowsupdate');
+    return { opened: true };
   });
 
   ipcMain.handle('roblox:list-games', (_event, request) => listGames(request));

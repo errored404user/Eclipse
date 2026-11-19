@@ -7,7 +7,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check electron/discord-presence.cjs && node --check electron/roblox-bootstrapper.cjs && node --check electron/fast-flags.cjs && node --check electron/launch-window.cjs && node --check electron/launch-preload.cjs && node --check electron/launch.js && node --check electron/system-integration.cjs && node --check electron/taskbar-recents.cjs && node --check electron/window-visibility.cjs && node --check electron/player-mods.cjs && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
+    "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check electron/discord-presence.cjs && node --check electron/roblox-bootstrapper.cjs && node --check electron/fast-flags.cjs && node --check electron/launch-window.cjs && node --check electron/launch-preload.cjs && node --check electron/launch.js && node --check electron/system-integration.cjs && node --check electron/taskbar-recents.cjs && node --check electron/window-visibility.cjs && node --check electron/player-mods.cjs && node --check electron/optimization.cjs && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
     "test": "node --test",
     "desktop:dev": "electron .",
     "dist:win": "electron-builder --win portable --x64",

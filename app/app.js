@@ -25,6 +25,7 @@ const state = {
   bootstrapper: { status: null, busy: false, progress: null, error: '' },
   mods: { status: null, targets: null, targetsLoading: false, targetError: '', busy: false, message: '', creator: { open: false, name: '', id: '', version: '1.0.0', description: '', assets: [] } },
   startup: { status: null, busy: false },
+  optimization: { status: null, busy: '', message: '' },
   fastFlags: { ...defaultFastFlagSelection(), status: null, profileId: '', busy: false, message: '' },
   fastFlagProfiles: normalizeSavedFastFlagProfiles(readStored(storageKeys.fastFlagProfiles, []))
 };
@@ -95,6 +96,10 @@ const bootstrapper = window.eclipseBootstrapper || browserBootstrapper;
 const browserSystem = {
   async startupStatus() { return { supported: false, enabled: false, reason: 'Launch on startup is available in the packaged Windows Eclipse app.' }; },
   async setStartup() { return this.startupStatus(); },
+  async optimizationStatus() { return { supported: false, playerRunning: false, robloxCacheBytes: 0, reason: 'Optimization tools are available in the Windows Eclipse desktop app only.' }; },
+  async clearEclipseCache() { throw new Error('Eclipse cache cleanup is available in the Windows desktop app only.'); },
+  async clearRobloxCache() { throw new Error('Roblox cache cleanup is available in the Windows desktop app only.'); },
+  async openWindowsUpdate() { throw new Error('Windows Update can be opened from the Windows Eclipse desktop app only.'); },
   onNavigate() { return () => {}; }
 };
 
@@ -1369,6 +1374,73 @@ function renderTools() {
   </div>`;
 }
 
+function formatStorageBytes(value) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let amount = bytes / 1024;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unit]}`;
+}
+
+async function refreshOptimizationStatus({ render = true } = {}) {
+  try {
+    state.optimization.status = await system.optimizationStatus();
+  } catch (error) {
+    state.optimization.status = { supported: false, playerRunning: false, robloxCacheBytes: 0, reason: error instanceof Error ? error.message : 'Optimization status is unavailable.' };
+  }
+  if (render && state.page === 'optimization') renderOptimization();
+  return state.optimization.status;
+}
+
+async function runOptimization(kind, operation, successMessage) {
+  if (state.optimization.busy) return;
+  state.optimization.busy = kind;
+  state.optimization.message = '';
+  if (state.page === 'optimization') renderOptimization();
+  try {
+    const result = await operation();
+    state.optimization.status = result?.supported === undefined ? state.optimization.status : result;
+    state.optimization.message = successMessage;
+    showToast(successMessage);
+  } catch (error) {
+    state.optimization.message = error instanceof Error ? error.message : 'Eclipse could not complete that optimization action.';
+    showToast(state.optimization.message);
+  } finally {
+    state.optimization.busy = '';
+    await refreshOptimizationStatus({ render: false });
+    if (state.page === 'optimization') renderOptimization();
+  }
+}
+
+function renderOptimization() {
+  if (!state.optimization.status && !state.optimization.busy) Promise.resolve().then(() => refreshOptimizationStatus());
+  const status = state.optimization.status || { supported: Boolean(window.eclipseSystem), playerRunning: false, robloxCacheBytes: 0, reason: 'Inspecting local Windows and Player maintenance…' };
+  const supported = Boolean(status.supported);
+  const busy = state.optimization.busy;
+  const playerClosed = supported && !status.playerRunning;
+  const cacheText = status.robloxCacheTruncated ? `${formatStorageBytes(status.robloxCacheBytes)}+` : formatStorageBytes(status.robloxCacheBytes);
+  const message = state.optimization.message || status.reason || '';
+  pageContent.innerHTML = `<div class="page-shell optimization-page">
+    ${pageHeader('Windows performance care', 'Optimization.', 'A safe maintenance workspace for Eclipse and Roblox Player. Eclipse does not install drivers, change the registry, or use “booster” downloads.', '')}
+    <section class="optimization-status-grid">
+      <article class="optimization-status-card panel"><span class="optimization-status-icon driver">◈</span><div><span>Graphics drivers</span><strong>Windows Update</strong><small>Official update path only</small></div></article>
+      <article class="optimization-status-card panel"><span class="optimization-status-icon ${status.playerRunning ? 'warning' : 'ready'}">◌</span><div><span>Roblox Player</span><strong>${status.playerRunning ? 'Close Player first' : supported ? 'Ready for maintenance' : 'Desktop app required'}</strong><small>${status.playerRunning ? 'Cache cleanup is paused' : 'No live Player files are changed'}</small></div></article>
+      <article class="optimization-status-card panel"><span class="optimization-status-icon cache">✦</span><div><span>Roblox cache & logs</span><strong>${supported ? cacheText : 'Unavailable'}</strong><small>${status.robloxCacheTruncated ? 'Bounded estimate' : 'Safe local cleanup only'}</small></div></article>
+    </section>
+    <section class="optimization-grid">
+      <article class="optimization-panel panel"><p class="section-kicker"><i></i> Driver care</p><h2>Use Windows’ trusted driver path.</h2><p>Check graphics drivers through Windows Update. Eclipse never downloads, installs, or recommends third-party driver packages.</p><div class="optimization-actions"><button class="primary-button" type="button" data-action="optimization-windows-update" ${supported && !busy ? '' : 'disabled'}>Open Windows Update</button><button class="quiet-button" type="button" data-action="optimization-refresh" ${busy ? 'disabled' : ''}>Refresh status</button></div><small>Windows can offer signed display-driver updates through its standard update flow.</small></article>
+      <article class="optimization-panel panel"><p class="section-kicker"><i></i> Cache hygiene</p><h2>Clear temporary data safely.</h2><p>Clear Eclipse’s browser cache at any time. Roblox cache and logs can be cleared only after Roblox Player is completely closed.</p><div class="optimization-actions"><button class="quiet-button" type="button" data-action="optimization-clear-eclipse-cache" ${supported && !busy ? '' : 'disabled'}>${busy === 'eclipse-cache' ? 'Clearing Eclipse cache…' : 'Clear Eclipse cache'}</button><button class="quiet-button" type="button" data-action="optimization-clear-roblox-cache" ${playerClosed && !busy ? '' : 'disabled'}>${busy === 'roblox-cache' ? 'Clearing Roblox cache…' : 'Clear Roblox cache & logs'}</button></div><small>${escapeHtml(message || (status.playerRunning ? 'Close Roblox Player to enable Roblox cache cleanup.' : 'Only Roblox local HTTP cache and logs are removed. Player content and settings are left intact.'))}</small></article>
+      <article class="optimization-panel panel"><p class="section-kicker"><i></i> Player tuning</p><h2>Choose intentional settings.</h2><p>Review the bounded Fast Flags Eclipse manages, or run the signed official Player repair path if the installation itself needs attention.</p><div class="optimization-actions"><button class="quiet-button" type="button" data-page-link="fastflags">Review Fast Flags</button><button class="quiet-button" type="button" data-page-link="tools">Player Health</button></div><small>These workflows preserve Eclipse’s local-only, recoverable boundaries.</small></article>
+      <article class="optimization-panel panel optimization-note"><p class="section-kicker">What Eclipse will not do</p><h2>No placebo “boost” switches.</h2><ul><li>No driver booster downloads or unsigned installers.</li><li>No registry cleaners, network tweaks, or background process killing.</li><li>No changes to Roblox Player while it is running.</li></ul></article>
+    </section>
+  </div>`;
+}
+
 function renderFastFlags() {
   pageContent.innerHTML = `<div class="page-shell fastflags-page">
     ${pageHeader('Roblox Player configuration', 'Fast Flags.', 'Manage Eclipse-supported Roblox Player graphics settings in one place. Eclipse writes only the settings shown here and preserves unrelated ClientAppSettings values.', '')}
@@ -1672,7 +1744,7 @@ function renderSettings() {
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', 'game-details': 'Game details', tools: 'Tools', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', 'game-details': 'Game details', tools: 'Tools', optimization: 'Optimization', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -1687,6 +1759,7 @@ function renderCurrentPage() {
   else if (state.page === 'library') renderLibrary();
   else if (state.page === 'game-details') renderGameDetails();
   else if (state.page === 'tools') renderTools();
+  else if (state.page === 'optimization') renderOptimization();
   else if (state.page === 'fastflags') renderFastFlags();
   else if (state.page === 'mods') renderMods();
   else if (state.page === 'integrations') renderIntegrations();
@@ -1696,7 +1769,7 @@ function renderCurrentPage() {
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'tools', 'fastflags', 'mods', 'integrations', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
@@ -1803,6 +1876,10 @@ document.addEventListener('click', async (event) => {
   if (action === 'bootstrapper-repair') await updateRobloxPlayer({ repair: true });
   if (action === 'copy-player-diagnostics') await copyPlayerDiagnostics();
   if (action === 'open-fastflags') setPage('fastflags');
+  if (action === 'optimization-refresh') await refreshOptimizationStatus();
+  if (action === 'optimization-windows-update') await runOptimization('windows-update', () => system.openWindowsUpdate(), 'Windows Update opened for official driver and system updates.');
+  if (action === 'optimization-clear-eclipse-cache') await runOptimization('eclipse-cache', () => system.clearEclipseCache(), 'Eclipse browser cache cleared.');
+  if (action === 'optimization-clear-roblox-cache') await runOptimization('roblox-cache', () => system.clearRobloxCache(), 'Roblox local cache and logs cleared.');
   if (action === 'launch-game' || action === 'relaunch-place') await launchGame(button.dataset.placeId);
   if (action === 'open-game') await openOfficial('game', button.dataset.placeId);
   if (action === 'game-details') openGameDetails(button.dataset.universeId, button.dataset.placeId);

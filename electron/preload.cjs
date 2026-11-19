@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('eclipseRoblox', {
 contextBridge.exposeInMainWorld('eclipseSystem', {
   startupStatus: () => ipcRenderer.invoke('system:startup-status'),
   setStartup: (enabled) => ipcRenderer.invoke('system:set-startup', enabled === true),
+  optimizationStatus: () => ipcRenderer.invoke('system:optimization-status'),
+  clearEclipseCache: () => ipcRenderer.invoke('system:clear-eclipse-cache'),
+  clearRobloxCache: () => ipcRenderer.invoke('system:clear-roblox-cache'),
+  openWindowsUpdate: () => ipcRenderer.invoke('system:open-windows-update'),
   onNavigate: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, page) => callback(typeof page === 'string' ? page : '');

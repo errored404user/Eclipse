@@ -13,6 +13,7 @@ test('limits Windows destinations to Eclipse-owned pages', () => {
   assert.equal(navigationPage('tools'), 'tools');
   assert.equal(navigationPage('FASTFLAGS'), 'fastflags');
   assert.equal(navigationPage('mods'), 'mods');
+  assert.equal(navigationPage('optimization'), 'optimization');
   assert.equal(navigationPage('roblox://experiences/start'), '');
   assert.equal(navigationPageFromArguments(['--some-other-flag', '--eclipse-page=library']), 'library');
   assert.equal(navigationPageFromArguments(['--eclipse-page=../../settings']), '');
