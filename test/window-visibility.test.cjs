@@ -41,6 +41,9 @@ test('main process recovers a hidden single-instance window and has a visible fa
   assert.match(main, /showStartupFailure\(\);/);
   assert.doesNotMatch(main, /window\.destroy\(\);\s*app\.exit\(1\);/);
   assert.match(main, /dialog\.showErrorBox\('Eclipse could not start'/);
+  assert.match(main, /function refreshJumpList\(\)/);
+  assert.match(main, /Array\.isArray\(categories\)/);
+  assert.match(main, /Eclipse could not refresh its optional Windows Jump List/);
   assert.match(main, /function recoverMainWindow\(\)/);
   assert.match(main, /else recoverMainWindow\(\);/);
   assert.match(main, /window\.isVisible\(\).*revealMainWindow\(window\)/);

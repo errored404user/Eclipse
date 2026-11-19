@@ -129,8 +129,17 @@ function openNavigationPage(page) {
 }
 
 function refreshJumpList() {
-  if (process.platform !== 'win32') return;
-  app.setJumpList(taskbarJumpList(process.execPath, recentLaunchPlaceIds));
+  if (process.platform !== 'win32') return '';
+  // Jump Lists are optional Windows shell decoration. Some portable Electron builds reject
+  // otherwise-valid category arrays, so this must never prevent Eclipse from opening.
+  try {
+    const categories = taskbarJumpList(process.execPath, recentLaunchPlaceIds);
+    if (!Array.isArray(categories)) return '';
+    return app.setJumpList(categories);
+  } catch (error) {
+    console.warn('Eclipse could not refresh its optional Windows Jump List.', error);
+    return '';
+  }
 }
 
 function taskbarRecentsPath() {
