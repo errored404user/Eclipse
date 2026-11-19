@@ -9,8 +9,8 @@ test('builds an NSIS Eclipse installer that launches the installed app after set
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'build-windows-exe.yml'), 'utf8');
 
-  assert.equal(packageJson.scripts['dist:win'], 'electron-builder --win nsis --x64');
-  assert.equal(packageJson.scripts['dist:win:portable'], 'electron-builder --win portable --x64');
+  assert.equal(packageJson.scripts['dist:win'], 'electron-builder --win nsis --x64 --publish never');
+  assert.equal(packageJson.scripts['dist:win:portable'], 'electron-builder --win portable --x64 --publish never');
   assert.match(packageJson.build.nsis.artifactName, /-Setup-/);
   assert.doesNotMatch(packageJson.build.win.artifactName, /-Setup-/);
   assert.equal(packageJson.build.nsis.oneClick, false);

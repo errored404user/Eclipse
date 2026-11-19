@@ -1,6 +1,6 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0-preview.26",
+  "version": "0.1.0-preview.27",
   "private": true,
   "description": "Eclipse official Roblox Player bootstrapper and desktop client",
   "author": "Eclipse contributors",
@@ -10,9 +10,9 @@
     "check": "node --check server.js && node --check shared/roblox-api.cjs && node --check electron/discord-presence.cjs && node --check electron/roblox-bootstrapper.cjs && node --check electron/fast-flags.cjs && node --check electron/launch-window.cjs && node --check electron/launch-preload.cjs && node --check electron/launch.js && node --check electron/system-integration.cjs && node --check electron/taskbar-recents.cjs && node --check electron/window-visibility.cjs && node --check electron/player-mods.cjs && node --check electron/optimization.cjs && node --check electron/update-checker.cjs && node --check app/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
     "test": "node --test",
     "desktop:dev": "electron .",
-    "dist:win": "electron-builder --win nsis --x64",
-    "dist:win:installer": "electron-builder --win nsis --x64",
-    "dist:win:portable": "electron-builder --win portable --x64"
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "dist:win:installer": "electron-builder --win nsis --x64 --publish never",
+    "dist:win:portable": "electron-builder --win portable --x64 --publish never"
   },
   "build": {
     "appId": "app.eclipse.client",

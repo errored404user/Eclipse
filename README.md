@@ -92,7 +92,7 @@ npm run dist:win
 This creates an NSIS installer in `release/`, named similarly to:
 
 ```text
-Eclipse-Setup-0.1.0-preview.26-x64.exe
+Eclipse-Setup-0.1.0-preview.27-x64.exe
 ```
 
 Run that setup executable to choose an installation folder and create Start menu/Desktop shortcuts. The final installer page has **Launch Eclipse** selected by default, so it opens the installed Eclipse application after setup completes. The installer preserves Eclipse’s local data when it is removed.
