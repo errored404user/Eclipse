@@ -11,6 +11,7 @@ test('builds an NSIS Eclipse installer that launches the installed app after set
 
   assert.equal(packageJson.scripts['dist:win'], 'electron-builder --win nsis --x64 --publish never');
   assert.equal(packageJson.scripts['dist:win:portable'], 'electron-builder --win portable --x64 --publish never');
+  assert.deepEqual(packageJson.build.electronLanguages, ['en-US']);
   assert.match(packageJson.build.nsis.artifactName, /-Setup-/);
   assert.doesNotMatch(packageJson.build.win.artifactName, /-Setup-/);
   assert.equal(packageJson.build.nsis.oneClick, false);
