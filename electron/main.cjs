@@ -144,7 +144,7 @@ function openNavigationPage(page) {
 
 function refreshJumpList() {
   if (process.platform !== 'win32') return '';
-  // Jump Lists are optional Windows shell decoration. Some portable Electron builds reject
+  // Jump Lists are optional Windows shell decoration. Some Windows Electron builds reject
   // otherwise-valid category arrays, so this must never prevent Eclipse from opening.
   try {
     const categories = taskbarJumpList(process.execPath, recentLaunchPlaceIds);
@@ -269,7 +269,7 @@ function createMainWindow() {
   return window;
 }
 // Eclipse is primarily a desktop control surface; software rendering avoids driver-specific
-// Chromium startup failures that otherwise leave a background-only portable process.
+// Chromium startup failures that otherwise leave a background-only Electron process.
 // Keep the command-line switch as well: it matches the Windows recovery launch exactly.
 app.commandLine.appendSwitch('disable-gpu');
 app.disableHardwareAcceleration();
@@ -454,10 +454,10 @@ app.whenReady().then(async () => {
 }).catch((error) => {
   const detail = error instanceof Error ? error.message : String(error || 'Unknown startup error.');
   console.error('Eclipse could not initialize its main process.', error);
-  // Packaged portable builds have no terminal, so do not turn a main-process fault into a
+  // Packaged Windows builds have no terminal, so do not turn a main-process fault into a
   // silent disappearance. This native message is intentionally available before any window.
   try {
-    dialog.showErrorBox('Eclipse could not start', `Eclipse stopped during startup:\n\n${detail}\n\nTry launching Eclipse again. If this repeats, use the portable build from the latest Eclipse release and share this message.`);
+    dialog.showErrorBox('Eclipse could not start', `Eclipse stopped during startup:\n\n${detail}\n\nTry launching Eclipse again. If this repeats, use the Eclipse installer from the latest published release and share this message.`);
   } finally {
     app.quit();
   }

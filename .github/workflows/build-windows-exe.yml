@@ -34,7 +34,7 @@ jobs:
       - name: Run launcher tests
         run: npm run test
 
-      - name: Build portable executable
+      - name: Build Windows installer
         id: package
         continue-on-error: true
         shell: pwsh
@@ -69,10 +69,10 @@ jobs:
         shell: pwsh
         run: exit 1
 
-      - name: Upload portable executable
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: Eclipse-Windows-Portable
-          path: release/*.exe
+          name: Eclipse-Windows-Installer
+          path: release/*-Setup-*.exe
           if-no-files-found: error
           retention-days: 30

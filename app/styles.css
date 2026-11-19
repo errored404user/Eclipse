@@ -284,7 +284,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 @media (max-width: 760px) { .server-row { grid-template-columns: 34px minmax(0, 1fr) auto; }.server-signal { grid-column: 2; }.server-join-button { grid-column: 3; grid-row: 1 / span 2; align-self: center; } }
 @media (max-width: 440px) { .game-details-actions { gap: 8px; }.server-row { grid-template-columns: 29px minmax(0, 1fr); }.server-join-button { grid-column: 2; grid-row: auto; justify-self: start; margin-top: 3px; }.server-signal { grid-column: 2; } }
 
-/* Performance budget for the portable, software-rendered Electron workspace. Kept on by
+/* Performance budget for the software-rendered Electron desktop workspace. Kept on by
    default so visual polish never costs basic navigation and scrolling responsiveness. */
 .performance-mode .content-glow { display: none; }
 .performance-mode .titlebar,

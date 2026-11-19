@@ -15,7 +15,7 @@ Eclipse is a Windows desktop bootstrapper and launcher for official Roblox exper
 - **Mods** is a Windows-only local Player Packs workspace for validated texture/UI and sound assets. Its guided tutorial and Pack Creator scan the installed Player for eligible existing targets, then turn selected local media into a shareable `.eclipsepack`; you can also import a local `.eclipsepack` ZIP or developer manifest folder. Packs apply only while Roblox Player is closed, use versioned original-file backups, and restore in one click. Packages never contain code: executables, scripts, injectors, DLLs, credentials, network permissions, arbitrary paths, and undeclared files are rejected. An official Player update or repair restores originals, disables every active pack, and marks it for compatibility review rather than migrating it automatically.
 - **Integrations** can enable or pause the local recording of Eclipse launch requests. On the desktop app, Discord Rich Presence uses Discord’s local IPC connection to show **Open Eclipse** while Eclipse is running. It requires a public Discord Application ID, never asks for Discord credentials, and does not pretend to know Roblox server/gameplay state.
 - **Eclipse profile** is a single-click local editor in the sidebar for an optional display name and profile image. JPEG, PNG, and WebP images are center-cropped to a bounded local avatar; no image is uploaded. The profile creates no online account, never requests Roblox credentials, and is not connected to a Roblox account.
-- **Settings** persist only Eclipse interface preferences locally, including Reduce interface motion and an on-by-default Eclipse performance mode. Performance mode removes expensive blur, glow, shadows, and decorative animation from the portable software-rendered workspace; it can be turned off if the fuller visual treatment is preferred. Settings can export/import a validated, bounded `eclipse-local-backup/v1` of Eclipse-owned Library, history, preferences, local profile, and saved Fast Flag profiles; Roblox credentials and Player files are never included. Desktop builds also offer a non-blocking GitHub Release check that only reports and opens a newer published release when you choose—it never downloads or installs anything automatically.
+- **Settings** persist only Eclipse interface preferences locally, including Reduce interface motion and an on-by-default Eclipse performance mode. Performance mode removes expensive blur, glow, shadows, and decorative animation from the software-rendered desktop workspace; it can be turned off if the fuller visual treatment is preferred. Settings can export/import a validated, bounded `eclipse-local-backup/v1` of Eclipse-owned Library, history, preferences, local profile, and saved Fast Flag profiles; Roblox credentials and Player files are never included. Desktop builds also offer a non-blocking GitHub Release check that only reports and opens a newer published release when you choose—it never downloads or installs anything automatically.
 
 > Eclipse is not affiliated with Roblox. Availability, rankings, game details, and the player-launch protocol are controlled by Roblox and may change.
 
@@ -80,7 +80,7 @@ ECLIPSE_DISCORD_CLIENT_ID=123456789012345678 npm run desktop:dev
 
 Enable **Show Open Eclipse in Discord** in Integrations while Discord Desktop is running. The presence reads **Open Eclipse** / **Roblox launcher** and clears when Eclipse exits. An Application ID is public—not a client secret; never place a Discord client secret, bot token, or user token in Eclipse.
 
-## Build a Windows EXE
+## Build the Windows installer
 
 Build on a 64-bit Windows machine with Node.js 22 or newer installed:
 
@@ -89,23 +89,23 @@ npm install
 npm run dist:win
 ```
 
-This creates a portable executable in `release/`, named similarly to:
+This creates an NSIS installer in `release/`, named similarly to:
 
 ```text
-Eclipse-0.1.0-preview.25-x64.exe
+Eclipse-Setup-0.1.0-preview.26-x64.exe
 ```
 
-To create a conventional Windows installer with Start menu and desktop shortcut options instead:
+Run that setup executable to choose an installation folder and create Start menu/Desktop shortcuts. The final installer page has **Launch Eclipse** selected by default, so it opens the installed Eclipse application after setup completes. The installer preserves Eclipse’s local data when it is removed.
+
+A portable package remains available only for developer troubleshooting:
 
 ```bash
-npm run dist:win:installer
+npm run dist:win:portable
 ```
-
-That creates an NSIS installer in `release/`.
 
 ### Build from GitHub
 
-The repository includes a manual **Build Windows EXE** GitHub Actions workflow. Run it from the Actions tab, then download the `Eclipse-Windows-Portable` artifact after it completes.
+The repository includes a manual **Build Windows EXE** GitHub Actions workflow. Run it from the Actions tab, then download the `Eclipse-Windows-Installer` artifact after it completes.
 
 > The first EXE build downloads Electron’s Windows runtime and packaging dependencies. Windows SmartScreen may display a warning until Eclipse has code signing and established reputation.
 
