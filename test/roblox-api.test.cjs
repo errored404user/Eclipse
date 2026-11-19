@@ -195,6 +195,23 @@ test('provides a safe Windows optimization workspace without driver downloads or
   assert.match(styles, /\.optimization-grid/);
 });
 
+test('uses a reduced-motion-aware renderer splash before the Eclipse workspace appears', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  assert.match(shell, /data-app-splash/);
+  assert.match(shell, /Preparing your orbit/);
+  assert.match(renderer, /function finishAppSplash\(\)/);
+  assert.match(renderer, /minimumDuration/);
+  assert.match(renderer, /eclipse-ready/);
+  assert.match(styles, /\.app-splash/);
+  assert.match(styles, /eclipse-splash-failsafe/);
+  assert.match(styles, /prefers-reduced-motion: reduce/);
+});
+
 test('accepts only safe numeric Roblox place IDs', () => {
   const { normalizePlaceId } = require('../shared/roblox-api.cjs');
   assert.equal(normalizePlaceId('1818'), 1818);

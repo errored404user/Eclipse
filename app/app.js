@@ -1,6 +1,8 @@
 const toast = document.querySelector('[data-toast]');
 const pageContent = document.querySelector('[data-page-content]');
 const sidebar = document.querySelector('[data-sidebar]');
+const appSplash = document.querySelector('[data-app-splash]');
+const splashStartedAt = performance.now();
 const desktopWindow = window.eclipseWindow;
 const storageKeys = {
   library: 'eclipse.roblox.library.v1',
@@ -2194,8 +2196,21 @@ document.addEventListener('change', async (event) => {
   showToast('Eclipse preference saved on this device.');
 });
 
+function finishAppSplash() {
+  if (!appSplash) return;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || state.settings.reducedMotion;
+  const minimumDuration = reducedMotion ? 180 : 720;
+  const remaining = Math.max(0, minimumDuration - (performance.now() - splashStartedAt));
+  window.setTimeout(() => {
+    document.body.classList.add('eclipse-ready');
+    appSplash.setAttribute('aria-hidden', 'true');
+    window.setTimeout(() => { appSplash.hidden = true; }, reducedMotion ? 0 : 520);
+  }, remaining);
+}
+
 wireWindowControls();
 wireShell();
 setSettings();
 renderCurrentPage();
+requestAnimationFrame(() => requestAnimationFrame(finishAppSplash));
 void syncDiscordPresence();
