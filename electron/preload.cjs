@@ -22,7 +22,14 @@ contextBridge.exposeInMainWorld('eclipseRoblox', {
   gameServers: (placeId, cursor = '') => ipcRenderer.invoke('roblox:game-servers', placeId, typeof cursor === 'string' ? cursor : ''),
   launchPlace: (placeId) => ipcRenderer.invoke('roblox:launch-place', placeId),
   launchServer: (placeId, gameInstanceId) => ipcRenderer.invoke('roblox:launch-server', placeId, typeof gameInstanceId === 'string' ? gameInstanceId : ''),
-  openOfficial: (action, placeId) => ipcRenderer.invoke('roblox:open-official', action, placeId)
+  openOfficial: (action, placeId) => ipcRenderer.invoke('roblox:open-official', action, placeId),
+  openOfficialAccount: (action, account = {}) => ipcRenderer.invoke('roblox:open-account',
+    typeof action === 'string' ? action : '',
+    {
+      username: typeof account?.username === 'string' ? account.username.slice(0, 20) : '',
+      userId: typeof account?.userId === 'string' || typeof account?.userId === 'number' ? String(account.userId).slice(0, 16) : ''
+    }
+  )
 });
 
 contextBridge.exposeInMainWorld('eclipseSystem', {

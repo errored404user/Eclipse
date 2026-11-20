@@ -375,3 +375,50 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .local-data-danger .section-kicker { color: #dd94a5; }
 .danger-button { border-color: rgba(238,121,142,.3); color: #ffd7df; background: rgba(177,55,82,.1); }
 .danger-button:hover { border-color: rgba(255,162,181,.58); color: #fff0f3; background: rgba(190,59,88,.22); }
+
+/* Local Roblox account shortcuts: a privacy-preserving organizer with official-browser handoffs. */
+.icon-accounts { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 2a5.1 5.1 0 1 1 0 10.2A5.1 5.1 0 0 1 12 2m0 2a3.1 3.1 0 1 0 0 6.2A3.1 3.1 0 0 0 12 4M4 20c.4-4.1 3.5-6.4 8-6.4s7.6 2.3 8 6.4H4m2.3-2h11.4c-.9-1.6-2.9-2.4-5.7-2.4s-4.8.8-5.7 2.4'/%3E%3C/svg%3E"); }
+.accounts-page { max-width: 1180px; }
+.roblox-account-privacy { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 23px 25px; margin-bottom: 15px; border-color: rgba(184,164,255,.19); background: linear-gradient(125deg, rgba(61,46,94,.44), rgba(24,21,33,.84)); }
+.roblox-account-privacy h2, .roblox-account-form h2, .roblox-account-directory h2 { margin: 0; font-size: 18px; letter-spacing: -.035em; }
+.roblox-account-privacy p:not(.section-kicker), .roblox-account-form > div > p:not(.section-kicker), .roblox-account-directory-heading p, .roblox-account-scope { max-width: 690px; margin: 7px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.58; }
+.roblox-account-privacy .quiet-button { flex: 0 0 auto; }
+.roblox-account-layout { display: grid; align-items: start; grid-template-columns: minmax(275px, .72fr) minmax(0, 1.28fr); gap: 15px; }
+.roblox-account-form { display: grid; gap: 14px; padding: 23px; }
+.roblox-account-form label { display: grid; gap: 6px; color: #d7cde8; font: 10px "Cascadia Mono", "SFMono-Regular", Consolas, monospace; letter-spacing: .025em; }
+.roblox-account-form label em { color: #91869e; font-style: normal; }
+.roblox-account-form input { width: 100%; min-width: 0; padding: 10px 11px; border: 1px solid var(--border-strong); border-radius: 9px; outline: 0; color: #f0eafc; background: rgba(7,6,12,.39); font: 12px "Segoe UI Variable", "Aptos", "Segoe UI", system-ui, sans-serif; }
+.roblox-account-form input:focus { border-color: rgba(190,165,255,.7); box-shadow: 0 0 0 3px rgba(127,89,221,.14); }
+.roblox-account-form input[aria-invalid="true"] { border-color: rgba(238,121,142,.78); }
+.roblox-account-form input:disabled { cursor: not-allowed; opacity: .55; }
+.roblox-account-form small { color: #92889d; font: 9px "Segoe UI Variable", "Aptos", "Segoe UI", system-ui, sans-serif; letter-spacing: 0; }
+.roblox-account-form-error { margin: -3px 0 0; color: #ffc7d1; font-size: 10px; line-height: 1.45; }
+.roblox-account-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.roblox-account-form-actions .primary-button { justify-content: center; }
+.roblox-account-limit { margin: -2px 0 0; color: #c3b4d7; font-size: 10px; line-height: 1.5; }
+.roblox-account-directory { display: grid; gap: 12px; }
+.roblox-account-directory-heading { padding: 8px 5px 0; }
+.roblox-account-directory-heading h2 { font-size: 19px; }
+.roblox-account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.roblox-account-card { position: relative; display: grid; gap: 13px; min-width: 0; padding: 18px; overflow: hidden; }
+.roblox-account-card.is-default { border-color: rgba(193,171,255,.36); background: linear-gradient(145deg, rgba(65,49,100,.61), rgba(25,21,35,.89)); }
+.roblox-account-card.is-default::before { position: absolute; top: 0; right: 16px; left: 16px; height: 1px; background: linear-gradient(90deg, transparent, rgba(206,189,255,.78), transparent); box-shadow: 0 0 15px rgba(172,144,255,.64); content: ""; }
+.roblox-account-identity { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.roblox-account-avatar { display: grid; width: 38px; height: 38px; flex: 0 0 38px; place-items: center; border: 1px solid rgba(216,200,255,.3); border-radius: 12px; color: #f1eaff; background: radial-gradient(circle at 26% 19%, #d6c6ff, #8564d0 44%, #302052 100%); box-shadow: inset 0 0 18px rgba(255,255,255,.16), 0 5px 18px rgba(68,42,122,.31); font: 11px "Cascadia Mono", "SFMono-Regular", Consolas, monospace; }
+.roblox-account-title { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 7px; }
+.roblox-account-title h2 { overflow: hidden; margin: 0; color: #f4f0ff; font-size: 14px; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.roblox-account-title span { padding: 3px 5px; border: 1px solid rgba(193,171,255,.2); border-radius: 999px; color: #d8caff; background: rgba(133,98,218,.16); font: 7px "Cascadia Mono", "SFMono-Regular", Consolas, monospace; letter-spacing: .03em; text-transform: uppercase; }
+.roblox-account-identity p { overflow: hidden; margin: 4px 0 0; color: #a99fba; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.roblox-account-scope { min-height: 35px; margin: 0; font-size: 9px; }
+.roblox-account-actions, .roblox-account-manage { display: flex; flex-wrap: wrap; gap: 6px; }
+.roblox-account-actions { padding-top: 2px; }
+.roblox-account-actions .quiet-button { padding: 6px 8px; }
+.roblox-account-manage { align-items: center; min-height: 21px; padding-top: 8px; border-top: 1px solid rgba(218,203,255,.09); }
+.roblox-account-manage .text-button { padding: 3px 1px; font-size: 9px; }
+.roblox-account-manage .account-remove-button { margin-left: auto; color: #c79da9; }
+.roblox-account-manage .account-remove-button:hover { color: #ffd5dd; }
+.accounts-page .empty-state { min-height: 250px; margin: 0; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) { .roblox-account-card { transition: border-color 220ms ease, transform 220ms cubic-bezier(.2,.8,.2,1), background 220ms ease, box-shadow 220ms ease; }.roblox-account-card:hover { border-color: rgba(199,180,255,.32); box-shadow: 0 15px 32px rgba(0,0,0,.17); transform: translateY(-2px); } }
+@media (max-width: 900px) { .roblox-account-layout { grid-template-columns: 1fr; }.roblox-account-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }.roblox-account-form > div, .roblox-account-form-error, .roblox-account-form-actions, .roblox-account-limit { grid-column: 1 / -1; }.roblox-account-form-actions { justify-content: flex-end; } }
+@media (max-width: 680px) { .roblox-account-privacy { align-items: flex-start; flex-direction: column; }.roblox-account-privacy .quiet-button { width: 100%; justify-content: center; }.roblox-account-grid { grid-template-columns: 1fr; }.roblox-account-form { grid-template-columns: 1fr; }.roblox-account-form > div, .roblox-account-form-error, .roblox-account-form-actions, .roblox-account-limit { grid-column: auto; } }
+@media (max-width: 440px) { .roblox-account-form, .roblox-account-privacy, .roblox-account-card { padding: 18px; }.roblox-account-actions .quiet-button { flex: 1 1 calc(50% - 4px); justify-content: center; }.roblox-account-manage .account-remove-button { margin-left: 0; }.roblox-account-form-actions { flex-direction: column-reverse; }.roblox-account-form-actions button { width: 100%; justify-content: center; } }
