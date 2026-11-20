@@ -1,4 +1,4 @@
-const navigationPages = Object.freeze(['home', 'discover', 'library', 'history', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'accounts', 'settings']);
+const navigationPages = Object.freeze(['home', 'discover', 'library', 'history', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'settings']);
 
 function navigationPage(value) {
   const page = String(value || '').trim().toLowerCase();

@@ -374,35 +374,22 @@ test('clamps numeric Fast Flag fine-tuning and rejects unsupported renderers', (
   assert.deepEqual(buildManagedFlags({ renderingMode: 'vulkan' }), { FFlagDebugGraphicsPreferVulkan: 'True' });
 });
 
-test('uses privacy-bounded local Roblox account shortcuts and official browser handoffs', () => {
+test('uses a local Eclipse profile and official Windows Player bootstrapper without Roblox login or protocol ownership', () => {
   const root = require('node:path').join(__dirname, '..');
   const renderer = require('node:fs').readFileSync(require('node:path').join(root, 'app', 'app.js'), 'utf8');
   const shell = require('node:fs').readFileSync(require('node:path').join(root, 'app', 'index.html'), 'utf8');
   const main = require('node:fs').readFileSync(require('node:path').join(root, 'electron', 'main.cjs'), 'utf8');
   const preload = require('node:fs').readFileSync(require('node:path').join(root, 'electron', 'preload.cjs'), 'utf8');
-  const integration = require('node:fs').readFileSync(require('node:path').join(root, 'electron', 'system-integration.cjs'), 'utf8');
-  const styles = require('node:fs').readFileSync(require('node:path').join(root, 'app', 'styles.css'), 'utf8');
   assert.match(renderer, /eclipse\.profile\.v1/);
-  assert.match(renderer, /eclipse\.roblox\.accounts\.v1/);
-  assert.match(renderer, /function normalizeRobloxAccounts\(value\)/);
-  assert.match(renderer, /function renderRobloxAccounts\(\)/);
-  assert.match(renderer, /Roblox authentication stays with Roblox/);
-  assert.match(renderer, /never collects passwords, cookies, verification codes, or Roblox session tokens/);
-  assert.match(renderer, /function openRobloxAccount\(action, accountId/);
-  assert.match(shell, /data-page="accounts"/);
-  assert.match(shell, /icon-accounts/);
-  assert.match(preload, /openOfficialAccount/);
-  assert.match(preload, /roblox:open-account/);
-  assert.match(main, /function robloxAccountUrl\(action, account = \{\}\)/);
-  assert.match(main, /https:\/\/www\.roblox\.com\/login/);
-  assert.match(main, /https:\/\/www\.roblox\.com\/my\/account/);
-  assert.match(main, /ipcMain\.handle\('roblox:open-account'/);
-  assert.match(integration, /'accounts'/);
-  assert.match(styles, /\.roblox-account-privacy/);
-  assert.match(styles, /\.roblox-account-grid/);
-  assert.doesNotMatch(shell, /type="password"/);
-  assert.doesNotMatch(preload, /cookies\.get|cookies\.set|webRequest/);
-  assert.doesNotMatch(main, /cookies\.get|cookies\.set|setAsDefaultProtocolClient/);
+  assert.match(renderer, /Create your Eclipse profile/);
+  assert.match(shell, /data-profile-form/);
+  assert.match(renderer, /Eclipse bootstrapper/);
+  assert.match(renderer, /data-action="bootstrapper-update"/);
+  assert.match(main, /roblox-bootstrapper:status/);
+  assert.match(preload, /eclipseBootstrapper/);
+  assert.doesNotMatch(renderer, /roblox\.com\/login|data-account-action|accountAction/);
+  assert.doesNotMatch(shell, /Sign in at Roblox|data-account-action/);
+  assert.doesNotMatch(main, /roblox\.com\/login|setAsDefaultProtocolClient/);
 });
 
 test('uses the Eclipse corona asset in the shell and Windows desktop package', () => {

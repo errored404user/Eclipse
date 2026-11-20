@@ -12,7 +12,6 @@ const storageKeys = {
   settings: 'eclipse.settings.v1',
   integrations: 'eclipse.integrations.v1',
   profile: 'eclipse.profile.v1',
-  robloxAccounts: 'eclipse.roblox.accounts.v1',
   fastFlagProfiles: 'eclipse.fastflag-profiles.v1',
   launchHistory: 'eclipse.launch-history.v1',
   discoveryCache: 'eclipse.roblox.discovery-cache.v1'
@@ -27,8 +26,6 @@ const state = {
   settings: normalizeSettings(readStored(storageKeys.settings, {})),
   integrations: normalizeIntegrations(readStored(storageKeys.integrations, {})),
   profile: normalizeProfile(readStored(storageKeys.profile, {})),
-  robloxAccounts: normalizeRobloxAccounts(readStored(storageKeys.robloxAccounts, [])),
-  accountEditor: defaultRobloxAccountEditor(),
   launchHistory: normalizeLaunchHistory(readStored(storageKeys.launchHistory, [])),
   libraryView: { query: '', tag: 'all', sort: 'pinned' },
   discover: { games: cachedDiscover.games, collections: cachedDiscover.collections, collectionId: cachedDiscover.collections[0]?.id || '', query: '', cursor: cachedDiscover.cursor, loading: false, error: '', sort: 'featured', filter: 'all', cachedAt: cachedDiscover.savedAt, cacheRefreshStarted: false },
@@ -80,20 +77,6 @@ const browserRoblox = {
     };
     const url = urls[action];
     if (!url) throw new Error('Unsupported Roblox action.');
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return { opened: true };
-  },
-  async openOfficialAccount(action, account = {}) {
-    const username = normalizeRobloxUsername(account?.username);
-    const userId = normalizeRobloxUserId(account?.userId);
-    const urls = {
-      login: 'https://www.roblox.com/login',
-      settings: 'https://www.roblox.com/my/account#!/info',
-      profile: userId ? `https://www.roblox.com/users/${userId}/profile` : '',
-      search: username ? `https://www.roblox.com/search/users?keyword=${encodeURIComponent(username)}` : ''
-    };
-    const url = urls[action];
-    if (!url) throw new Error('Choose a valid saved Roblox account shortcut.');
     window.open(url, '_blank', 'noopener,noreferrer');
     return { opened: true };
   }
@@ -226,162 +209,6 @@ function normalizeProfile(value) {
   const displayName = String(value?.displayName || '').trim().replace(/\s+/g, ' ').slice(0, 28);
   const avatarDataUrl = normalizeProfileImage(value?.avatarDataUrl);
   return displayName ? { displayName, avatarDataUrl, created: true } : { displayName: 'Eclipse guest', avatarDataUrl: '', created: false };
-}
-
-function defaultRobloxAccountEditor() {
-  return { id: '', username: '', userId: '', label: '' };
-}
-
-function normalizeRobloxUsername(value) {
-  const username = String(value || '').trim();
-  return /^[A-Za-z0-9_]{3,20}$/.test(username) ? username : '';
-}
-
-function normalizeRobloxUserId(value) {
-  const userId = String(value || '').trim();
-  if (!/^[1-9]\d{0,15}$/.test(userId)) return '';
-  const numericId = Number(userId);
-  return Number.isSafeInteger(numericId) && numericId > 0 ? userId : '';
-}
-
-function normalizeRobloxAccountLabel(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 32);
-}
-
-function normalizeRobloxAccount(value) {
-  const username = normalizeRobloxUsername(value?.username);
-  if (!username) return null;
-  const providedId = String(value?.id || '').trim();
-  const id = /^[a-z0-9_-]{3,40}$/i.test(providedId) ? providedId : `roblox-${username.toLowerCase()}`;
-  return {
-    id,
-    username,
-    userId: normalizeRobloxUserId(value?.userId),
-    label: normalizeRobloxAccountLabel(value?.label),
-    isDefault: value?.isDefault === true,
-    addedAt: validLocalTimestamp(value?.addedAt)
-  };
-}
-
-function normalizeRobloxAccounts(value) {
-  if (!Array.isArray(value)) return [];
-  const ids = new Set();
-  const usernames = new Set();
-  let hasDefault = false;
-  const accounts = value.flatMap((item) => {
-    const account = normalizeRobloxAccount(item);
-    if (!account) return [];
-    const username = account.username.toLowerCase();
-    if (ids.has(account.id) || usernames.has(username)) return [];
-    ids.add(account.id);
-    usernames.add(username);
-    const isDefault = account.isDefault && !hasDefault;
-    if (isDefault) hasDefault = true;
-    return [{ ...account, isDefault }];
-  }).slice(0, 20);
-  if (accounts.length && !accounts.some((account) => account.isDefault)) accounts[0].isDefault = true;
-  return accounts;
-}
-
-function saveRobloxAccounts() {
-  state.robloxAccounts = normalizeRobloxAccounts(state.robloxAccounts);
-  writeStored(storageKeys.robloxAccounts, state.robloxAccounts);
-}
-
-function robloxAccountName(account) {
-  return account?.label || account?.username || 'Roblox account';
-}
-
-function robloxAccountInitials(account) {
-  return String(robloxAccountName(account)).trim().slice(0, 2).toUpperCase() || 'R';
-}
-
-function currentRobloxAccount() {
-  return state.robloxAccounts.find((account) => account.isDefault) || null;
-}
-
-function startEditingRobloxAccount(id) {
-  const account = state.robloxAccounts.find((item) => item.id === String(id || ''));
-  if (!account) return;
-  state.accountEditor = { id: account.id, username: account.username, userId: account.userId, label: account.label };
-  renderRobloxAccounts();
-  window.setTimeout(() => pageContent.querySelector('[data-roblox-account-form] input[name="username"]')?.focus(), 0);
-}
-
-function stopEditingRobloxAccount() {
-  state.accountEditor = defaultRobloxAccountEditor();
-  if (state.page === 'accounts') renderRobloxAccounts();
-}
-
-function saveRobloxAccount(form) {
-  const editor = state.accountEditor;
-  const error = form.querySelector('[data-roblox-account-error]');
-  const username = normalizeRobloxUsername(new FormData(form).get('username'));
-  const userIdInput = String(new FormData(form).get('userId') || '').trim();
-  const userId = normalizeRobloxUserId(userIdInput);
-  const label = normalizeRobloxAccountLabel(new FormData(form).get('label'));
-  const showError = (message, field) => {
-    if (error) {
-      error.textContent = message;
-      error.hidden = false;
-    }
-    const input = form.querySelector(`[name="${field}"]`);
-    input?.setAttribute('aria-invalid', 'true');
-    input?.focus();
-  };
-  if (!username) {
-    showError('Enter a Roblox username using 3–20 letters, numbers, or underscores.', 'username');
-    return;
-  }
-  if (userIdInput && !userId) {
-    showError('User ID must be a positive numeric Roblox user ID.', 'userId');
-    return;
-  }
-  const duplicate = state.robloxAccounts.find((account) => account.username.toLowerCase() === username.toLowerCase() && account.id !== editor.id);
-  if (duplicate) {
-    showError(`@${duplicate.username} is already saved in this local account list.`, 'username');
-    return;
-  }
-  const existing = state.robloxAccounts.find((account) => account.id === editor.id);
-  const account = normalizeRobloxAccount({
-    id: existing?.id || `roblox-${username.toLowerCase()}`,
-    username,
-    userId,
-    label,
-    isDefault: existing?.isDefault === true || (!existing && state.robloxAccounts.length === 0),
-    addedAt: existing?.addedAt || new Date().toISOString()
-  });
-  if (!account) return;
-  state.robloxAccounts = existing
-    ? state.robloxAccounts.map((item) => item.id === existing.id ? account : item)
-    : [...state.robloxAccounts, account];
-  saveRobloxAccounts();
-  state.accountEditor = defaultRobloxAccountEditor();
-  renderRobloxAccounts();
-  showToast(existing ? `Updated the local shortcut for @${account.username}.` : `Saved @${account.username} as a local Roblox account shortcut.`);
-}
-
-function setDefaultRobloxAccount(id) {
-  const accountId = String(id || '');
-  const account = state.robloxAccounts.find((item) => item.id === accountId);
-  if (!account) return;
-  state.robloxAccounts = state.robloxAccounts.map((item) => ({ ...item, isDefault: item.id === accountId }));
-  saveRobloxAccounts();
-  if (state.page === 'accounts') renderRobloxAccounts();
-  showToast(`@${account.username} is now the default local shortcut. Roblox sign-in is unchanged.`);
-}
-
-function removeRobloxAccount(id) {
-  const account = state.robloxAccounts.find((item) => item.id === String(id || ''));
-  if (!account) return;
-  if (!window.confirm(`Remove the local shortcut for @${account.username}? This does not sign out of Roblox or change the Roblox account.`)) return;
-  const remaining = state.robloxAccounts.filter((item) => item.id !== account.id);
-  if (account.isDefault && remaining.length) remaining[0].isDefault = true;
-  state.robloxAccounts = remaining;
-  saveRobloxAccounts();
-  if (state.accountEditor.id === account.id) state.accountEditor = defaultRobloxAccountEditor();
-  if (state.page === 'accounts') renderRobloxAccounts();
-  showToast(`Removed @${account.username} from this local Eclipse account list.`);
 }
 
 function normalizeDiscordAssetKey(value) {
@@ -2062,61 +1889,6 @@ async function runModsOperation(operation, successMessage) {
   }
 }
 
-function renderRobloxAccounts() {
-  const accounts = state.robloxAccounts;
-  const editor = state.accountEditor;
-  const editing = Boolean(editor.id);
-  const defaultAccount = currentRobloxAccount();
-  const accountLimitReached = !editing && accounts.length >= 20;
-  const accountCards = accounts.length
-    ? `<div class="roblox-account-grid">${accounts.map((account) => {
-      const profileAction = account.userId ? 'profile' : 'search';
-      const profileLabel = account.userId ? 'Open public profile' : 'Find on Roblox';
-      const identity = account.userId ? `Roblox user ID ${account.userId}` : 'User ID not saved';
-      return `<article class="roblox-account-card panel ${account.isDefault ? 'is-default' : ''}">
-        <div class="roblox-account-identity"><span class="roblox-account-avatar" aria-hidden="true">${escapeHtml(robloxAccountInitials(account))}</span><div><div class="roblox-account-title"><h2>${escapeHtml(robloxAccountName(account))}</h2>${account.isDefault ? '<span>Default local shortcut</span>' : ''}</div><p>@${escapeHtml(account.username)} · ${escapeHtml(identity)}</p></div></div>
-        <p class="roblox-account-scope">This is a local Eclipse shortcut. Roblox decides which account is signed in when an official page opens.</p>
-        <div class="roblox-account-actions"><button class="quiet-button compact-button" type="button" data-action="roblox-account-open" data-account-official-action="${profileAction}" data-account-id="${escapeHtml(account.id)}">${profileLabel}</button><button class="quiet-button compact-button" type="button" data-action="roblox-account-open" data-account-official-action="login">Official sign-in</button><button class="quiet-button compact-button" type="button" data-action="roblox-account-open" data-account-official-action="settings">Manage on Roblox</button></div>
-        <div class="roblox-account-manage"><button class="text-button" type="button" data-action="edit-roblox-account" data-account-id="${escapeHtml(account.id)}">Edit shortcut</button>${account.isDefault ? '' : `<button class="text-button" type="button" data-action="default-roblox-account" data-account-id="${escapeHtml(account.id)}">Make default</button>`}<button class="text-button account-remove-button" type="button" data-action="remove-roblox-account" data-account-id="${escapeHtml(account.id)}">Remove</button></div>
-      </article>`;
-    }).join('')}</div>`
-    : emptyState('◎', 'No Roblox account shortcuts yet.', 'Save a username here to organize local Eclipse shortcuts. Eclipse does not ask for passwords, cookies, verification codes, or Roblox session data.', '');
-  const formTitle = editing ? `Edit @${escapeHtml(editor.username)}` : 'Add a local account shortcut';
-  const submitLabel = editing ? 'Save shortcut' : accountLimitReached ? 'Shortcut limit reached' : 'Save shortcut';
-  pageContent.innerHTML = `<div class="page-shell accounts-page">
-    ${pageHeader('Roblox accounts', 'Account shortcuts.', 'Organize local Roblox account shortcuts, then use the official Roblox site for sign-in and account changes.', '<button class="primary-button" type="button" data-action="roblox-account-open" data-account-official-action="login">Official Roblox sign-in</button>')}
-    <section class="roblox-account-privacy panel"><div><p class="section-kicker"><i></i> Privacy boundary</p><h2>Roblox authentication stays with Roblox.</h2><p>Eclipse stores only the username, optional public user ID, optional local label, and default-shortcut choice you enter on this device. It never collects passwords, cookies, verification codes, or Roblox session tokens—and it cannot sign you in, sign you out, or switch the Roblox account in Player.</p></div><button class="quiet-button" type="button" data-action="roblox-account-open" data-account-official-action="settings">Open official account settings</button></section>
-    <section class="roblox-account-layout">
-      <form class="roblox-account-form panel" data-roblox-account-form novalidate>
-        <div><p class="section-kicker"><i></i> Local organizer</p><h2>${formTitle}</h2><p>Add a username manually. The optional user ID makes the public-profile shortcut precise; Eclipse does not look up or sync any private Roblox account information.</p></div>
-        <label>Roblox username<input name="username" value="${escapeHtml(editor.username)}" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Example_User" required ${accountLimitReached ? 'disabled' : ''}/><small>3–20 letters, numbers, or underscores</small></label>
-        <label>Public user ID <em>optional</em><input name="userId" value="${escapeHtml(editor.userId)}" inputmode="numeric" pattern="[1-9][0-9]{0,15}" maxlength="16" autocomplete="off" placeholder="123456789" ${accountLimitReached ? 'disabled' : ''}/><small>Used only to open the public profile URL</small></label>
-        <label>Local label <em>optional</em><input name="label" value="${escapeHtml(editor.label)}" maxlength="32" autocomplete="off" placeholder="Main account" ${accountLimitReached ? 'disabled' : ''}/><small>Visible only in Eclipse on this device</small></label>
-        <p class="roblox-account-form-error" data-roblox-account-error role="alert" hidden></p>
-        <div class="roblox-account-form-actions">${editing ? '<button class="quiet-button" type="button" data-action="cancel-roblox-account-edit">Cancel</button>' : ''}<button class="primary-button" type="submit" ${accountLimitReached ? 'disabled' : ''}>${submitLabel}</button></div>
-        ${accountLimitReached ? '<p class="roblox-account-limit">You can keep up to 20 local account shortcuts. Edit or remove one to add another.</p>' : ''}
-      </form>
-      <section class="roblox-account-directory"><div class="roblox-account-directory-heading"><div><p class="section-kicker"><i></i> Saved on this device</p><h2>${accounts.length} local shortcut${accounts.length === 1 ? '' : 's'}</h2><p>${defaultAccount ? `@${escapeHtml(defaultAccount.username)} is the default local shortcut. Changing it does not change Roblox sign-in.` : 'The first shortcut you add becomes the default local shortcut.'}</p></div></div>${accountCards}</section>
-    </section>
-  </div>`;
-}
-
-async function openRobloxAccount(action, accountId = '') {
-  const account = state.robloxAccounts.find((item) => item.id === String(accountId || '')) || {};
-  try {
-    await roblox.openOfficialAccount(action, account);
-    const messages = {
-      login: 'Opening the official Roblox sign-in page.',
-      settings: 'Opening official Roblox account settings.',
-      profile: 'Opening the saved public Roblox profile.',
-      search: 'Opening the official Roblox user search.'
-    };
-    showToast(messages[action] || 'Opening Roblox.');
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : 'Roblox could not be opened.');
-  }
-}
-
 function renderIntegrations() {
   const { activityTracking, discordRichPresence, discordClientId, discordAssetKey, discordActivityDisplay } = state.integrations;
   const status = discordStatus || {
@@ -2159,7 +1931,7 @@ function renderIntegrations() {
         <div class="setting-row integration-client-id-row"><div><h2>Eclipse icon asset key</h2><p>Use the name of an image asset uploaded to your Discord application. The included Eclipse icon uses <code>eclipse</code>.</p></div><label class="integration-select integration-client-id"><span class="sr-only">Eclipse icon asset key</span><input data-discord-asset-key maxlength="32" value="${escapeHtml(discordAssetKey)}" placeholder="eclipse" autocomplete="off" /></label></div>
         <div class="setting-row integration-unavailable"><div><h2>Allow activity joining</h2><p>Unavailable by design. Eclipse cannot read a Roblox server or session, so it cannot offer Discord joining links.</p></div><label class="toggle is-disabled"><input type="checkbox" disabled /><span></span></label></div>
         <div class="setting-row integration-unavailable"><div><h2>Allow Discord invites</h2><p>Unavailable by design. Eclipse does not create Roblox server invites or communicate with Discord accounts.</p></div><label class="toggle is-disabled"><input type="checkbox" disabled /><span></span></label></div>
-        <div class="setting-row"><div><h2>Saved Roblox account shortcuts</h2><p>Organize local usernames and open official Roblox pages from Accounts. Eclipse never asks for or stores Roblox credentials, cookies, or session data.</p></div><button class="quiet-button compact-button" type="button" data-page-link="accounts">Open Accounts</button></div>
+        <div class="setting-row integration-unavailable"><div><h2>Show Roblox account</h2><p>Unavailable by design. Eclipse never signs in to Roblox, reads Roblox account data, or handles Roblox credentials.</p></div><label class="toggle is-disabled"><input type="checkbox" disabled /><span></span></label></div>
       </div>
       <div class="discord-presence-preview panel"><img src="assets/eclipse-icon.png" alt="Eclipse icon preview" /><div><p class="section-kicker"><i></i> Discord card preview</p><strong>Eclipse</strong><span>${escapeHtml(displayDescription)}</span><small>Discord uses your Application name. Name the application <b>Eclipse</b> in the Discord Developer Portal, then upload this provided PNG as the <code>${escapeHtml(discordAssetKey)}</code> image asset.</small></div><a class="quiet-button compact-button" href="assets/eclipse-icon.png" download="eclipse-discord-icon.png">Download Eclipse icon</a></div>
       <div class="integration-note"><i></i><span><strong>${escapeHtml(status.reason || 'Discord Rich Presence is ready to configure.')}</strong> ${status.supported ? 'For the icon to appear, upload the downloaded Eclipse PNG in the Discord Application’s Rich Presence assets and use the same asset key above. Eclipse only sends the selected Eclipse-owned status through Discord’s local IPC connection.' : 'The browser preview never attempts a Discord connection.'}</span><button class="text-button" type="button" data-action="refresh-discord">Refresh status <span>→</span></button></div>
@@ -2200,7 +1972,6 @@ function eclipseBackupPayload() {
     launchHistory: state.launchHistory,
     settings: state.settings,
     profile: state.profile,
-    robloxAccounts: state.robloxAccounts,
     fastFlagProfiles: state.fastFlagProfiles
   };
 }
@@ -2219,21 +1990,18 @@ async function importEclipseBackup(file) {
   const launchHistory = normalizeLaunchHistory(backup.launchHistory);
   const settings = normalizeSettings(backup.settings);
   const profile = normalizeProfile(backup.profile);
-  const robloxAccounts = normalizeRobloxAccounts(backup.robloxAccounts);
   const fastFlagProfiles = normalizeSavedFastFlagProfiles(backup.fastFlagProfiles);
-  if (!window.confirm('Replace this device’s Eclipse library, recent list, launch history, interface settings, profile, local Roblox account shortcuts, and saved Fast Flag profiles with this backup?')) return;
+  if (!window.confirm('Replace this device’s Eclipse library, recent list, launch history, interface settings, profile, and saved Fast Flag profiles with this backup?')) return;
   state.library = library;
   state.recent = recent;
   state.launchHistory = launchHistory;
   state.settings = settings;
   state.profile = profile;
-  state.robloxAccounts = robloxAccounts;
   state.fastFlagProfiles = fastFlagProfiles;
   writeStored(storageKeys.library, state.library);
   writeStored(storageKeys.recent, state.recent);
   writeStored(storageKeys.launchHistory, state.launchHistory);
   writeStored(storageKeys.profile, state.profile);
-  writeStored(storageKeys.robloxAccounts, state.robloxAccounts);
   writeStored(storageKeys.fastFlagProfiles, state.fastFlagProfiles);
   setSettings();
   updateProfileSurface();
@@ -2242,7 +2010,7 @@ async function importEclipseBackup(file) {
 }
 
 async function clearAllLocalEclipseData() {
-  const confirmed = window.confirm('Delete all local Eclipse profile, saved Roblox account shortcuts, Library, recent activity, history, preferences, cached discovery data, and browser storage from this device? This cannot be undone. Roblox Player files, Player Packs, Fast Flags, and your Roblox account are not changed.');
+  const confirmed = window.confirm('Delete all local Eclipse profile, Library, recent activity, history, preferences, cached discovery data, and browser storage from this device? This cannot be undone. Roblox Player files, Player Packs, Fast Flags, and your Roblox account are not changed.');
   if (!confirmed) return;
   try {
     await system.clearEclipseData();
@@ -2299,14 +2067,14 @@ function renderSettings() {
     </section>
     <section class="settings-list panel settings-extra-list">
       <div class="setting-row"><div><p class="section-kicker">Eclipse updates</p><h2>${escapeHtml(updateTitle)}</h2><p>${escapeHtml(updateDescription)}</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="check-updates" ${state.update.busy ? 'disabled' : ''}>${state.update.busy ? 'Checking…' : 'Check for updates'}</button>${update.updateAvailable ? '<button class="primary-button" type="button" data-action="open-update-page">Open release</button>' : ''}</div></div>
-      <div class="setting-row"><div><p class="section-kicker">Local backup</p><h2>Export or restore Eclipse data</h2><p>Back up local Library, recent games, launch history, interface settings, profile, saved Roblox account shortcuts, and saved Fast Flag profiles. Roblox credentials and Player files are never included.</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="export-eclipse-backup">Export backup</button><button class="quiet-button" type="button" data-action="import-eclipse-backup">Import backup</button><input type="file" data-eclipse-backup-import accept="application/json,.json" hidden /></div></div>
-      <div class="setting-row local-data-danger"><div><p class="section-kicker">Privacy</p><h2>Delete local Eclipse data</h2><p>Erase this device’s Eclipse profile, saved Roblox account shortcuts, Library, recent activity, history, preferences, cached discovery data, and browser storage. This does not sign out of Roblox or remove Roblox Player files, Player Packs, Fast Flags, or Windows settings.</p></div><button class="quiet-button danger-button" type="button" data-action="clear-local-eclipse-data">Delete local data</button></div>
+      <div class="setting-row"><div><p class="section-kicker">Local backup</p><h2>Export or restore Eclipse data</h2><p>Back up local Library, recent games, launch history, interface settings, profile, and saved Fast Flag profiles. Roblox credentials and Player files are never included.</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="export-eclipse-backup">Export backup</button><button class="quiet-button" type="button" data-action="import-eclipse-backup">Import backup</button><input type="file" data-eclipse-backup-import accept="application/json,.json" hidden /></div></div>
+      <div class="setting-row local-data-danger"><div><p class="section-kicker">Privacy</p><h2>Delete local Eclipse data</h2><p>Erase this device’s Eclipse profile, Library, recent activity, history, preferences, cached discovery data, and browser storage. This does not sign out of Roblox or remove Roblox Player files, Player Packs, Fast Flags, or Windows settings.</p></div><button class="quiet-button danger-button" type="button" data-action="clear-local-eclipse-data">Delete local data</button></div>
     </section>
   </div>`;
 }
 
 function updateWindowTab() {
-  const labels = { home: 'Home', discover: 'Discover', library: 'Library', history: 'History', 'game-details': 'Game details', tools: 'Tools', optimization: 'Optimization', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', accounts: 'Accounts', settings: 'Settings' };
+  const labels = { home: 'Home', discover: 'Discover', library: 'Library', history: 'History', 'game-details': 'Game details', tools: 'Tools', optimization: 'Optimization', fastflags: 'Fast Flags', mods: 'Mods', integrations: 'Integrations', settings: 'Settings' };
   const label = labels[state.page] || 'Home';
   const target = document.querySelector('[data-active-page]');
   if (target) target.textContent = label;
@@ -2326,14 +2094,13 @@ function renderCurrentPage() {
   else if (state.page === 'fastflags') renderFastFlags();
   else if (state.page === 'mods') renderMods();
   else if (state.page === 'integrations') renderIntegrations();
-  else if (state.page === 'accounts') renderRobloxAccounts();
   else if (state.page === 'settings') renderSettings();
   else renderHome();
   pageContent.focus({ preventScroll: true });
 }
 
 function setPage(page) {
-  if (!['home', 'discover', 'library', 'history', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'accounts', 'settings'].includes(page)) return;
+  if (!['home', 'discover', 'library', 'history', 'tools', 'optimization', 'fastflags', 'mods', 'integrations', 'settings'].includes(page)) return;
   state.page = page;
   document.querySelectorAll('[data-page]').forEach((button) => {
     const active = button.dataset.page === page;
@@ -2465,11 +2232,6 @@ document.addEventListener('click', async (event) => {
   if (action === 'optimization-clear-eclipse-cache') await runOptimization('eclipse-cache', () => system.clearEclipseCache(), 'Eclipse browser cache cleared.');
   if (action === 'optimization-clear-roblox-cache') await runOptimization('roblox-cache', () => system.clearRobloxCache(), 'Roblox local cache and logs cleared.');
   if (action === 'clear-local-eclipse-data') await clearAllLocalEclipseData();
-  if (action === 'roblox-account-open') await openRobloxAccount(button.dataset.accountOfficialAction, button.dataset.accountId);
-  if (action === 'edit-roblox-account') startEditingRobloxAccount(button.dataset.accountId);
-  if (action === 'cancel-roblox-account-edit') stopEditingRobloxAccount();
-  if (action === 'default-roblox-account') setDefaultRobloxAccount(button.dataset.accountId);
-  if (action === 'remove-roblox-account') removeRobloxAccount(button.dataset.accountId);
   if (action === 'check-updates') await refreshUpdateStatus({ check: true });
   if (action === 'open-update-page') await openEclipseUpdatePage();
   if (action === 'export-eclipse-backup') exportEclipseBackup();
@@ -2602,11 +2364,6 @@ document.addEventListener('click', async (event) => {
 });
 
 document.addEventListener('submit', async (event) => {
-  if (event.target.matches('[data-roblox-account-form]')) {
-    event.preventDefault();
-    saveRobloxAccount(event.target);
-    return;
-  }
   if (event.target.matches('[data-mod-creator-form]')) {
     event.preventDefault();
     const creator = state.mods.creator;
@@ -2706,13 +2463,6 @@ document.addEventListener('input', (event) => {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = Number(fastFlagInput.value);
     const output = pageContent.querySelector(`[data-fastflag-output="${fastFlagInput.dataset.fastflagField}"]`);
     if (output) output.textContent = fastFlagInput.value;
-    return;
-  }
-  const robloxAccountInput = event.target.closest('[data-roblox-account-form] input');
-  if (robloxAccountInput) {
-    robloxAccountInput.setAttribute('aria-invalid', 'false');
-    const error = robloxAccountInput.closest('[data-roblox-account-form]')?.querySelector('[data-roblox-account-error]');
-    if (error) error.hidden = true;
     return;
   }
   const profileInput = event.target.closest('[name="displayName"]');

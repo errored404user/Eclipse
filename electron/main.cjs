@@ -63,28 +63,6 @@ function gamePageUrl(placeId) {
   return `https://www.roblox.com/games/${placeId}`;
 }
 
-function normalizeRobloxUsername(value) {
-  const username = String(value || '').trim();
-  return /^[A-Za-z0-9_]{3,20}$/.test(username) ? username : '';
-}
-
-function normalizeRobloxUserId(value) {
-  const userId = String(value || '').trim();
-  if (!/^[1-9]\d{0,15}$/.test(userId)) return '';
-  const numericId = Number(userId);
-  return Number.isSafeInteger(numericId) && numericId > 0 ? userId : '';
-}
-
-function robloxAccountUrl(action, account = {}) {
-  if (action === 'login') return 'https://www.roblox.com/login';
-  if (action === 'settings') return 'https://www.roblox.com/my/account#!/info';
-  const username = normalizeRobloxUsername(account?.username);
-  const userId = normalizeRobloxUserId(account?.userId);
-  if (action === 'profile' && userId) return `https://www.roblox.com/users/${userId}/profile`;
-  if (action === 'search' && username) return `https://www.roblox.com/search/users?keyword=${encodeURIComponent(username)}`;
-  return '';
-}
-
 async function openOfficialUrl(url) {
   await shell.openExternal(url);
   return { opened: true };
@@ -460,11 +438,6 @@ app.whenReady().then(async () => {
       return openOfficialUrl(gamePageUrl(validPlaceId));
     }
     throw new Error('Unsupported official Roblox action.');
-  });
-  ipcMain.handle('roblox:open-account', async (_event, action, account = {}) => {
-    const url = robloxAccountUrl(String(action || ''), account && typeof account === 'object' ? account : {});
-    if (!url) throw new Error('Choose a valid saved Roblox account shortcut.');
-    return openOfficialUrl(url);
   });
 
   recentLaunchPlaceIds = await readRecentPlaceIds(taskbarRecentsPath());
