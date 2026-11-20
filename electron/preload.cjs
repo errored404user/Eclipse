@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('eclipseSystem', {
   setStartup: (enabled) => ipcRenderer.invoke('system:set-startup', enabled === true),
   optimizationStatus: () => ipcRenderer.invoke('system:optimization-status'),
   clearEclipseCache: () => ipcRenderer.invoke('system:clear-eclipse-cache'),
+  clearEclipseData: () => ipcRenderer.invoke('system:clear-eclipse-data'),
   clearRobloxCache: () => ipcRenderer.invoke('system:clear-roblox-cache'),
   openWindowsUpdate: () => ipcRenderer.invoke('system:open-windows-update'),
   updateStatus: () => ipcRenderer.invoke('system:update-status'),

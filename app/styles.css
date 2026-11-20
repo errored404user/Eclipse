@@ -368,3 +368,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .page-shell, .page-shell > *, .game-grid .game-card, .history-list .history-row, .settings-list .setting-row, .server-list .server-row,
   .performance-mode .page-shell, .performance-mode .page-shell > * { animation: none !important; transform: none !important; }
 }
+
+
+/* Destructive local-data action stays explicit and scoped to Eclipse-owned storage. */
+.local-data-danger { border-color: rgba(238,121,142,.16); }
+.local-data-danger .section-kicker { color: #dd94a5; }
+.danger-button { border-color: rgba(238,121,142,.3); color: #ffd7df; background: rgba(177,55,82,.1); }
+.danger-button:hover { border-color: rgba(255,162,181,.58); color: #fff0f3; background: rgba(190,59,88,.22); }

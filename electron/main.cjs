@@ -399,6 +399,11 @@ app.whenReady().then(async () => {
     await session.defaultSession.clearCache();
     return optimization?.status() || { supported: true };
   });
+  ipcMain.handle('system:clear-eclipse-data', async () => {
+    await session.defaultSession.clearStorageData();
+    await session.defaultSession.clearCache();
+    return { cleared: true };
+  });
   ipcMain.handle('system:clear-roblox-cache', () => optimization?.clearRobloxCache());
   ipcMain.handle('system:open-windows-update', async () => {
     await shell.openExternal('ms-settings:windowsupdate');

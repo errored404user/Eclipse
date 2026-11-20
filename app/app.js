@@ -105,6 +105,7 @@ const browserSystem = {
   async setStartup() { return this.startupStatus(); },
   async optimizationStatus() { return { supported: false, playerRunning: false, robloxCacheBytes: 0, reason: 'Optimization tools are available in the Windows Eclipse desktop app only.' }; },
   async clearEclipseCache() { throw new Error('Eclipse cache cleanup is available in the Windows desktop app only.'); },
+  async clearEclipseData() { return { cleared: true }; },
   async clearRobloxCache() { throw new Error('Roblox cache cleanup is available in the Windows desktop app only.'); },
   async openWindowsUpdate() { throw new Error('Windows Update can be opened from the Windows Eclipse desktop app only.'); },
   async updateStatus() { return { supported: false, updateAvailable: false, reason: 'Update checks are available in the packaged Windows Eclipse app.' }; },
@@ -2008,6 +2009,19 @@ async function importEclipseBackup(file) {
   showToast('Eclipse local backup imported.');
 }
 
+async function clearAllLocalEclipseData() {
+  const confirmed = window.confirm('Delete all local Eclipse profile, Library, recent activity, history, preferences, cached discovery data, and browser storage from this device? This cannot be undone. Roblox Player files, Player Packs, Fast Flags, and your Roblox account are not changed.');
+  if (!confirmed) return;
+  try {
+    await system.clearEclipseData();
+    Object.values(storageKeys).forEach((key) => localStorage.removeItem(key));
+    showToast('Local Eclipse data deleted. Restarting Eclipse…');
+    window.setTimeout(() => window.location.reload(), 350);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Eclipse could not delete its local data.');
+  }
+}
+
 async function refreshUpdateStatus({ check = false, render = true } = {}) {
   state.update.busy = true;
   if (render && state.page === 'settings') renderSettings();
@@ -2054,6 +2068,7 @@ function renderSettings() {
     <section class="settings-list panel settings-extra-list">
       <div class="setting-row"><div><p class="section-kicker">Eclipse updates</p><h2>${escapeHtml(updateTitle)}</h2><p>${escapeHtml(updateDescription)}</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="check-updates" ${state.update.busy ? 'disabled' : ''}>${state.update.busy ? 'Checking…' : 'Check for updates'}</button>${update.updateAvailable ? '<button class="primary-button" type="button" data-action="open-update-page">Open release</button>' : ''}</div></div>
       <div class="setting-row"><div><p class="section-kicker">Local backup</p><h2>Export or restore Eclipse data</h2><p>Back up local Library, recent games, launch history, interface settings, profile, and saved Fast Flag profiles. Roblox credentials and Player files are never included.</p></div><div class="settings-actions"><button class="quiet-button" type="button" data-action="export-eclipse-backup">Export backup</button><button class="quiet-button" type="button" data-action="import-eclipse-backup">Import backup</button><input type="file" data-eclipse-backup-import accept="application/json,.json" hidden /></div></div>
+      <div class="setting-row local-data-danger"><div><p class="section-kicker">Privacy</p><h2>Delete local Eclipse data</h2><p>Erase this device’s Eclipse profile, Library, recent activity, history, preferences, cached discovery data, and browser storage. This does not sign out of Roblox or remove Roblox Player files, Player Packs, Fast Flags, or Windows settings.</p></div><button class="quiet-button danger-button" type="button" data-action="clear-local-eclipse-data">Delete local data</button></div>
     </section>
   </div>`;
 }
@@ -2216,6 +2231,7 @@ document.addEventListener('click', async (event) => {
   if (action === 'optimization-windows-update') await runOptimization('windows-update', () => system.openWindowsUpdate(), 'Windows Update opened for official driver and system updates.');
   if (action === 'optimization-clear-eclipse-cache') await runOptimization('eclipse-cache', () => system.clearEclipseCache(), 'Eclipse browser cache cleared.');
   if (action === 'optimization-clear-roblox-cache') await runOptimization('roblox-cache', () => system.clearRobloxCache(), 'Roblox local cache and logs cleared.');
+  if (action === 'clear-local-eclipse-data') await clearAllLocalEclipseData();
   if (action === 'check-updates') await refreshUpdateStatus({ check: true });
   if (action === 'open-update-page') await openEclipseUpdatePage();
   if (action === 'export-eclipse-backup') exportEclipseBackup();

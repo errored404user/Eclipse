@@ -262,6 +262,14 @@ test('keeps local discovery, library, history, backup, and update workflows boun
   assert.match(renderer, /function renderHistory\(\)/);
   assert.match(renderer, /eclipse-local-backup\/v1/);
   assert.match(renderer, /function importEclipseBackup\(file\)/);
+  assert.match(renderer, /function clearAllLocalEclipseData\(\)/);
+  assert.match(renderer, /data-action=\"clear-local-eclipse-data\"/);
+  assert.match(renderer, /Object\.values\(storageKeys\)\.forEach/);
+  assert.match(renderer, /Roblox Player files, Player Packs, Fast Flags, and your Roblox account are not changed/);
+  assert.match(preload, /system:clear-eclipse-data/);
+  assert.match(main, /system:clear-eclipse-data/);
+  assert.match(main, /session\.defaultSession\.clearStorageData/);
+  assert.match(styles, /\.local-data-danger/);
   assert.match(renderer, /Refresh & re-sort/);
   assert.match(renderer, /data-game-server-filter/);
   assert.match(renderer, /state\.settings\.serverSort/);
