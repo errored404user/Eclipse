@@ -578,3 +578,38 @@ test('keeps Fast Flags visible and lets the single profile card open a local edi
   assert.match(styles, /\.profile-dialog-avatar\.has-image/);
   assert.match(styles, /\.profile-image-upload/);
 });
+
+test('keeps collections, public-server finder preferences, and first-run setup local and explicit', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  assert.match(renderer, /eclipse\.library-collections\.v1/);
+  assert.match(renderer, /eclipse\.server-finder-presets\.v1/);
+  assert.match(renderer, /eclipse\.onboarding\.v1/);
+  assert.match(renderer, /function normalizeLibraryCollections\(value\)/);
+  assert.match(renderer, /function createLibraryCollection\(\)/);
+  assert.match(renderer, /function editGameCollections\(universeId\)/);
+  assert.match(renderer, /function moveLibraryCollection\(id, direction\)/);
+  assert.match(renderer, /function moveGameInCollection\(universeId, direction\)/);
+  assert.match(renderer, /Manual collection order/);
+  assert.match(renderer, /function saveServerFinderPreset\(\)/);
+  assert.match(renderer, /function applyGameServersResult\(detail, result/);
+  assert.match(renderer, /Eclipse does not keep or rejoin expired server IDs/);
+  assert.match(renderer, /data-action="save-server-finder"/);
+  assert.match(renderer, /function openOnboardingIfNeeded\(\)/);
+  assert.match(renderer, /function restartOnboarding\(\)/);
+  assert.match(renderer, /data-action="restart-onboarding"/);
+  assert.match(renderer, /Roblox credentials or take over Roblox account sign-in/);
+  assert.match(renderer, /libraryCollections: state\.libraryCollections/);
+  assert.match(renderer, /serverFinderPresets: state\.serverFinderPresets/);
+  assert.match(shell, /data-onboarding-dialog/);
+  assert.match(shell, /data-onboarding-content/);
+  assert.match(styles, /\.library-collection-chips/);
+  assert.match(styles, /\.server-preset-status/);
+  assert.match(styles, /\.onboarding-dialog/);
+  assert.match(styles, /\.high-contrast/);
+  assert.match(styles, /forced-colors: active/);
+});
