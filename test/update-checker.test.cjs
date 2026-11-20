@@ -2,10 +2,13 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { compareVersions, createUpdateChecker, parseVersion } = require('../electron/update-checker.cjs');
 
-test('compares Eclipse preview versions numerically', () => {
+test('compares stable Eclipse v2 releases and older preview versions numerically', () => {
   assert.deepEqual(parseVersion('v0.1.0-preview.25'), { major: 0, minor: 1, patch: 0, preview: 25 });
+  assert.deepEqual(parseVersion('v2.0.0'), { major: 2, minor: 0, patch: 0, preview: Infinity });
   assert.equal(compareVersions('v0.1.0-preview.25', 'v0.1.0-preview.9'), 1);
   assert.equal(compareVersions('v0.1.0', 'v0.1.0-preview.99'), 1);
+  assert.equal(compareVersions('v2.0.0', 'v0.1.0-preview.35'), 1);
+  assert.equal(compareVersions('v2.0.1', 'v2.0.0'), 1);
   assert.equal(parseVersion('latest'), null);
 });
 
@@ -58,4 +61,18 @@ test('reports a release-check failure without throwing or claiming an update', a
   const status = await checker.check();
   assert.equal(status.updateAvailable, false);
   assert.match(status.reason, /Could not check GitHub releases/);
+});
+
+test('marks Eclipse v2 as the stable installer release', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'build-windows-exe.yml'), 'utf8');
+  assert.equal(packageJson.version, '2.0.0');
+  assert.match(shell, /class="release-badge"[^>]*>v2<\/span>/);
+  assert.doesNotMatch(shell, />Preview<\/span>/);
+  assert.match(workflow, /gh release create .*--generate-notes/);
+  assert.doesNotMatch(workflow, /--prerelease/);
 });

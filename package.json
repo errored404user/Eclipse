@@ -1,6 +1,6 @@
 {
   "name": "eclipse-client-shell",
-  "version": "0.1.0-preview.35",
+  "version": "2.0.0",
   "private": true,
   "description": "Eclipse official Roblox Player bootstrapper and desktop client",
   "author": "Eclipse contributors",

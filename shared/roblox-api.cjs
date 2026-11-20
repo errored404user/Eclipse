@@ -63,7 +63,7 @@ async function fetchJson(url) {
   const response = await fetch(url, {
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'Eclipse/0.1.0-preview.2'
+      'User-Agent': 'Eclipse/2.0.0'
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });

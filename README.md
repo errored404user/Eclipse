@@ -2,12 +2,12 @@
 
 Eclipse is a Windows desktop bootstrapper and launcher for official Roblox experiences.
 
-## What works in this preview
+## What works in Eclipse v2
 
 - **Home** shows locally recorded recent launches and saved Roblox experiences.
 - **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs. Selectable Roblox-provided collections expose more choices than a single trending feed, alongside search and result pagination. Eclipse also keeps a bounded local snapshot with visible freshness information, renders it immediately while official data refreshes, and can show that snapshot when Roblox discovery is temporarily unavailable.
-- **Game details** exposes official public-server lists. Server sorting, availability/ping-reported filters, and refresh/re-sort controls only organize the current Roblox response; joining still hands the chosen public-server ID to Roblox Player, which may select another server if it fills.
-- **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games. Pin games, add bounded private tags and notes, then search or sort your local collection by pins, recent Eclipse handoff, players, or name.
+- **Game details** exposes official public-server lists. You can save a local per-experience server-finder preference for sort, availability, and Roblox-reported ping, then compare the currently returned page after a refresh. These controls only organize current Roblox responses; Eclipse does not measure latency, reserve servers, control matchmaking, or retain expired server IDs.
+- **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games. Create bounded local collections, manually order collections and games within a collection, pin games, add private tags and notes, then search or sort your local library. Collections and notes never modify Roblox.
 - **History** records a bounded local list of successful Eclipse-to-Roblox Player handoff requests. It supports relaunching, pinning remembered game details into Library, JSON export, and confirmed clearing; it never claims to know Roblox connection or gameplay results.
 - **Eclipse bootstrapper (Windows desktop)** detects the installed Roblox Player, checks Roblox’s official Windows Player release service before Eclipse launches, and downloads only the official Roblox installer when installation or an update is needed. Eclipse verifies the installer with Windows Authenticode before it runs, then confirms the installed version. It does not change the system `roblox://` association.
 - **Tools** validates a Roblox place ID, asks the bootstrapper to prepare the official Player, then requests the existing official `roblox://experiences/start?placeId=…` protocol handler. The Eclipse Player Handoff reports Eclipse-owned install/handoff stages only—it never claims Roblox game or server state.
@@ -15,7 +15,7 @@ Eclipse is a Windows desktop bootstrapper and launcher for official Roblox exper
 - **Mods** is a Windows-only local Player Packs workspace for validated texture/UI and sound assets. Its guided tutorial and Pack Creator scan the installed Player for eligible existing targets, then turn selected local media into a shareable `.eclipsepack`; you can also import a local `.eclipsepack` ZIP or developer manifest folder. Packs apply only while Roblox Player is closed, use versioned original-file backups, and restore in one click. Packages never contain code: executables, scripts, injectors, DLLs, credentials, network permissions, arbitrary paths, and undeclared files are rejected. An official Player update or repair restores originals, disables every active pack, and marks it for compatibility review rather than migrating it automatically.
 - **Integrations** can enable or pause the local recording of Eclipse launch requests. On the desktop app, Discord Rich Presence uses Discord’s local IPC connection to show **Open Eclipse** while Eclipse is running. It requires a public Discord Application ID, never asks for Discord credentials, and does not pretend to know Roblox server/gameplay state.
 - **Eclipse profile** is a single-click local editor in the sidebar for an optional display name and profile image. JPEG, PNG, and WebP images are center-cropped to a bounded local avatar; no image is uploaded. The profile creates no online account, never requests Roblox credentials, and is not connected to a Roblox account.
-- **Settings** persist only Eclipse interface preferences locally, including Reduce interface motion and an on-by-default Eclipse performance mode. Performance mode removes expensive blur, glow, shadows, and decorative animation from the software-rendered desktop workspace; it can be turned off if the fuller visual treatment is preferred. Settings can export/import a validated, bounded `eclipse-local-backup/v1` of Eclipse-owned Library, history, preferences, local profile, and saved Fast Flag profiles; Roblox credentials and Player files are never included. When a public GitHub Release feed is available, desktop builds offer a non-blocking check that only reports and opens a newer published release when you choose—it never downloads or installs anything automatically. If that feed is unavailable, Eclipse says so instead of claiming that the build is up to date.
+- **Settings** persist only Eclipse interface preferences locally, including Reduce interface motion, high contrast, interface scale, and an on-by-default Eclipse performance mode. A first-run guide explains Player readiness, local workspace data, and explicit-change controls. Performance mode removes expensive blur, glow, shadows, and decorative animation from the software-rendered desktop workspace; it can be turned off if the fuller visual treatment is preferred. Settings can export/import a validated, bounded `eclipse-local-backup/v1` of Eclipse-owned Library, collections, server-finder preferences, history, preferences, local profile, and saved Fast Flag profiles; Roblox credentials and Player files are never included. When a public GitHub Release feed is available, desktop builds offer a non-blocking check that only reports and opens a newer published release when you choose—it never downloads or installs anything automatically. If that feed is unavailable, Eclipse says so instead of claiming that the build is up to date.
 
 > Eclipse is not affiliated with Roblox. Availability, rankings, game details, and the player-launch protocol are controlled by Roblox and may change.
 
@@ -30,7 +30,7 @@ npm start
 
 Open `http://localhost:4173`.
 
-The browser preview fetches live Roblox discovery data through its local Node server. Launching a game hands off to the Roblox protocol registered on your computer.
+Browser mode fetches live Roblox discovery data through its local Node server. Launching a game hands off to the Roblox protocol registered on your computer.
 
 ## Run as a desktop application
 
@@ -92,7 +92,7 @@ npm run dist:win
 This creates an NSIS installer in `release/`, named similarly to:
 
 ```text
-Eclipse-Setup-0.1.0-preview.28-x64.exe
+Eclipse-Setup-2.0.0-x64.exe
 ```
 
 Run that setup executable to choose an installation folder and create Start menu/Desktop shortcuts. The final installer page has **Launch Eclipse** selected by default, so it opens the installed Eclipse application after setup completes. The installer preserves Eclipse’s local data when it is removed.
