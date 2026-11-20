@@ -7,6 +7,8 @@ const desktopWindow = window.eclipseWindow;
 const SERVER_RENDER_BATCH_SIZE = 40;
 const UNCAPPED_FPS_TARGET = 9_999;
 const FAST_FLAG_FPS_TARGETS = [60, 120, 144, 165, 240, UNCAPPED_FPS_TARGET];
+const FAST_FLAG_CUSTOM_LIMITS = { maxFlags: 50, maxKeyLength: 100, maxValueLength: 1000 };
+const FAST_FLAG_CUSTOM_KEY_PATTERN = /^(?:F|DF)(?:Flag|Int|String|Log)[A-Za-z0-9_]{1,96}$/;
 
 const storageKeys = {
   library: 'eclipse.roblox.library.v1',
@@ -331,7 +333,27 @@ function activeLibraryCollection() {
 }
 
 function defaultFastFlagSelection() {
-  return { profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic' };
+  return { profile: 'balanced', msaa: 2, fpsCap: 0, preserveDisplayScaling: false, meshDetailEnabled: false, meshDetail: 3, frmQualityEnabled: false, frmQuality: 21, renderingMode: 'automatic', customFlags: [] };
+}
+
+function normalizeCustomFlagEntries(value) {
+  const entries = Array.isArray(value)
+    ? value.map((item) => [item?.key, item?.value])
+    : value && typeof value === 'object'
+      ? Object.entries(value)
+      : [];
+  const flags = new Map();
+  for (const [rawKey, rawValue] of entries) {
+    const key = String(rawKey ?? '').trim();
+    if (!FAST_FLAG_CUSTOM_KEY_PATTERN.test(key) || key.length > FAST_FLAG_CUSTOM_LIMITS.maxKeyLength) continue;
+    if (rawValue === null || rawValue === undefined || typeof rawValue === 'object' || typeof rawValue === 'function' || typeof rawValue === 'symbol') continue;
+    const flagValue = String(rawValue).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, FAST_FLAG_CUSTOM_LIMITS.maxValueLength);
+    if (!flagValue) continue;
+    flags.delete(key);
+    flags.set(key, flagValue);
+    if (flags.size > FAST_FLAG_CUSTOM_LIMITS.maxFlags) flags.delete(flags.keys().next().value);
+  }
+  return [...flags.entries()].map(([key, flagValue]) => ({ key, value: flagValue }));
 }
 
 function normalizeFastFlagSelection(value = {}) {
@@ -346,7 +368,8 @@ function normalizeFastFlagSelection(value = {}) {
     meshDetail: integer(value.meshDetail, [0, 1, 2, 3], 3),
     frmQualityEnabled: value.frmQualityEnabled === true,
     frmQuality: integer(value.frmQuality, Array.from({ length: 21 }, (_item, index) => index + 1), 21),
-    renderingMode: ['automatic', 'd3d11', 'vulkan'].includes(value.renderingMode) ? value.renderingMode : 'automatic'
+    renderingMode: ['automatic', 'd3d11', 'vulkan'].includes(value.renderingMode) ? value.renderingMode : 'automatic',
+    customFlags: normalizeCustomFlagEntries(value.customFlags)
   };
 }
 
@@ -1583,6 +1606,7 @@ function fastFlagPreviewFor(source) {
   if (selection.frmQualityEnabled) flags.DFIntDebugFRMQualityLevelOverride = String(Math.max(1, Math.min(21, Number(selection.frmQuality) || 21)));
   if (selection.renderingMode === 'd3d11') flags.FFlagDebugGraphicsPreferD3D11 = 'True';
   if (selection.renderingMode === 'vulkan') flags.FFlagDebugGraphicsPreferVulkan = 'True';
+  for (const entry of selection.customFlags) flags[entry.key] = entry.value;
   return flags;
 }
 
@@ -1596,6 +1620,26 @@ function fastFlagToggle(field, checked, title, description, disabled) {
 
 function fastFlagSelection() {
   return normalizeFastFlagSelection(state.fastFlags);
+}
+
+function customFastFlagEntries() {
+  return Array.isArray(state.fastFlags.customFlags) ? state.fastFlags.customFlags : [];
+}
+
+function addCustomFastFlag() {
+  if (!Array.isArray(state.fastFlags.customFlags)) state.fastFlags.customFlags = [];
+  if (state.fastFlags.customFlags.length >= FAST_FLAG_CUSTOM_LIMITS.maxFlags) return showToast(`Keep up to ${FAST_FLAG_CUSTOM_LIMITS.maxFlags} custom flags.`);
+  state.fastFlags.customFlags.push({ key: '', value: '' });
+  updateFastFlagsPanel();
+  pageContent.querySelector(`[data-fastflag-custom-key="${state.fastFlags.customFlags.length - 1}"]`)?.focus();
+}
+
+function removeCustomFastFlag(indexValue) {
+  const index = Number(indexValue);
+  if (!Number.isSafeInteger(index) || !customFastFlagEntries()[index]) return;
+  state.fastFlags.customFlags.splice(index, 1);
+  persistActiveFastFlagProfile();
+  updateFastFlagsPanel();
 }
 
 function saveFastFlagProfiles() {
@@ -1712,6 +1756,14 @@ function fastFlagsPanel() {
     const changes = managedFlagDifferenceCount(fastFlagPreview(), { ...fastFlagProfiles[item.settings.profile].flags, ...fastFlagPreviewFor(item.settings) });
     return `<button class="ff-profile ff-profile-saved ${selection.profileId === item.id ? 'selected' : ''}" type="button" data-action="select-saved-fastflag-profile" data-saved-fastflag-profile="${escapeHtml(item.id)}" ${disabled ? 'disabled' : ''}><strong>${escapeHtml(item.name)}</strong><span>${changes ? `${changes} managed change${changes === 1 ? '' : 's'}` : 'Matches current settings'}</span></button>`;
   }).join('');
+  const customEntries = Array.isArray(selection.customFlags) ? selection.customFlags.slice(0, FAST_FLAG_CUSTOM_LIMITS.maxFlags) : [];
+  const customRows = customEntries.map((entry, index) => {
+    const key = String(entry?.key ?? '');
+    const value = String(entry?.value ?? '');
+    const invalid = key.trim() !== '' && !FAST_FLAG_CUSTOM_KEY_PATTERN.test(key.trim());
+    return `<div class="ff-custom-row${invalid ? ' is-invalid' : ''}"><input type="text" data-fastflag-custom-key="${index}" value="${escapeHtml(key)}" placeholder="DFFlagExampleName" maxlength="${FAST_FLAG_CUSTOM_LIMITS.maxKeyLength}" spellcheck="false" autocomplete="off" aria-label="Custom flag ${index + 1} name" aria-invalid="${invalid ? 'true' : 'false'}" ${disabled ? 'disabled' : ''}/><input type="text" data-fastflag-custom-value="${index}" value="${escapeHtml(value)}" placeholder="True" maxlength="${FAST_FLAG_CUSTOM_LIMITS.maxValueLength}" spellcheck="false" autocomplete="off" aria-label="Custom flag ${index + 1} value" ${disabled ? 'disabled' : ''}/><button class="quiet-button compact-button" type="button" data-action="fastflag-custom-remove" data-fastflag-custom-remove="${index}" aria-label="Remove custom flag ${index + 1}" ${disabled ? 'disabled' : ''}>Remove</button></div>`;
+  }).join('');
+  const customPending = customEntries.length - normalizeCustomFlagEntries(customEntries).length;
   const flagsJson = Object.keys(flags).length ? JSON.stringify(flags, null, 2) : '{}';
   const appliedChangeCount = managedFlagDifferenceCount(status?.managedFlags || {}, flags);
   const activeLocalProfile = activeSavedFastFlagProfile();
@@ -1735,11 +1787,12 @@ function fastFlagsPanel() {
         <div class="ff-setting-card ff-choice-card"><div><strong>Rendering mode</strong><p>Use Automatic unless you need to prefer a specific renderer.</p></div><label class="ff-select"><span class="sr-only">Rendering mode</span><select data-fastflag-field="renderingMode" data-fastflag-type="string" ${disabled ? 'disabled' : ''}><option value="automatic" ${renderingMode === 'automatic' ? 'selected' : ''}>Automatic</option><option value="d3d11" ${renderingMode === 'd3d11' ? 'selected' : ''}>Direct3D 11</option><option value="vulkan" ${renderingMode === 'vulkan' ? 'selected' : ''}>Vulkan</option></select></label></div>
       </section>
       <section class="ff-setting-group"><h3>Player pacing</h3><div class="ff-setting-card ff-choice-card"><div><strong>Frame-rate target</strong><p>Choose a managed target, leave Roblox Player at its default, or use the 9,999 FPS uncapped target. Roblox, your display, and hardware can still limit the final frame rate.</p></div><label class="ff-select"><span class="sr-only">Frame-rate target</span><select data-fastflag-field="fpsCap" ${disabled ? 'disabled' : ''}><option value="0" ${Number(fpsCap) === 0 ? 'selected' : ''}>Roblox default</option><option value="60" ${Number(fpsCap) === 60 ? 'selected' : ''}>60 FPS</option><option value="120" ${Number(fpsCap) === 120 ? 'selected' : ''}>120 FPS</option><option value="144" ${Number(fpsCap) === 144 ? 'selected' : ''}>144 FPS</option><option value="165" ${Number(fpsCap) === 165 ? 'selected' : ''}>165 FPS</option><option value="240" ${Number(fpsCap) === 240 ? 'selected' : ''}>240 FPS</option><option value="${UNCAPPED_FPS_TARGET}" ${Number(fpsCap) === UNCAPPED_FPS_TARGET ? 'selected' : ''}>Uncapped (9,999 FPS target)</option></select></label></div></section>
+      <section class="ff-setting-group"><h3>Custom flags</h3><div class="ff-setting-card ff-custom-card"><div><strong>Fast Flag editor</strong><p>Add your own Roblox FVariable entries — names must start with FFlag, DFFlag, FInt, DFInt, FString, DFString, FLog, or DFLog. Up to ${FAST_FLAG_CUSTOM_LIMITS.maxFlags} entries, stored locally, included in profiles and exports, removed again by Reset, and carried across Roblox Player updates. Roblox decides which local flags it accepts.</p></div>${customRows || '<p class="ff-custom-empty">No custom flags yet. Add one below to edit ClientAppSettings directly.</p>'}<div class="ff-custom-actions"><button class="quiet-button compact-button" type="button" data-action="fastflag-custom-add" ${disabled || customEntries.length >= FAST_FLAG_CUSTOM_LIMITS.maxFlags ? 'disabled' : ''}>Add custom flag</button>${customPending ? `<span class="ff-custom-warning">${customPending} entr${customPending === 1 ? 'y needs' : 'ies need'} a valid flag name and value before applying.</span>` : ''}</div></div></section>
       <div class="ff-actions"><button class="primary-button" type="submit" ${disabled ? 'disabled' : ''}>${busy ? 'Applying…' : 'Apply Fast Flags'}</button><button class="quiet-button" type="button" data-action="fastflag-reset" ${disabled ? 'disabled' : ''}>Reset managed flags</button></div>
     </form>
     <div class="ff-preview"><div><p class="section-kicker">Eclipse-managed preview</p><p>${escapeHtml(statusText)}</p><small>${escapeHtml(pathText)}</small></div><pre>${escapeHtml(flagsJson)}</pre></div>
     ${message ? `<p class="ff-message">${escapeHtml(message)}</p>` : ''}
-    <p class="ff-safety">Eclipse writes only the fixed graphics keys shown above. Applying preserves settings it does not manage; close Roblox Player before applying changes, then relaunch it.</p>
+    <p class="ff-safety">Eclipse writes the managed graphics keys above plus any custom flags you add, tracks exactly what it wrote, and removes those keys again with Reset. Applying preserves settings Eclipse did not write; close Roblox Player before applying changes, then relaunch it.</p>
   </section>`;
 }
 
@@ -2695,6 +2748,8 @@ document.addEventListener('click', async (event) => {
   if (action === 'fastflag-profile-delete') deleteSavedFastFlagProfile();
   if (action === 'fastflag-profile-export') exportSavedFastFlagProfiles();
   if (action === 'fastflag-reset') await resetFastFlags();
+  if (action === 'fastflag-custom-add') addCustomFastFlag();
+  if (action === 'fastflag-custom-remove') removeCustomFastFlag(button.dataset.fastflagCustomRemove);
   if (action === 'refresh-mods') await refreshModsStatus();
   if (action === 'mod-creator-open') {
     if (!state.mods.targets) state.mods.targetError = '';
@@ -2826,6 +2881,14 @@ document.addEventListener('input', (event) => {
     if (output) output.textContent = fastFlagInput.value;
     return;
   }
+  const customFlagField = event.target.closest('[data-fastflag-custom-key], [data-fastflag-custom-value]');
+  if (customFlagField) {
+    const isKey = customFlagField.hasAttribute('data-fastflag-custom-key');
+    const index = Number(isKey ? customFlagField.dataset.fastflagCustomKey : customFlagField.dataset.fastflagCustomValue);
+    const entries = customFastFlagEntries();
+    if (Number.isSafeInteger(index) && entries[index]) entries[index][isKey ? 'key' : 'value'] = String(customFlagField.value || '');
+    return;
+  }
   const profileInput = event.target.closest('[name="displayName"]');
   if (profileInput) {
     profileInput.setAttribute('aria-invalid', 'false');
@@ -2886,6 +2949,12 @@ document.addEventListener('change', async (event) => {
   const fastFlagInput = event.target.closest('[data-fastflag-field]');
   if (fastFlagInput) {
     state.fastFlags[fastFlagInput.dataset.fastflagField] = fastFlagInput.type === 'checkbox' ? fastFlagInput.checked : fastFlagInput.dataset.fastflagType === 'string' ? fastFlagInput.value : Number(fastFlagInput.value);
+    persistActiveFastFlagProfile();
+    updateFastFlagsPanel();
+    return;
+  }
+  const customFlagField = event.target.closest('[data-fastflag-custom-key], [data-fastflag-custom-value]');
+  if (customFlagField) {
     persistActiveFastFlagProfile();
     updateFastFlagsPanel();
     return;

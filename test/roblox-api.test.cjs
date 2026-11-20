@@ -356,6 +356,55 @@ test('builds bounded mesh, FRM, display-scaling, and rendering-mode Fast Flags',
   assert.deepEqual(reset, { FFlagUnrelatedSetting: 'Keep' });
 });
 
+test('supports a bounded custom Fast Flag editor with tracked reset behavior', async () => {
+  const fs = require('node:fs/promises');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { CUSTOM_FLAG_LIMITS, buildManagedFlags, customFlagsObject, mergeManagedFlags, normalizeCustomFlags, normalizeOptions, readAppliedCustomKeys, writeAppliedCustomKeys } = require('../electron/fast-flags.cjs');
+
+  const normalized = normalizeCustomFlags([
+    { key: 'DFIntTaskSchedulerTargetFps', value: '9999' },
+    { key: 'not a flag', value: 'x' },
+    { key: 'FFlagEditorExample', value: 123 },
+    { key: 'FFlagEditorExample', value: 'True' },
+    { key: 'DFStringEditorExample', value: null },
+    { key: 'FIntEmptyValue', value: '   ' }
+  ]);
+  assert.deepEqual(normalized, [
+    { key: 'DFIntTaskSchedulerTargetFps', value: '9999' },
+    { key: 'FFlagEditorExample', value: 'True' }
+  ]);
+  assert.deepEqual(customFlagsObject({ DFIntEditorMap: '7', 'bad key': 'no' }), { DFIntEditorMap: '7' });
+  assert.equal(normalizeCustomFlags(Array.from({ length: 80 }, (_item, index) => ({ key: `FFlagEditorFlood${index}`, value: '1' }))).length, CUSTOM_FLAG_LIMITS.maxFlags);
+  assert.equal(normalizeCustomFlags([{ key: 'FFlagLongValue', value: 'x'.repeat(5000) }])[0].value.length, CUSTOM_FLAG_LIMITS.maxValueLength);
+  assert.equal(normalizeCustomFlags('nonsense').length, 0);
+
+  const built = buildManagedFlags({ profile: 'balanced', fpsCap: 120, customFlags: [{ key: 'DFIntTaskSchedulerTargetFps', value: '9999' }, { key: 'FFlagEditorExtra', value: 'True' }] });
+  assert.equal(built.DFIntTaskSchedulerTargetFps, '9999');
+  assert.equal(built.FFlagEditorExtra, 'True');
+  assert.equal(built.DFFlagTextureQualityOverrideEnabled, 'True');
+  assert.equal(normalizeOptions({ customFlags: [{ key: 'FFlagEditorOption', value: 'True' }] }).customFlags.length, 1);
+
+  const merged = mergeManagedFlags({ FFlagStaleCustom: '1', FFlagUnrelatedSetting: 'Keep' }, { FFlagFreshCustom: '2' }, ['FFlagStaleCustom']);
+  assert.deepEqual(merged, { FFlagUnrelatedSetting: 'Keep', FFlagFreshCustom: '2' });
+
+  const statePath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'eclipse-fflags-')), 'state.json');
+  const previous = process.env.ECLIPSE_FASTFLAG_STATE_PATH;
+  process.env.ECLIPSE_FASTFLAG_STATE_PATH = statePath;
+  try {
+    assert.deepEqual(await readAppliedCustomKeys(), []);
+    await writeAppliedCustomKeys(['FFlagTrackedOne', 'bad key', 'DFIntTrackedTwo']);
+    assert.deepEqual(await readAppliedCustomKeys(), ['FFlagTrackedOne', 'DFIntTrackedTwo']);
+    await writeAppliedCustomKeys([]);
+    assert.deepEqual(await readAppliedCustomKeys(), []);
+    await fs.writeFile(statePath, 'not json', 'utf8');
+    assert.deepEqual(await readAppliedCustomKeys(), []);
+  } finally {
+    if (previous === undefined) delete process.env.ECLIPSE_FASTFLAG_STATE_PATH;
+    else process.env.ECLIPSE_FASTFLAG_STATE_PATH = previous;
+  }
+});
+
 test('clamps numeric Fast Flag fine-tuning and rejects unsupported renderers', () => {
   const { normalizeOptions, buildManagedFlags } = require('../electron/fast-flags.cjs');
   assert.deepEqual(normalizeOptions({
@@ -373,7 +422,8 @@ test('clamps numeric Fast Flag fine-tuning and rejects unsupported renderers', (
     meshDetail: 3,
     frmQualityEnabled: false,
     frmQuality: 1,
-    renderingMode: 'automatic'
+    renderingMode: 'automatic',
+    customFlags: []
   });
   assert.deepEqual(buildManagedFlags({ renderingMode: 'vulkan' }), { FFlagDebugGraphicsPreferVulkan: 'True' });
 });
@@ -591,6 +641,9 @@ test('keeps collections, public-server finder preferences, and first-run setup l
   const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
   assert.match(renderer, /Uncapped \(9,999 FPS target\)/);
+  assert.match(renderer, /Fast Flag editor/);
+  assert.match(renderer, /fastflag-custom-add/);
+  assert.match(renderer, /FAST_FLAG_CUSTOM_KEY_PATTERN = \/\^\(\?:F\|DF\)/);
   assert.match(renderer, /UNCAPPED_FPS_TARGET = 9_999/);
   assert.match(renderer, /eclipse\.library-collections\.v1/);
   assert.match(renderer, /eclipse\.server-finder-presets\.v1/);

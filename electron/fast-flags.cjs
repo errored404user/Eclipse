@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
@@ -26,6 +27,14 @@ const MESH_DETAIL_RANGE = Object.freeze({ min: 0, max: 3 });
 const FRM_QUALITY_RANGE = Object.freeze({ min: 1, max: 21 });
 const RENDERING_MODES = Object.freeze(['automatic', 'd3d11', 'vulkan']);
 
+// Custom Fast Flags are user-defined entries added through the editor. They stay
+// bounded and follow the Roblox FVariable naming prefixes so Eclipse never writes
+// arbitrary ClientAppSettings keys. Keys Eclipse applied are tracked in a small
+// Eclipse-owned state file so Reset and Player-version migration can remove or
+// carry exactly the entries Eclipse wrote and nothing else.
+const CUSTOM_FLAG_LIMITS = Object.freeze({ maxFlags: 50, maxKeyLength: 100, maxValueLength: 1000 });
+const CUSTOM_FLAG_KEY_PATTERN = /^(?:F|DF)(?:Flag|Int|String|Log)[A-Za-z0-9_]{1,96}$/;
+
 const MANAGED_KEYS = Object.freeze([
   'DFFlagTextureQualityOverrideEnabled',
   'DFIntTextureQualityOverride',
@@ -41,6 +50,61 @@ const MANAGED_KEYS = Object.freeze([
   'FFlagDebugGraphicsPreferD3D11',
   'FFlagDebugGraphicsPreferVulkan'
 ]);
+
+function normalizeCustomFlags(value) {
+  const entries = Array.isArray(value)
+    ? value.map((item) => [item?.key, item?.value])
+    : value && typeof value === 'object'
+      ? Object.entries(value)
+      : [];
+  const flags = new Map();
+  for (const [rawKey, rawValue] of entries) {
+    const key = String(rawKey ?? '').trim();
+    if (!CUSTOM_FLAG_KEY_PATTERN.test(key) || key.length > CUSTOM_FLAG_LIMITS.maxKeyLength) continue;
+    if (rawValue === null || rawValue === undefined || typeof rawValue === 'object' || typeof rawValue === 'function' || typeof rawValue === 'symbol') continue;
+    const flagValue = String(rawValue).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CUSTOM_FLAG_LIMITS.maxValueLength);
+    if (!flagValue) continue;
+    flags.delete(key);
+    flags.set(key, flagValue);
+    if (flags.size > CUSTOM_FLAG_LIMITS.maxFlags) flags.delete(flags.keys().next().value);
+  }
+  return [...flags.entries()].map(([key, flagValue]) => ({ key, value: flagValue }));
+}
+
+function customFlagsObject(value) {
+  return Object.fromEntries(normalizeCustomFlags(value).map((entry) => [entry.key, entry.value]));
+}
+
+function appliedStatePath() {
+  if (process.env.ECLIPSE_FASTFLAG_STATE_PATH) return process.env.ECLIPSE_FASTFLAG_STATE_PATH;
+  try {
+    const { app } = require('electron');
+    const userData = app?.getPath?.('userData');
+    if (userData) return path.join(userData, 'fastflags-applied.json');
+  } catch {
+    // Electron is unavailable outside the desktop app (for example in tests).
+  }
+  return path.join(os.homedir(), '.eclipse', 'fastflags-applied.json');
+}
+
+async function readAppliedCustomKeys() {
+  try {
+    const parsed = JSON.parse(await fs.readFile(appliedStatePath(), 'utf8'));
+    const keys = Array.isArray(parsed?.appliedKeys) ? parsed.appliedKeys : [];
+    return keys.filter((key) => typeof key === 'string' && CUSTOM_FLAG_KEY_PATTERN.test(key)).slice(0, CUSTOM_FLAG_LIMITS.maxFlags);
+  } catch {
+    return [];
+  }
+}
+
+async function writeAppliedCustomKeys(keys) {
+  const statePath = appliedStatePath();
+  await fs.mkdir(path.dirname(statePath), { recursive: true });
+  const temporaryPath = `${statePath}.${randomUUID()}.tmp`;
+  const appliedKeys = (Array.isArray(keys) ? keys : []).filter((key) => typeof key === 'string' && CUSTOM_FLAG_KEY_PATTERN.test(key)).slice(0, CUSTOM_FLAG_LIMITS.maxFlags);
+  await fs.writeFile(temporaryPath, `${JSON.stringify({ schema: 'eclipse-fastflags-applied/v1', appliedKeys }, null, 2)}\n`, 'utf8');
+  await fs.rename(temporaryPath, statePath);
+}
 
 function clampInteger(value, range, fallback) {
   const number = Number(value);
@@ -63,7 +127,8 @@ function normalizeOptions(options = {}) {
     meshDetail: clampInteger(options.meshDetail, MESH_DETAIL_RANGE, MESH_DETAIL_RANGE.max),
     frmQualityEnabled: options.frmQualityEnabled === true,
     frmQuality: clampInteger(options.frmQuality, FRM_QUALITY_RANGE, FRM_QUALITY_RANGE.max),
-    renderingMode: RENDERING_MODES.includes(requestedMode) ? requestedMode : 'automatic'
+    renderingMode: RENDERING_MODES.includes(requestedMode) ? requestedMode : 'automatic',
+    customFlags: normalizeCustomFlags(options.customFlags)
   };
 }
 
@@ -96,12 +161,16 @@ function buildManagedFlags(options = {}) {
   if (normalized.meshDetailEnabled) Object.assign(flags, buildMeshDetailFlags(normalized.meshDetail));
   if (normalized.frmQualityEnabled) flags.DFIntDebugFRMQualityLevelOverride = String(normalized.frmQuality);
   Object.assign(flags, buildRenderingModeFlags(normalized.renderingMode));
+  for (const entry of normalized.customFlags) flags[entry.key] = entry.value;
   return flags;
 }
 
-function mergeManagedFlags(existing, managed) {
+function mergeManagedFlags(existing, managed, previousCustomKeys = []) {
   const next = { ...existing };
   for (const key of MANAGED_KEYS) delete next[key];
+  for (const key of previousCustomKeys) {
+    if (!Object.hasOwn(managed, key)) delete next[key];
+  }
   return { ...next, ...managed };
 }
 
@@ -164,11 +233,12 @@ async function migrateManagedFlags(sourceDirectory, targetDirectory) {
     if (error?.code === 'ENOENT') return {};
     throw error;
   }
-  const managedFlags = Object.fromEntries(MANAGED_KEYS.filter((key) => typeof source[key] === 'string').map((key) => [key, source[key]]));
+  const trackedKeys = [...MANAGED_KEYS, ...(await readAppliedCustomKeys())];
+  const managedFlags = Object.fromEntries(trackedKeys.filter((key) => typeof source[key] === 'string').map((key) => [key, source[key]]));
   if (!Object.keys(managedFlags).length) return {};
   const targetPath = path.join(targetDirectory, 'ClientSettings', 'ClientAppSettings.json');
   const target = await readSettings(targetPath);
-  await writeSettings(targetPath, mergeManagedFlags(target, managedFlags));
+  await writeSettings(targetPath, mergeManagedFlags(target, managedFlags, await readAppliedCustomKeys()));
   return managedFlags;
 }
 
@@ -182,27 +252,33 @@ async function getStatus() {
   }
   const settingsPath = path.join(playerDirectory, 'ClientSettings', 'ClientAppSettings.json');
   const settings = await readSettings(settingsPath);
-  const managedFlags = Object.fromEntries(MANAGED_KEYS.filter((key) => typeof settings[key] === 'string').map((key) => [key, settings[key]]));
-  return { supported: true, playerDirectory, settingsPath, managedFlags };
+  const appliedCustomKeys = await readAppliedCustomKeys();
+  const trackedKeys = [...MANAGED_KEYS, ...appliedCustomKeys];
+  const managedFlags = Object.fromEntries(trackedKeys.filter((key) => typeof settings[key] === 'string').map((key) => [key, settings[key]]));
+  return { supported: true, playerDirectory, settingsPath, managedFlags, appliedCustomKeys };
 }
 
 async function apply(options) {
   const status = await getStatus();
   if (!status.supported) throw new Error(status.reason);
   const existing = await readSettings(status.settingsPath);
-  const managedFlags = buildManagedFlags(options);
-  const merged = mergeManagedFlags(existing, managedFlags);
+  const normalized = normalizeOptions(options);
+  const managedFlags = buildManagedFlags(normalized);
+  const merged = mergeManagedFlags(existing, managedFlags, status.appliedCustomKeys);
   await writeSettings(status.settingsPath, merged);
-  return { ...status, managedFlags };
+  const appliedCustomKeys = normalized.customFlags.map((entry) => entry.key);
+  await writeAppliedCustomKeys(appliedCustomKeys);
+  return { ...status, managedFlags, appliedCustomKeys };
 }
 
 async function reset() {
   const status = await getStatus();
   if (!status.supported) throw new Error(status.reason);
   const existing = await readSettings(status.settingsPath);
-  const merged = mergeManagedFlags(existing, {});
+  const merged = mergeManagedFlags(existing, {}, status.appliedCustomKeys);
   await writeSettings(status.settingsPath, merged);
-  return { ...status, managedFlags: {} };
+  await writeAppliedCustomKeys([]);
+  return { ...status, managedFlags: {}, appliedCustomKeys: [] };
 }
 
-module.exports = { FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, UNCAPPED_FPS_TARGET, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, getStatus, mergeManagedFlags, migrateManagedFlags, normalizeOptions, reset };
+module.exports = { CUSTOM_FLAG_KEY_PATTERN, CUSTOM_FLAG_LIMITS, FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, UNCAPPED_FPS_TARGET, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, customFlagsObject, getStatus, mergeManagedFlags, migrateManagedFlags, normalizeCustomFlags, normalizeOptions, readAppliedCustomKeys, reset, writeAppliedCustomKeys };
