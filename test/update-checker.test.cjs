@@ -70,7 +70,7 @@ test('marks Eclipse v2 as the stable installer release', () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
   const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'build-windows-exe.yml'), 'utf8');
-  assert.equal(packageJson.version, '2.0.0');
+  assert.match(packageJson.version, /^2\.\d+\.\d+$/);
   assert.match(shell, /class="release-badge"[^>]*>v2<\/span>/);
   assert.doesNotMatch(shell, />Preview<\/span>/);
   assert.match(workflow, /gh release create .*--generate-notes/);

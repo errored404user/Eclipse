@@ -19,7 +19,8 @@ const PROFILE_FLAGS = Object.freeze({
 });
 
 const PROFILE_MSAA = Object.freeze({ default: 0, performance: 1, balanced: 2, quality: 4 });
-const FPS_CAPS = Object.freeze([60, 120, 144, 165, 240]);
+const UNCAPPED_FPS_TARGET = 9_999;
+const FPS_CAPS = Object.freeze([60, 120, 144, 165, 240, UNCAPPED_FPS_TARGET]);
 const MSAA_LEVELS = Object.freeze([0, 1, 2, 4]);
 const MESH_DETAIL_RANGE = Object.freeze({ min: 0, max: 3 });
 const FRM_QUALITY_RANGE = Object.freeze({ min: 1, max: 21 });
@@ -204,4 +205,4 @@ async function reset() {
   return { ...status, managedFlags: {} };
 }
 
-module.exports = { FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, getStatus, mergeManagedFlags, migrateManagedFlags, normalizeOptions, reset };
+module.exports = { FPS_CAPS, FRM_QUALITY_RANGE, MANAGED_KEYS, MESH_DETAIL_RANGE, MSAA_LEVELS, PROFILE_FLAGS, PROFILE_MSAA, RENDERING_MODES, UNCAPPED_FPS_TARGET, apply, buildManagedFlags, buildMeshDetailFlags, buildRenderingModeFlags, getStatus, mergeManagedFlags, migrateManagedFlags, normalizeOptions, reset };

@@ -297,7 +297,7 @@ test('accepts only safe numeric Roblox place IDs', () => {
 });
 
 test('builds and resets only the safe managed Fast Flag keys', () => {
-  const { buildManagedFlags, mergeManagedFlags } = require('../electron/fast-flags.cjs');
+  const { FPS_CAPS, UNCAPPED_FPS_TARGET, buildManagedFlags, mergeManagedFlags, normalizeOptions } = require('../electron/fast-flags.cjs');
   const flags = buildManagedFlags({ profile: 'balanced', fpsCap: 144, disableDpiScaling: true });
   assert.deepEqual(flags, {
     DFFlagTextureQualityOverrideEnabled: 'True',
@@ -311,6 +311,10 @@ test('builds and resets only the safe managed Fast Flag keys', () => {
   assert.equal(merged.DFIntTextureQualityOverride, '2');
   const reset = mergeManagedFlags(merged, {});
   assert.deepEqual(reset, { FFlagUnrelatedSetting: 'Keep' });
+  assert.equal(UNCAPPED_FPS_TARGET, 9999);
+  assert.equal(FPS_CAPS.includes(UNCAPPED_FPS_TARGET), true);
+  assert.equal(normalizeOptions({ fpsCap: UNCAPPED_FPS_TARGET }).fpsCap, UNCAPPED_FPS_TARGET);
+  assert.deepEqual(buildManagedFlags({ fpsCap: UNCAPPED_FPS_TARGET }), { DFIntTaskSchedulerTargetFps: '9999' });
 });
 
 test('defines bounded player-handoff states without pretending to read Roblox connection status', () => {
@@ -586,6 +590,8 @@ test('keeps collections, public-server finder preferences, and first-run setup l
   const renderer = fs.readFileSync(path.join(root, 'app', 'app.js'), 'utf8');
   const shell = fs.readFileSync(path.join(root, 'app', 'index.html'), 'utf8');
   const styles = fs.readFileSync(path.join(root, 'app', 'styles.css'), 'utf8');
+  assert.match(renderer, /Uncapped \(9,999 FPS target\)/);
+  assert.match(renderer, /UNCAPPED_FPS_TARGET = 9_999/);
   assert.match(renderer, /eclipse\.library-collections\.v1/);
   assert.match(renderer, /eclipse\.server-finder-presets\.v1/);
   assert.match(renderer, /eclipse\.onboarding\.v1/);

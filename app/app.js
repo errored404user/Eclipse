@@ -5,6 +5,8 @@ const appSplash = document.querySelector('[data-app-splash]');
 const splashStartedAt = performance.now();
 const desktopWindow = window.eclipseWindow;
 const SERVER_RENDER_BATCH_SIZE = 40;
+const UNCAPPED_FPS_TARGET = 9_999;
+const FAST_FLAG_FPS_TARGETS = [60, 120, 144, 165, 240, UNCAPPED_FPS_TARGET];
 
 const storageKeys = {
   library: 'eclipse.roblox.library.v1',
@@ -338,7 +340,7 @@ function normalizeFastFlagSelection(value = {}) {
   return {
     profile,
     msaa: integer(value.msaa, [0, 1, 2, 4], profile === 'default' ? 0 : ({ performance: 1, balanced: 2, quality: 4 }[profile] || 2)),
-    fpsCap: integer(value.fpsCap, [0, 60, 120, 144, 165, 240], 0),
+    fpsCap: integer(value.fpsCap, [0, ...FAST_FLAG_FPS_TARGETS], 0),
     preserveDisplayScaling: value.preserveDisplayScaling === true,
     meshDetailEnabled: value.meshDetailEnabled === true,
     meshDetail: integer(value.meshDetail, [0, 1, 2, 3], 3),
@@ -1570,7 +1572,7 @@ function fastFlagPreviewFor(source) {
   const selection = normalizeFastFlagSelection(source);
   const flags = { ...fastFlagProfiles[selection.profile].flags };
   if ([1, 2, 4].includes(Number(selection.msaa))) flags.FIntDebugForceMSAASamples = String(selection.msaa);
-  if ([60, 120, 144, 165, 240].includes(Number(selection.fpsCap))) flags.DFIntTaskSchedulerTargetFps = String(selection.fpsCap);
+  if (FAST_FLAG_FPS_TARGETS.includes(Number(selection.fpsCap))) flags.DFIntTaskSchedulerTargetFps = String(selection.fpsCap);
   if (selection.preserveDisplayScaling) flags.DFFlagDisableDPIScale = 'True';
   if (selection.meshDetailEnabled) {
     const detail = Math.max(0, Math.min(3, Number(selection.meshDetail) || 0));
@@ -1732,7 +1734,7 @@ function fastFlagsPanel() {
         <div class="ff-setting-card ${frmQualityEnabled ? 'is-expanded' : ''}"><div class="ff-setting-top"><div><strong>FRM quality override</strong><p>Choose the FRM quality Roblox should use.</p></div>${fastFlagToggle('frmQualityEnabled', frmQualityEnabled, 'Enable override', 'Higher values can cost more GPU performance.', disabled)}</div>${frmQualityEnabled ? `<div class="ff-range-area"><div class="ff-range-line"><span>Lowest quality</span><input type="range" min="1" max="21" step="1" value="${frmQuality}" data-fastflag-field="frmQuality" aria-label="FRM quality override" ${disabled ? 'disabled' : ''}/><span>Highest quality</span><output data-fastflag-output="frmQuality">${frmQuality}</output></div></div>` : ''}</div>
         <div class="ff-setting-card ff-choice-card"><div><strong>Rendering mode</strong><p>Use Automatic unless you need to prefer a specific renderer.</p></div><label class="ff-select"><span class="sr-only">Rendering mode</span><select data-fastflag-field="renderingMode" data-fastflag-type="string" ${disabled ? 'disabled' : ''}><option value="automatic" ${renderingMode === 'automatic' ? 'selected' : ''}>Automatic</option><option value="d3d11" ${renderingMode === 'd3d11' ? 'selected' : ''}>Direct3D 11</option><option value="vulkan" ${renderingMode === 'vulkan' ? 'selected' : ''}>Vulkan</option></select></label></div>
       </section>
-      <section class="ff-setting-group"><h3>Player pacing</h3><div class="ff-setting-card ff-choice-card"><div><strong>Frame-rate target</strong><p>Set a managed target or leave Roblox Player at its default.</p></div><label class="ff-select"><span class="sr-only">Frame-rate target</span><select data-fastflag-field="fpsCap" ${disabled ? 'disabled' : ''}><option value="0" ${Number(fpsCap) === 0 ? 'selected' : ''}>Roblox default</option><option value="60" ${Number(fpsCap) === 60 ? 'selected' : ''}>60 FPS</option><option value="120" ${Number(fpsCap) === 120 ? 'selected' : ''}>120 FPS</option><option value="144" ${Number(fpsCap) === 144 ? 'selected' : ''}>144 FPS</option><option value="165" ${Number(fpsCap) === 165 ? 'selected' : ''}>165 FPS</option><option value="240" ${Number(fpsCap) === 240 ? 'selected' : ''}>240 FPS</option></select></label></div></section>
+      <section class="ff-setting-group"><h3>Player pacing</h3><div class="ff-setting-card ff-choice-card"><div><strong>Frame-rate target</strong><p>Choose a managed target, leave Roblox Player at its default, or use the 9,999 FPS uncapped target. Roblox, your display, and hardware can still limit the final frame rate.</p></div><label class="ff-select"><span class="sr-only">Frame-rate target</span><select data-fastflag-field="fpsCap" ${disabled ? 'disabled' : ''}><option value="0" ${Number(fpsCap) === 0 ? 'selected' : ''}>Roblox default</option><option value="60" ${Number(fpsCap) === 60 ? 'selected' : ''}>60 FPS</option><option value="120" ${Number(fpsCap) === 120 ? 'selected' : ''}>120 FPS</option><option value="144" ${Number(fpsCap) === 144 ? 'selected' : ''}>144 FPS</option><option value="165" ${Number(fpsCap) === 165 ? 'selected' : ''}>165 FPS</option><option value="240" ${Number(fpsCap) === 240 ? 'selected' : ''}>240 FPS</option><option value="${UNCAPPED_FPS_TARGET}" ${Number(fpsCap) === UNCAPPED_FPS_TARGET ? 'selected' : ''}>Uncapped (9,999 FPS target)</option></select></label></div></section>
       <div class="ff-actions"><button class="primary-button" type="submit" ${disabled ? 'disabled' : ''}>${busy ? 'Applying…' : 'Apply Fast Flags'}</button><button class="quiet-button" type="button" data-action="fastflag-reset" ${disabled ? 'disabled' : ''}>Reset managed flags</button></div>
     </form>
     <div class="ff-preview"><div><p class="section-kicker">Eclipse-managed preview</p><p>${escapeHtml(statusText)}</p><small>${escapeHtml(pathText)}</small></div><pre>${escapeHtml(flagsJson)}</pre></div>
