@@ -40,6 +40,7 @@ const MANAGED_KEYS = Object.freeze([
   'DFIntTextureQualityOverride',
   'FIntDebugForceMSAASamples',
   'DFIntTaskSchedulerTargetFps',
+  'FFlagTaskSchedulerLimitTargetFpsTo2402',
   'DFFlagDisableDPIScale',
   'DFIntCSGLevelOfDetailSwitchingDistanceStatic',
   'DFIntCSGLevelOfDetailSwitchingDistance',
@@ -156,7 +157,11 @@ function buildManagedFlags(options = {}) {
   const normalized = normalizeOptions(options);
   const flags = { ...PROFILE_FLAGS[normalized.profile] };
   if (normalized.msaa) flags.FIntDebugForceMSAASamples = String(normalized.msaa);
-  if (normalized.fpsCap) flags.DFIntTaskSchedulerTargetFps = String(normalized.fpsCap);
+  if (normalized.fpsCap) {
+    flags.DFIntTaskSchedulerTargetFps = String(normalized.fpsCap);
+    // Roblox clamps the task scheduler target to 240 FPS unless this flag is disabled.
+    if (normalized.fpsCap > 240) flags.FFlagTaskSchedulerLimitTargetFpsTo2402 = 'False';
+  }
   if (normalized.preserveDisplayScaling) flags.DFFlagDisableDPIScale = 'True';
   if (normalized.meshDetailEnabled) Object.assign(flags, buildMeshDetailFlags(normalized.meshDetail));
   if (normalized.frmQualityEnabled) flags.DFIntDebugFRMQualityLevelOverride = String(normalized.frmQuality);

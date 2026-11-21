@@ -297,7 +297,7 @@ test('accepts only safe numeric Roblox place IDs', () => {
 });
 
 test('builds and resets only the safe managed Fast Flag keys', () => {
-  const { FPS_CAPS, UNCAPPED_FPS_TARGET, buildManagedFlags, mergeManagedFlags, normalizeOptions } = require('../electron/fast-flags.cjs');
+  const { FPS_CAPS, MANAGED_KEYS, UNCAPPED_FPS_TARGET, buildManagedFlags, mergeManagedFlags, normalizeOptions } = require('../electron/fast-flags.cjs');
   const flags = buildManagedFlags({ profile: 'balanced', fpsCap: 144, disableDpiScaling: true });
   assert.deepEqual(flags, {
     DFFlagTextureQualityOverrideEnabled: 'True',
@@ -314,7 +314,9 @@ test('builds and resets only the safe managed Fast Flag keys', () => {
   assert.equal(UNCAPPED_FPS_TARGET, 9999);
   assert.equal(FPS_CAPS.includes(UNCAPPED_FPS_TARGET), true);
   assert.equal(normalizeOptions({ fpsCap: UNCAPPED_FPS_TARGET }).fpsCap, UNCAPPED_FPS_TARGET);
-  assert.deepEqual(buildManagedFlags({ fpsCap: UNCAPPED_FPS_TARGET }), { DFIntTaskSchedulerTargetFps: '9999' });
+  assert.deepEqual(buildManagedFlags({ fpsCap: UNCAPPED_FPS_TARGET }), { DFIntTaskSchedulerTargetFps: '9999', FFlagTaskSchedulerLimitTargetFpsTo2402: 'False' });
+  assert.equal(buildManagedFlags({ fpsCap: 240 }).FFlagTaskSchedulerLimitTargetFpsTo2402, undefined);
+  assert.equal(MANAGED_KEYS.includes('FFlagTaskSchedulerLimitTargetFpsTo2402'), true);
 });
 
 test('defines bounded player-handoff states without pretending to read Roblox connection status', () => {
