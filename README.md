@@ -5,7 +5,7 @@ Eclipse is a Windows desktop bootstrapper and launcher for official Roblox exper
 ## What works in Eclipse v2
 
 - **Home** shows locally recorded recent launches and saved Roblox experiences.
-- **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs. Selectable Roblox-provided collections expose more choices than a single trending feed, alongside search and result pagination. Eclipse also keeps a bounded local snapshot with visible freshness information, renders it immediately while official data refreshes, and can show that snapshot when Roblox discovery is temporarily unavailable.
+- **Discover** loads live game names, player counts, ratings, creators, and thumbnails from Roblox’s official discovery and search APIs. Selectable Roblox-provided collections expose more choices than a single trending feed, alongside search and result pagination. Individual cards save to the local Library, and a single “Add all to Library” action saves every currently visible result at once while respecting the 120-game local limit. Eclipse also keeps a bounded local snapshot with visible freshness information, renders it immediately while official data refreshes, and can show that snapshot when Roblox discovery is temporarily unavailable.
 - **Game details** exposes official public-server lists. You can save a local per-experience server-finder preference for sort, availability, and Roblox-reported ping, then compare the currently returned page after a refresh. These controls only organize current Roblox responses; Eclipse does not measure latency, reserve servers, control matchmaking, or retain expired server IDs.
 - **Library** saves official Roblox experiences locally on the current device; Eclipse does not invent or host custom games. Create bounded local collections, manually order collections and games within a collection, pin games, add private tags and notes, then search or sort your local library. Collections and notes never modify Roblox.
 - **History** records a bounded local list of successful Eclipse-to-Roblox Player handoff requests. It supports relaunching, pinning remembered game details into Library, JSON export, and confirmed clearing; it never claims to know Roblox connection or gameplay results.
@@ -92,7 +92,7 @@ npm run dist:win
 This creates an NSIS installer in `release/`, named similarly to:
 
 ```text
-Eclipse-Setup-2.0.4-x64.exe
+Eclipse-Setup-2.0.5-x64.exe
 ```
 
 Run that setup executable to choose an installation folder and create Start menu/Desktop shortcuts. The final installer page has **Launch Eclipse** selected by default, so it opens the installed Eclipse application after setup completes. The installer preserves Eclipse’s local data when it is removed.

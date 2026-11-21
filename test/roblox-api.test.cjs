@@ -671,6 +671,8 @@ test('keeps collections, public-server finder preferences, and first-run setup l
   assert.match(renderer, /Fast Flag editor/);
   assert.match(renderer, /fastflag-custom-add/);
   assert.match(renderer, /Maximum performance/);
+  assert.match(renderer, /add-discover-to-library/);
+  assert.match(renderer, /addVisibleDiscoverGamesToLibrary/);
   assert.match(renderer, /FAST_FLAG_CUSTOM_KEY_PATTERN = \/\^\(\?:F\|DF\)/);
   assert.match(renderer, /UNCAPPED_FPS_TARGET = 9_999/);
   assert.match(renderer, /eclipse\.library-collections\.v1/);

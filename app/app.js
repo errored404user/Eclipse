@@ -998,6 +998,23 @@ function saveGame(game) {
   writeStored(storageKeys.library, state.library);
 }
 
+function addVisibleDiscoverGamesToLibrary() {
+  const activeCollection = activeDiscoverCollection();
+  const rawVisibleGames = state.discover.query ? state.discover.games : activeCollection?.games || state.discover.games;
+  const visibleGames = displayDiscoverGames(rawVisibleGames);
+  const fresh = visibleGames.filter((game) => !isSaved(game));
+  if (!visibleGames.length) return showToast('There are no Roblox experiences on this page to add yet.');
+  if (!fresh.length) return showToast('Everything on this page is already in your local Library.');
+  const capacity = Math.max(0, 120 - state.library.length);
+  const added = fresh.slice(0, capacity).map((game) => normalizeGame(game)).filter(Boolean);
+  if (!added.length) return showToast('Your Library is full. Remove a game before adding more.');
+  state.library = [...added, ...state.library].slice(0, 120);
+  writeStored(storageKeys.library, state.library);
+  updateDiscoverView();
+  if (added.length < fresh.length) showToast(`Added ${added.length} games. The 120-game local Library limit skipped ${fresh.length - added.length}.`);
+  else showToast(`Added ${added.length} game${added.length === 1 ? '' : 's'} to your local Library.`);
+}
+
 function removeGame(universeId) {
   state.library = state.library.filter((game) => game.universeId !== Number(universeId));
   writeStored(storageKeys.library, state.library);
@@ -1230,7 +1247,7 @@ function renderDiscover() {
         <input id="game-search" name="query" maxlength="100" value="${escapeHtml(state.discover.query)}" placeholder="Search official Roblox experiences" autocomplete="off" />
         <button class="primary-button" type="submit">Search</button>
       </form>
-      <div class="discovery-toolbar"><span><i></i><span data-discovery-context>${state.discover.query ? `Official Roblox search · “${escapeHtml(state.discover.query)}”` : 'Official Roblox Explore collections'}</span></span><div class="discovery-controls"><label><span class="sr-only">Sort experiences</span><select data-discovery-sort><option value="featured" ${state.discover.sort === 'featured' ? 'selected' : ''}>Official order</option><option value="players" ${state.discover.sort === 'players' ? 'selected' : ''}>Most playing</option><option value="rating" ${state.discover.sort === 'rating' ? 'selected' : ''}>Highest rated</option><option value="name" ${state.discover.sort === 'name' ? 'selected' : ''}>Name</option></select></label><label><span class="sr-only">Filter experiences</span><select data-discovery-filter><option value="all" ${state.discover.filter === 'all' ? 'selected' : ''}>All</option><option value="popular" ${state.discover.filter === 'popular' ? 'selected' : ''}>1K+ playing</option><option value="rated" ${state.discover.filter === 'rated' ? 'selected' : ''}>Rated</option></select></label><button class="quiet-button compact-button" type="button" data-action="refresh-discover">Refresh</button></div></div>
+      <div class="discovery-toolbar"><span><i></i><span data-discovery-context>${state.discover.query ? `Official Roblox search · “${escapeHtml(state.discover.query)}”` : 'Official Roblox Explore collections'}</span></span><div class="discovery-controls"><label><span class="sr-only">Sort experiences</span><select data-discovery-sort><option value="featured" ${state.discover.sort === 'featured' ? 'selected' : ''}>Official order</option><option value="players" ${state.discover.sort === 'players' ? 'selected' : ''}>Most playing</option><option value="rating" ${state.discover.sort === 'rating' ? 'selected' : ''}>Highest rated</option><option value="name" ${state.discover.sort === 'name' ? 'selected' : ''}>Name</option></select></label><label><span class="sr-only">Filter experiences</span><select data-discovery-filter><option value="all" ${state.discover.filter === 'all' ? 'selected' : ''}>All</option><option value="popular" ${state.discover.filter === 'popular' ? 'selected' : ''}>1K+ playing</option><option value="rated" ${state.discover.filter === 'rated' ? 'selected' : ''}>Rated</option></select></label><button class="quiet-button compact-button" type="button" data-action="add-discover-to-library" data-discovery-add-all>Add all to Library</button><button class="quiet-button compact-button" type="button" data-action="refresh-discover">Refresh</button></div></div>
       <div class="discovery-collections" data-discovery-collections aria-label="Official Roblox collections"></div>
     </section>
     <div class="discovery-feature" data-discovery-feature></div>
@@ -1275,6 +1292,12 @@ function updateDiscoverView() {
   const activeCollection = activeDiscoverCollection();
   const rawVisibleGames = state.discover.query ? state.discover.games : activeCollection?.games || state.discover.games;
   const visibleGames = displayDiscoverGames(rawVisibleGames);
+  const addAllButton = pageContent.querySelector('[data-discovery-add-all]');
+  if (addAllButton) {
+    const freshCount = visibleGames.filter((game) => !isSaved(game)).length;
+    addAllButton.disabled = state.discover.loading || !visibleGames.length || freshCount === 0;
+    addAllButton.textContent = !visibleGames.length ? 'Add all to Library' : freshCount === 0 ? 'All saved ✓' : `Add all (${freshCount}) to Library`;
+  }
   const collectionTitle = activeCollection?.title || 'Popular on Roblox';
   const cacheNote = !state.discover.query && state.discover.cachedAt ? ` · local cache ${discoverCacheAge(state.discover.cachedAt)}` : '';
   context.textContent = state.discover.query ? `Official Roblox search · “${state.discover.query}”` : `${collectionTitle} · official Roblox Explore${cacheNote}`;
@@ -2716,6 +2739,7 @@ document.addEventListener('click', async (event) => {
       showToast(`${game.name} was pinned in your library.`);
     }
   }
+  if (action === 'add-discover-to-library') addVisibleDiscoverGamesToLibrary();
   if (action === 'refresh-discover') await loadDiscover({ resetToPopular: !state.discover.query });
   if (action === 'clear-discover-filters') {
     state.discover.filter = 'all';
