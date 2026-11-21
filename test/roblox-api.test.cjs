@@ -358,6 +358,31 @@ test('builds bounded mesh, FRM, display-scaling, and rendering-mode Fast Flags',
   assert.deepEqual(reset, { FFlagUnrelatedSetting: 'Keep' });
 });
 
+test('provides a maximum-performance Fast Flag profile with fully managed keys', () => {
+  const { MANAGED_KEYS, PROFILE_FLAGS, PROFILE_MSAA, buildManagedFlags, normalizeOptions } = require('../electron/fast-flags.cjs');
+  assert.equal(PROFILE_MSAA.maximum, 1);
+  for (const [name, flags] of Object.entries(PROFILE_FLAGS)) {
+    const unmanaged = Object.keys(flags).filter((key) => !MANAGED_KEYS.includes(key));
+    assert.deepEqual(unmanaged, [], `profile ${name} has unmanaged keys`);
+  }
+  const built = buildManagedFlags({ profile: 'maximum' });
+  assert.equal(built.DFFlagTextureQualityOverrideEnabled, 'True');
+  assert.equal(built.DFIntTextureQualityOverride, '0');
+  assert.equal(built.FIntDebugForceMSAASamples, '1');
+  assert.equal(built.DFIntDebugFRMQualityLevelOverride, '1');
+  assert.equal(built.FIntRenderShadowIntensity, '0');
+  assert.equal(built.FFlagDisablePostFx, 'True');
+  assert.equal(built.FFlagRenderNoLowFrmBloom, 'True');
+  assert.equal(built.FIntRenderGrassDetailStrands, '0');
+  assert.equal(built.FFlagDebugCheckRenderThreading, 'True');
+  assert.equal(built.FFlagMovePrerenderV2, 'True');
+  assert.equal(built.DFIntMaxFrameBufferSize, '4');
+  assert.equal(buildManagedFlags({ profile: 'maximum', fpsCap: 240 }).DFIntTaskSchedulerTargetFps, '240');
+  const normalized = normalizeOptions({ profile: 'maximum', msaa: 8 });
+  assert.equal(normalized.profile, 'maximum');
+  assert.equal(normalized.msaa, 1);
+});
+
 test('supports a bounded custom Fast Flag editor with tracked reset behavior', async () => {
   const fs = require('node:fs/promises');
   const os = require('node:os');
@@ -645,6 +670,7 @@ test('keeps collections, public-server finder preferences, and first-run setup l
   assert.match(renderer, /Uncapped \(9,999 FPS target\)/);
   assert.match(renderer, /Fast Flag editor/);
   assert.match(renderer, /fastflag-custom-add/);
+  assert.match(renderer, /Maximum performance/);
   assert.match(renderer, /FAST_FLAG_CUSTOM_KEY_PATTERN = \/\^\(\?:F\|DF\)/);
   assert.match(renderer, /UNCAPPED_FPS_TARGET = 9_999/);
   assert.match(renderer, /eclipse\.library-collections\.v1/);

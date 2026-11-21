@@ -16,10 +16,35 @@ const PROFILE_FLAGS = Object.freeze({
   quality: Object.freeze({
     DFFlagTextureQualityOverrideEnabled: 'True',
     DFIntTextureQualityOverride: '3'
+  }),
+  maximum: Object.freeze({
+    DFFlagTextureQualityOverrideEnabled: 'True',
+    DFIntTextureQualityOverride: '0',
+    DFIntDebugFRMQualityLevelOverride: '1',
+    FIntRenderShadowIntensity: '0',
+    FIntFRMMinGrassDistance: '0',
+    FIntFRMMaxGrassDistance: '0',
+    FIntRenderGrassDetailStrands: '0',
+    FIntGrassMovementReducedMotionFactor: '0',
+    FFlagRenderNoLowFrmBloom: 'True',
+    FFlagDisablePostFx: 'True',
+    FIntRenderLocalLightUpdatesMax: '8',
+    FIntRenderLocalLightUpdatesMin: '6',
+    FIntRenderLocalLightFadeInMs: '0',
+    FFlagFastGPULightCulling3: 'True',
+    FFlagDebugCheckRenderThreading: 'True',
+    FFlagRenderDebugCheckThreading2: 'True',
+    FFlagMovePrerenderV2: 'True',
+    DFIntMaxFrameBufferSize: '4',
+    DFIntCSGLevelOfDetailSwitchingDistanceStatic: '0',
+    DFIntCSGLevelOfDetailSwitchingDistance: '250',
+    DFIntCSGLevelOfDetailSwitchingDistanceL12: '250',
+    DFIntCSGLevelOfDetailSwitchingDistanceL23: '250',
+    DFIntCSGLevelOfDetailSwitchingDistanceL34: '250'
   })
 });
 
-const PROFILE_MSAA = Object.freeze({ default: 0, performance: 1, balanced: 2, quality: 4 });
+const PROFILE_MSAA = Object.freeze({ default: 0, performance: 1, balanced: 2, quality: 4, maximum: 1 });
 const UNCAPPED_FPS_TARGET = 9_999;
 const FPS_CAPS = Object.freeze([60, 120, 144, 165, 240, UNCAPPED_FPS_TARGET]);
 const MSAA_LEVELS = Object.freeze([0, 1, 2, 4]);
@@ -49,7 +74,22 @@ const MANAGED_KEYS = Object.freeze([
   'DFIntCSGLevelOfDetailSwitchingDistanceL34',
   'DFIntDebugFRMQualityLevelOverride',
   'FFlagDebugGraphicsPreferD3D11',
-  'FFlagDebugGraphicsPreferVulkan'
+  'FFlagDebugGraphicsPreferVulkan',
+  'FIntRenderShadowIntensity',
+  'FIntFRMMinGrassDistance',
+  'FIntFRMMaxGrassDistance',
+  'FIntRenderGrassDetailStrands',
+  'FIntGrassMovementReducedMotionFactor',
+  'FFlagRenderNoLowFrmBloom',
+  'FFlagDisablePostFx',
+  'FIntRenderLocalLightUpdatesMax',
+  'FIntRenderLocalLightUpdatesMin',
+  'FIntRenderLocalLightFadeInMs',
+  'FFlagFastGPULightCulling3',
+  'FFlagDebugCheckRenderThreading',
+  'FFlagRenderDebugCheckThreading2',
+  'FFlagMovePrerenderV2',
+  'DFIntMaxFrameBufferSize'
 ]);
 
 function normalizeCustomFlags(value) {

@@ -357,11 +357,11 @@ function normalizeCustomFlagEntries(value) {
 }
 
 function normalizeFastFlagSelection(value = {}) {
-  const profile = ['default', 'performance', 'balanced', 'quality'].includes(value.profile) ? value.profile : 'balanced';
+  const profile = ['default', 'performance', 'balanced', 'quality', 'maximum'].includes(value.profile) ? value.profile : 'balanced';
   const integer = (candidate, allowed, fallback) => allowed.includes(Number(candidate)) ? Number(candidate) : fallback;
   return {
     profile,
-    msaa: integer(value.msaa, [0, 1, 2, 4], profile === 'default' ? 0 : ({ performance: 1, balanced: 2, quality: 4 }[profile] || 2)),
+    msaa: integer(value.msaa, [0, 1, 2, 4], profile === 'default' ? 0 : ({ performance: 1, balanced: 2, quality: 4, maximum: 1 }[profile] || 2)),
     fpsCap: integer(value.fpsCap, [0, ...FAST_FLAG_FPS_TARGETS], 0),
     preserveDisplayScaling: value.preserveDisplayScaling === true,
     meshDetailEnabled: value.meshDetailEnabled === true,
@@ -1588,7 +1588,8 @@ const fastFlagProfiles = {
   default: { label: 'Default', detail: 'Remove Eclipse-managed texture and MSAA overrides.', flags: {}, msaa: 0 },
   performance: { label: 'Performance', detail: 'Lower texture quality with 1× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '0' }, msaa: 1 },
   balanced: { label: 'Balanced', detail: 'Moderate texture quality with 2× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '2' }, msaa: 2 },
-  quality: { label: 'Quality', detail: 'Higher texture quality with 4× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '3' }, msaa: 4 }
+  quality: { label: 'Quality', detail: 'Higher texture quality with 4× MSAA.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '3' }, msaa: 4 },
+  maximum: { label: 'Maximum performance', detail: 'Lowest visual load: no shadows, grass, bloom, or post-processing, with prerendering and hyperthreading on. Can cause input lag on some PCs.', flags: { DFFlagTextureQualityOverrideEnabled: 'True', DFIntTextureQualityOverride: '0', DFIntDebugFRMQualityLevelOverride: '1', FIntRenderShadowIntensity: '0', FIntFRMMinGrassDistance: '0', FIntFRMMaxGrassDistance: '0', FIntRenderGrassDetailStrands: '0', FIntGrassMovementReducedMotionFactor: '0', FFlagRenderNoLowFrmBloom: 'True', FFlagDisablePostFx: 'True', FIntRenderLocalLightUpdatesMax: '8', FIntRenderLocalLightUpdatesMin: '6', FIntRenderLocalLightFadeInMs: '0', FFlagFastGPULightCulling3: 'True', FFlagDebugCheckRenderThreading: 'True', FFlagRenderDebugCheckThreading2: 'True', FFlagMovePrerenderV2: 'True', DFIntMaxFrameBufferSize: '4', DFIntCSGLevelOfDetailSwitchingDistanceStatic: '0', DFIntCSGLevelOfDetailSwitchingDistance: '250', DFIntCSGLevelOfDetailSwitchingDistanceL12: '250', DFIntCSGLevelOfDetailSwitchingDistanceL23: '250', DFIntCSGLevelOfDetailSwitchingDistanceL34: '250' }, msaa: 1 }
 };
 
 function fastFlagPreviewFor(source) {
